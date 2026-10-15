@@ -58,8 +58,21 @@ public class PartRepository {
 
     public long createSupplier(String rawName) {
         String name = cleanRequiredName(rawName, "Supplier");
+
+        // The desktop UI serializes database work. Reuse an existing supplier
+        // by case-insensitive name so repeated submissions are idempotent and
+        // existing supplier references are preserved.
+        List<Long> existingIds = jdbc.query(
+                "SELECT id FROM suppliers WHERE name = ? COLLATE NOCASE ORDER BY id LIMIT 1",
+                (rs, row) -> rs.getLong("id"), name);
+        if (!existingIds.isEmpty()) {
+            return existingIds.get(0);
+        }
+
         jdbc.update("INSERT INTO suppliers(name) VALUES (?)", name);
-        return jdbc.queryForObject("SELECT id FROM suppliers WHERE name=?", Long.class, name);
+        return jdbc.queryForObject(
+                "SELECT id FROM suppliers WHERE name = ? COLLATE NOCASE ORDER BY id LIMIT 1",
+                Long.class, name);
     }
 
     private static String cleanRequiredName(String rawName, String label) {
