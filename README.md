@@ -5,7 +5,7 @@ Java 21 · Spring Boot · JavaFX · Spring JDBC · SQLite · Maven
 
 MechMotor is designed as a lightweight desktop application for a single shop PC. It aims to manage parts inventory, classification, suppliers, customers, purchasing, sales, stock movements, invoices, local reports, scheduled Gmail reports and activation licensing. Core shop workflows are intended to remain available without internet access; Gmail delivery requires internet access and valid Google OAuth authorization.
 
-> **Project status:** This repository is an implementation starter, not a production-ready release. The initial JavaFX shell, core inventory search, SQLite schema, Maven configuration, tests, design documentation and CI workflow have been committed. Features marked **Planned** or **Partially implemented** below must not be assumed to work until their code and tests are added.
+> **Project status:** Inventory CRUD and the first advanced-search milestone are implemented on the working branch, with automated repository tests added. This remains an in-progress starter, not a production-ready release: saved views, vehicle fitment, imports/exports, purchasing, sales, reporting, licensing, backups and packaging remain incomplete. CI verification for the current branch must pass before this milestone is considered validated.
 
 ## Contents
 
@@ -97,12 +97,12 @@ The table below describes the **intended product scope** from the HLD/LLD. It is
 | Module | Intended functionality | Current status |
 |---|---|---|
 | Dashboard | Clickable KPI cards, sales trends, recent sales/invoices, low-stock alerts, quick actions and drill-downs to filtered records | Planned |
-| Parts & inventory | Create, view, update and deactivate parts; inventory quantities; SKU/barcode/part number; brand/company, material, color, dimensions, fitment, category, costs and reorder level | Partially implemented: core search/table and schema exist; full CRUD is planned |
-| Global search | Case-insensitive query across configured part fields, ranked exact matches and useful empty states | Starter implementation exists for core fields; see search specification |
-| Advanced filters | Category/subcategory, brand/company, material, color, vehicle type/make/model/year, supplier, active status, low/out-of-stock, price and quantity ranges | Planned |
-| Sorting and pagination | Sort by allowed columns, page controls, bounded result sizes and retained filter state | Starter search has a result cap; full pagination and sorting controls are planned |
+| Parts & inventory | Create, view, update and deactivate parts; inventory quantities; SKU/barcode/part number; brand/company, material, color, category, costs and reorder level | Implemented: create/edit/deactivate forms, validation, category/supplier selection and stock-adjustment audit; vehicle fitment/dimensions remain planned |
+| Global search | Case-insensitive query across configured part fields, ranked exact matches and useful empty states | Implemented for SKU, barcode, part number, name, brand/company, material, color, category and supplier with exact-match ranking and literal wildcard escaping |
+| Advanced filters | Category/subcategory, brand/company, material, color, vehicle type/make/model/year, supplier, active status, low/out-of-stock, price and quantity ranges | Partially implemented: brand, material, color, category, supplier, stock status and quantity/price ranges; vehicle fitment, subcategory tree and saved views remain planned |
+| Sorting and pagination | Sort by allowed columns, page controls, bounded result sizes and retained filter state | Implemented: allowlisted sort keys, 50-row pages, bounded page size and previous/next controls |
 | Saved views | Store reusable filter presets such as low stock, a brand or a part category | Planned |
-| Classification | Nested categories, vehicle types/models, manufacturers and part compatibility/fitment mapping | Schema foundation only; UI and workflows planned |
+| Classification | Nested categories, vehicle types/models, manufacturers and part compatibility/fitment mapping | Category creation and category selection implemented; nested hierarchy management and vehicle fitment remain planned |
 | Suppliers & purchasing | Supplier CRUD, purchase orders, goods receipt, purchase lines and supplier returns | Planned |
 | Sales & customers | Customer CRUD, cart, discounts, taxes, checkout, payment records, invoice and returns workflow | Planned |
 | Stock ledger | Auditable stock movements for purchases, sales, returns, adjustments and reversals | Schema foundation exists; transactional workflows planned |
@@ -461,7 +461,7 @@ The launcher JAR and input layout in this example must be adapted to the actual 
 
 ### Recommended milestones
 
-1. **Inventory foundation:** complete CRUD forms, category hierarchy, suppliers, vehicle models/fitment, full search filter DTO, advanced filter UI, pagination, sorting, saved views, import/export and query-plan benchmarks.
+1. **Inventory foundation:** CRUD/edit/deactivate, category/supplier selection and creation, initial advanced filters, safe sorting, pagination and repository regression tests implemented. Still pending: nested category management, vehicle fitment, saved views, import/export, representative-catalog benchmarks and successful current-branch CI verification.
 2. **Business workflows:** purchase orders, goods receipt, sales cart, checkout, returns, adjustments, payment records, immutable stock ledger and atomic transaction tests.
 3. **Dashboard and reports:** KPI drill-downs, charts, PDF invoices, PDF/CSV reports, shop settings and backup/restore.
 4. **Licensing:** canonical signed payload, Ed25519 verification, separate issuer utility, masked activation UI, service-layer guard, injected clock and exact expiry-boundary tests.
