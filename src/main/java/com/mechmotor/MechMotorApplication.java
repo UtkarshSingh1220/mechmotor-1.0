@@ -2,6 +2,7 @@ package com.mechmotor;
 
 import com.mechmotor.domain.*;
 import com.mechmotor.service.InventoryService;
+import com.mechmotor.service.DatabaseBackupService;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
@@ -12,6 +13,9 @@ import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
+import javafx.stage.DirectoryChooser;
+import javafx.stage.FileChooser;
+import java.nio.file.Path;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
@@ -31,6 +35,7 @@ public class MechMotorApplication extends Application {
         return thread;
     });
     private InventoryService inventory;
+    private DatabaseBackupService backupService;
     private final List<LookupOption> noOptions = List.of();
     private List<LookupOption> categories = noOptions;
     private List<LookupOption> suppliers = noOptions;
@@ -42,6 +47,7 @@ public class MechMotorApplication extends Application {
 
     @Override public void start(Stage stage) {
         inventory = context.getBean(InventoryService.class);
+        backupService = context.getBean(DatabaseBackupService.class);
         Label brand = new Label("MECHMOTOR 1.0");
         brand.getStyleClass().add("brand");
         Label subtitle = new Label("Vehicle parts • Inventory workspace");
@@ -70,6 +76,8 @@ public class MechMotorApplication extends Application {
         Button deactivateButton = new Button("Deactivate");
         Button addCategoryButton = new Button("+ Category");
         Button addSupplierButton = new Button("+ Supplier");
+        Button backupButton = new Button("Backup database");
+        Button restoreButton = new Button("Restore backup");
         Button previousButton = new Button("← Previous");
         Button nextButton = new Button("Next →");
         Label pageLabel = new Label("Page 1");
@@ -169,6 +177,37 @@ public class MechMotorApplication extends Application {
                 status.setText("Category created."); refreshLookups(categoryFilter, supplierFilter, loadPage, status);
             }, error -> showError("Could not create category", error)));
         });
+        backupButton.setOnAction(e -> {
+            DirectoryChooser chooser = new DirectoryChooser();
+            chooser.setTitle("Choose backup folder");
+            java.io.File directory = chooser.showDialog(stage);
+            if (directory != null) runBackground(() -> backupService.backupToDirectory(directory.toPath()), saved -> {
+                status.setText("Verified backup created: " + saved.getFileName());
+                Alert info = new Alert(Alert.AlertType.INFORMATION, "Backup created and integrity-checked at:\n" + saved, ButtonType.OK);
+                info.setTitle("Backup complete"); info.setHeaderText("Your inventory backup is ready"); info.show();
+            }, error -> showError("Backup failed", error));
+        });
+        restoreButton.setOnAction(e -> {
+            FileChooser chooser = new FileChooser();
+            chooser.setTitle("Choose MechMotor backup to restore");
+            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("SQLite database backup", "*.db"));
+            java.io.File selected = chooser.showOpenDialog(stage);
+            if (selected == null) return;
+            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
+                    "Restoring replaces the current inventory with the selected backup. A verified pre-restore backup will be created first. Close other MechMotor instances before continuing.",
+                    ButtonType.CANCEL, ButtonType.OK);
+            confirm.setTitle("Confirm database restore"); confirm.setHeaderText("Replace current inventory?");
+            confirm.showAndWait().filter(ButtonType.OK::equals).ifPresent(button ->
+                runBackground(() -> backupService.restoreFrom(selected.toPath()), safetyBackup -> {
+                    categoryFilter.setValue(null); supplierFilter.setValue(null); page[0] = 0;
+                    status.setText("Restore complete. Safety backup: " + safetyBackup.getFileName());
+                    refreshLookups(categoryFilter, supplierFilter, loadPage, status);
+                    Alert info = new Alert(Alert.AlertType.INFORMATION,
+                            "Restore completed. Your previous database was saved to:\n" + safetyBackup, ButtonType.OK);
+                    info.setTitle("Restore complete"); info.setHeaderText("Inventory restored"); info.show();
+                }, error -> showError("Restore failed", error)));
+        });
+
         addSupplierButton.setOnAction(e -> {
             TextInputDialog dialog = new TextInputDialog();
             dialog.setTitle("Add supplier"); dialog.setHeaderText("Create supplier");
@@ -186,7 +225,7 @@ public class MechMotorApplication extends Application {
         filters.add(minQty, 0, 2); filters.add(maxQty, 1, 2); filters.add(minPrice, 2, 2);
         filters.add(maxPrice, 3, 2); filters.add(new Label("Sort:"), 4, 2); filters.add(sort, 5, 2);
         for (int i = 0; i < 6; i++) GridPane.setHgrow(filters.getChildren().get(i), Priority.ALWAYS);
-        HBox actions = new HBox(8, addButton, editButton, deactivateButton, addCategoryButton, addSupplierButton,
+        HBox actions = new HBox(8, addButton, editButton, deactivateButton, addCategoryButton, addSupplierButton, backupButton, restoreButton,
                 new Separator(), previousButton, nextButton, pageLabel);
         actions.setPadding(new Insets(8, 20, 8, 20));
         HBox.setHgrow(pageLabel, Priority.ALWAYS);
