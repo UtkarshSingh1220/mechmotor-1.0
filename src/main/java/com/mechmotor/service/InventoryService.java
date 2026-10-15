@@ -5,6 +5,7 @@ import com.mechmotor.domain.InventoryPage;
 import com.mechmotor.domain.LookupOption;
 import com.mechmotor.domain.Part;
 import com.mechmotor.domain.PartDraft;
+import com.mechmotor.domain.PartDetails;
 import com.mechmotor.repository.PartRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +23,8 @@ public class InventoryService {
     public InventoryPage search(InventoryFilter filter) { return repository.findPage(filter); }
 
     public Part get(long id) { return repository.findById(id); }
+
+    public PartDetails getDetails(long id) { return repository.findDetailsById(id); }
 
     public List<LookupOption> categories() { return repository.categories(); }
 
