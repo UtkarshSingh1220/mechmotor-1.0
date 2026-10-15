@@ -53,7 +53,7 @@ class DatabaseBackupServiceTest {
 
         try (Connection connection = dataSource.getConnection(); Statement statement = connection.createStatement()) {
             statement.executeUpdate("DELETE FROM parts");
-            statement.executeUpdate("INSERT INTO parts(id, sku) VALUES (2, 'FILTER-002')");
+            statement.executeUpdate("INSERT INTO parts(id, sku, name) VALUES (2, 'FILTER-002', 'Oil filter')");
         }
 
         Path safetyBackup = service.restoreFrom(backup);
