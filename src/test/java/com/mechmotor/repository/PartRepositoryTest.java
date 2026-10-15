@@ -113,6 +113,8 @@ class PartRepositoryTest {
 
         repository.renameCategory(child, "Oil filters");
         assertTrue(repository.categories().stream().anyMatch(o -> o.id() == child && o.name().equals("Engine / Oil filters")));
+        repository.renameCategory(parent, "Powertrain");
+        assertTrue(repository.categories().stream().anyMatch(o -> o.id() == child && o.name().equals("Powertrain / Oil filters")));
     }
 
     @Test

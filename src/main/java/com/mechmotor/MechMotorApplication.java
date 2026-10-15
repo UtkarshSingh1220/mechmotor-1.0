@@ -204,7 +204,9 @@ public class MechMotorApplication extends Application {
         renameCategoryItem.setOnAction(e -> {
             LookupOption selected = categoryFilter.getValue();
             if (selected == null) { showError("Select a category", new IllegalArgumentException("Choose a category in the category filter first.")); return; }
-            TextInputDialog dialog = new TextInputDialog(selected.name().substring(selected.name().lastIndexOf(" / ") + 3));
+            int separator = selected.name().lastIndexOf(" / ");
+            String currentName = separator >= 0 ? selected.name().substring(separator + 3) : selected.name();
+            TextInputDialog dialog = new TextInputDialog(currentName);
             dialog.setTitle("Rename category"); dialog.setHeaderText("Rename " + selected.name());
             dialog.setContentText("New category name:");
             dialog.showAndWait().ifPresent(name -> runBackground(() -> { inventory.renameCategory(selected.id(), name); return Boolean.TRUE; }, ignored -> {
