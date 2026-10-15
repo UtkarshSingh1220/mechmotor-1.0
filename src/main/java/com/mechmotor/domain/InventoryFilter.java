@@ -25,8 +25,9 @@ public record InventoryFilter(
             throw new IllegalArgumentException("Minimum price cannot exceed maximum price.");
         page = Math.max(0, page);
         pageSize = Math.max(1, Math.min(pageSize, 200));
-        sortBy = switch (sortBy == null ? "name" : sortBy) {
-            case "sku", "name", "brand", "quantity", "sellingPrice", "updatedAt" -> sortBy;
+        String requestedSort = sortBy == null ? "name" : sortBy;
+        sortBy = switch (requestedSort) {
+            case "sku", "name", "brand", "quantity", "sellingPrice", "updatedAt" -> requestedSort;
             default -> "name";
         };
     }
