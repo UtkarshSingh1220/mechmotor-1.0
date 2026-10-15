@@ -46,6 +46,7 @@ class PartRepositoryTest {
     void createsAndSearchesPartCaseInsensitivelyWithExactSkuRankedFirst() {
         repository.create(draft("ZZ-OTHER", "Other Pad", 2, "100.00", null, null));
         repository.create(draft("BRK-001", "Brake Pad", 4, "125.50", brakesCategory, supplier));
+        repository.create(draft("ZZ-EXTRA", "BRK-001 replacement", 1, "125.50", null, null));
 
         InventoryPage exact = repository.findPage(InventoryFilter.defaults("brk-001"));
         assertEquals(2, exact.totalItems());
@@ -94,7 +95,7 @@ class PartRepositoryTest {
                 "Brand", "Company", "Ceramic", "Black", brakesCategory, supplier,
                 "10.00", "25.00", 5, 2));
         assertEquals(5, repository.findById(id).quantity());
-        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM stock_movements WHERE part_id=?", Integer.class, id));
+        assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM stock_movements WHERE part_id=?", Integer.class, id));
 
         repository.deactivate(id);
         assertTrue(repository.search("Edited Pad").isEmpty());
