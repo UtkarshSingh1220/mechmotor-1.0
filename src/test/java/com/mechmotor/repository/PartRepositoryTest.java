@@ -117,6 +117,23 @@ class PartRepositoryTest {
     }
 
     @Test
+    void duplicateSupplierCreationDoesNotEraseExistingContactDetails() {
+        long id = repository.createSupplier(new SupplierDraft("Existing Supplier", "9999999999", "KEEP-1"));
+        assertEquals(id, repository.createSupplier(" existing   supplier "));
+        assertEquals("9999999999", repository.supplierDetails(id).phone());
+        assertEquals("KEEP-1", repository.supplierDetails(id).supplierCode());
+    }
+
+    @Test
+    void renamingSupplierToAnotherExistingNameIsRejected() {
+        long first = repository.createSupplier("Supplier Alpha");
+        repository.createSupplier("Supplier Beta");
+        assertThrows(IllegalArgumentException.class,
+                () -> repository.updateSupplier(first, new SupplierDraft("Supplier Beta", null, null)));
+        assertEquals("Supplier Alpha", repository.supplierDetails(first).name());
+    }
+
+    @Test
     void duplicateSupplierCodeIsRejected() {
         repository.createSupplier(new SupplierDraft("Supplier One", "1111111111", "CODE-1"));
         assertThrows(org.springframework.dao.DataAccessException.class,

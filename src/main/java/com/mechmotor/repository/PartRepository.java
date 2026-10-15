@@ -110,7 +110,7 @@ public class PartRepository {
                 (rs, row) -> rs.getLong("id"), name);
         if (!existingIds.isEmpty()) {
             long id = existingIds.get(0);
-            jdbc.update("UPDATE suppliers SET phone=?, supplier_code=? WHERE id=?", phone, supplierCode, id);
+            jdbc.update("UPDATE suppliers SET phone=COALESCE(?, phone), supplier_code=COALESCE(?, supplier_code) WHERE id=?", phone, supplierCode, id);
             return id;
         }
         jdbc.update("INSERT INTO suppliers(name, phone, supplier_code) VALUES (?, ?, ?)", name, phone, supplierCode);
@@ -133,6 +133,11 @@ public class PartRepository {
         String name = cleanRequiredName(draft.name(), "Supplier");
         String phone = cleanOptional(draft.phone(), 40, "Supplier phone");
         String supplierCode = cleanOptional(draft.supplierCode(), 80, "Supplier code");
+        Integer duplicateNames = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM suppliers WHERE name=? COLLATE NOCASE AND id<>?", Integer.class, name, id);
+        if (duplicateNames != null && duplicateNames > 0) {
+            throw new IllegalArgumentException("Another supplier already uses this name.");
+        }
         int changed = jdbc.update("UPDATE suppliers SET name=?, phone=?, supplier_code=? WHERE id=?", name, phone, supplierCode, id);
         if (changed == 0) throw new IllegalArgumentException("Supplier was not found.");
     }
