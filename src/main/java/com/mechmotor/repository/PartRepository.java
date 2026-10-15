@@ -41,8 +41,17 @@ public class PartRepository {
     }
 
     public List<LookupOption> categories() {
-        return jdbc.query("SELECT id, name FROM categories WHERE active = 1 ORDER BY name COLLATE NOCASE",
-                (rs, row) -> new LookupOption(rs.getLong("id"), rs.getString("name")));
+        return jdbc.query("""
+            WITH RECURSIVE category_tree(id, name, parent_id, depth, path) AS (
+                SELECT id, name, parent_id, 0, name
+                FROM categories WHERE active=1 AND parent_id IS NULL
+                UNION ALL
+                SELECT c.id, c.name, c.parent_id, t.depth+1, t.path || ' / ' || c.name
+                FROM categories c JOIN category_tree t ON c.parent_id=t.id
+                WHERE c.active=1 AND t.depth < 20
+            )
+            SELECT id, path AS name FROM category_tree ORDER BY path COLLATE NOCASE
+            """, (rs, row) -> new LookupOption(rs.getLong("id"), rs.getString("name")));
     }
 
     public List<LookupOption> suppliers() {
@@ -51,9 +60,41 @@ public class PartRepository {
     }
 
     public long createCategory(String rawName) {
+        return createCategory(rawName, null);
+    }
+
+    public long createCategory(String rawName, Long parentId) {
         String name = cleanRequiredName(rawName, "Category");
-        jdbc.update("INSERT INTO categories(name) VALUES (?)", name);
-        return jdbc.queryForObject("SELECT id FROM categories WHERE name=?", Long.class, name);
+        if (parentId != null) {
+            Integer parentCount = jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM categories WHERE id=? AND active=1", Integer.class, parentId);
+            if (parentCount == null || parentCount != 1) {
+                throw new IllegalArgumentException("Choose an active parent category.");
+            }
+        }
+        jdbc.update("INSERT INTO categories(name, parent_id) VALUES (?, ?)", name, parentId);
+        return jdbc.queryForObject("SELECT id FROM categories WHERE name=? COLLATE NOCASE", Long.class, name);
+    }
+
+    public void renameCategory(long id, String rawName) {
+        String name = cleanRequiredName(rawName, "Category");
+        int changed = jdbc.update("UPDATE categories SET name=? WHERE id=? AND active=1", name, id);
+        if (changed == 0) throw new IllegalArgumentException("Category was not found or is inactive.");
+    }
+
+    public void deactivateCategory(long id) {
+        Integer children = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM categories WHERE parent_id=? AND active=1", Integer.class, id);
+        if (children != null && children > 0) {
+            throw new IllegalArgumentException("Move or deactivate active subcategories before deactivating this category.");
+        }
+        Integer parts = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM parts WHERE category_id=? AND active=1", Integer.class, id);
+        if (parts != null && parts > 0) {
+            throw new IllegalArgumentException("Reassign active inventory items before deactivating this category.");
+        }
+        int changed = jdbc.update("UPDATE categories SET active=0 WHERE id=? AND active=1", id);
+        if (changed == 0) throw new IllegalArgumentException("Category was not found or is already inactive.");
     }
 
     public long createSupplier(String rawName) {

@@ -104,6 +104,33 @@ class PartRepositoryTest {
     }
 
     @Test
+    void nestedCategoriesDisplayTheirFullPathAndCanBeRenamed() {
+        long parent = repository.createCategory("Engine");
+        long child = repository.createCategory("Filters", parent);
+
+        assertTrue(repository.categories().stream().anyMatch(o -> o.id() == parent && o.name().equals("Engine")));
+        assertTrue(repository.categories().stream().anyMatch(o -> o.id() == child && o.name().equals("Engine / Filters")));
+
+        repository.renameCategory(child, "Oil filters");
+        assertTrue(repository.categories().stream().anyMatch(o -> o.id() == child && o.name().equals("Engine / Oil filters")));
+        repository.renameCategory(parent, "Powertrain");
+        assertTrue(repository.categories().stream().anyMatch(o -> o.id() == child && o.name().equals("Powertrain / Oil filters")));
+    }
+
+    @Test
+    void categoryDeactivationProtectsActiveChildrenAndInventoryReferences() {
+        long parent = repository.createCategory("Electrical");
+        long child = repository.createCategory("Bulbs", parent);
+        assertThrows(IllegalArgumentException.class, () -> repository.deactivateCategory(parent));
+        repository.deactivateCategory(child);
+        assertTrue(repository.categories().stream().noneMatch(o -> o.id() == child));
+
+        long usedCategory = repository.createCategory("Cooling");
+        repository.create(draft("COOL-001", "Radiator", 1, "100.00", usedCategory, null));
+        assertThrows(IllegalArgumentException.class, () -> repository.deactivateCategory(usedCategory));
+    }
+
+    @Test
     void duplicateSupplierNamesReuseExistingSupplierCaseInsensitively() {
         long duplicateId = repository.createSupplier("  north   supply  ");
 

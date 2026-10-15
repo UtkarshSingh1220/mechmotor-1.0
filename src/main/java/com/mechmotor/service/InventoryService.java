@@ -34,6 +34,15 @@ public class InventoryService {
     public long createCategory(String name) { return repository.createCategory(name); }
 
     @Transactional
+    public long createCategory(String name, Long parentId) { return repository.createCategory(name, parentId); }
+
+    @Transactional
+    public void renameCategory(long id, String name) { repository.renameCategory(id, name); }
+
+    @Transactional
+    public void deactivateCategory(long id) { repository.deactivateCategory(id); }
+
+    @Transactional
     public long createSupplier(String name) { return repository.createSupplier(name); }
 
     @Transactional
