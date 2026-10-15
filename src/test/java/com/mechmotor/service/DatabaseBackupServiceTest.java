@@ -6,6 +6,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.sqlite.SQLiteDataSource;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.datasource.init.ScriptUtils;
 
 import javax.sql.DataSource;
 import java.nio.file.Files;
@@ -32,12 +34,8 @@ class DatabaseBackupServiceTest {
         sqlite.setUrl("jdbc:sqlite:" + databaseFile);
         dataSource = sqlite;
         try (Connection connection = dataSource.getConnection(); Statement statement = connection.createStatement()) {
-            statement.execute("CREATE TABLE categories (id INTEGER PRIMARY KEY, name TEXT)");
-            statement.execute("CREATE TABLE suppliers (id INTEGER PRIMARY KEY, name TEXT)");
-            statement.execute("CREATE TABLE parts (id INTEGER PRIMARY KEY, sku TEXT)");
-            statement.execute("CREATE TABLE inventory (part_id INTEGER PRIMARY KEY, quantity_on_hand INTEGER)");
-            statement.execute("CREATE TABLE stock_movements (id INTEGER PRIMARY KEY, part_id INTEGER, quantity INTEGER)");
-            statement.execute("INSERT INTO parts(id, sku) VALUES (1, 'BRAKE-001')");
+            ScriptUtils.executeSqlScript(connection, new ClassPathResource("schema.sql"));
+            statement.execute("INSERT INTO parts(id, sku, name) VALUES (1, 'BRAKE-001', 'Brake pad')");
         }
         service = new DatabaseBackupService(dataSource);
     }
@@ -65,6 +63,25 @@ class DatabaseBackupServiceTest {
             assertTrue(result.next());
             assertEquals("BRAKE-001", result.getString(1));
             assertFalse(result.next());
+        }
+    }
+
+    @Test
+    void structurallyIncompleteDatabaseIsRejected() throws Exception {
+        Path incomplete = tempDir.resolve("incomplete.db");
+        try (Connection connection = java.sql.DriverManager.getConnection("jdbc:sqlite:" + incomplete);
+             Statement statement = connection.createStatement()) {
+            statement.execute("CREATE TABLE categories (id INTEGER PRIMARY KEY, name TEXT)");
+            statement.execute("CREATE TABLE suppliers (id INTEGER PRIMARY KEY, name TEXT)");
+            statement.execute("CREATE TABLE parts (id INTEGER PRIMARY KEY, sku TEXT)");
+            statement.execute("CREATE TABLE inventory (part_id INTEGER PRIMARY KEY, quantity_on_hand INTEGER)");
+            statement.execute("CREATE TABLE stock_movements (id INTEGER PRIMARY KEY, part_id INTEGER, quantity INTEGER)");
+        }
+        assertThrows(IllegalArgumentException.class, () -> service.restoreFrom(incomplete));
+        try (Connection connection = dataSource.getConnection(); Statement statement = connection.createStatement();
+             var result = statement.executeQuery("SELECT sku FROM parts")) {
+            assertTrue(result.next());
+            assertEquals("BRAKE-001", result.getString(1));
         }
     }
 

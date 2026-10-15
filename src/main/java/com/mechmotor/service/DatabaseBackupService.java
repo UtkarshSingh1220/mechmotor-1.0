@@ -16,6 +16,7 @@ import java.sql.Statement;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -25,8 +26,14 @@ import java.util.Set;
 @Service
 public class DatabaseBackupService {
     private static final DateTimeFormatter FILE_TIME = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
-    private static final Set<String> REQUIRED_TABLES =
-            Set.of("categories", "suppliers", "parts", "inventory", "stock_movements");
+    private static final Map<String, Set<String>> REQUIRED_COLUMNS = Map.of(
+            "categories", Set.of("id", "name", "parent_id", "active"),
+            "suppliers", Set.of("id", "name", "phone", "supplier_code"),
+            "parts", Set.of("id", "sku", "barcode", "part_number", "name", "brand", "company",
+                    "material", "color", "category_id", "supplier_id", "purchase_price_paise",
+                    "selling_price_paise", "active", "updated_at"),
+            "inventory", Set.of("part_id", "quantity_on_hand", "reserved_quantity", "reorder_level"),
+            "stock_movements", Set.of("id", "part_id", "movement_type", "quantity", "reference", "reason", "created_at"));
 
     private final DataSource dataSource;
     private final Path databaseFile;
@@ -120,8 +127,17 @@ public class DatabaseBackupService {
                     "SELECT name FROM sqlite_master WHERE type='table'")) {
                 while (result.next()) tables.add(result.getString(1));
             }
-            if (!tables.containsAll(REQUIRED_TABLES)) {
+            if (!tables.containsAll(REQUIRED_COLUMNS.keySet())) {
                 throw new IOException("Database is missing required MechMotor tables.");
+            }
+            for (Map.Entry<String, Set<String>> required : REQUIRED_COLUMNS.entrySet()) {
+                Set<String> columns = new HashSet<>();
+                try (ResultSet result = statement.executeQuery("PRAGMA table_info('" + required.getKey() + "')")) {
+                    while (result.next()) columns.add(result.getString("name"));
+                }
+                if (!columns.containsAll(required.getValue())) {
+                    throw new IOException("Database table '" + required.getKey() + "' is missing required columns.");
+                }
             }
         }
     }
@@ -136,11 +152,9 @@ public class DatabaseBackupService {
     }
 
     private static void moveNewFile(Path source, Path destination) throws IOException {
-        try {
-            Files.move(source, destination, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
-        } catch (AtomicMoveNotSupportedException ex) {
-            Files.move(source, destination);
-        }
+        // Never replace an existing user backup if another process creates the
+        // same timestamped filename between name selection and the move.
+        Files.move(source, destination);
     }
 
     private static void replaceFile(Path source, Path destination) throws IOException {
