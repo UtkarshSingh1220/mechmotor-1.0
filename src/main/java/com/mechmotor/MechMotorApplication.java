@@ -67,6 +67,8 @@ public class MechMotorApplication extends Application {
         Button addButton = new Button("＋ Add part");
         Button editButton = new Button("Edit selected");
         Button deactivateButton = new Button("Deactivate");
+        Button addCategoryButton = new Button("+ Category");
+        Button addSupplierButton = new Button("+ Supplier");
         Button previousButton = new Button("← Previous");
         Button nextButton = new Button("Next →");
         Label pageLabel = new Label("Page 1");
@@ -158,6 +160,23 @@ public class MechMotorApplication extends Application {
                             error -> showError("Could not deactivate part", error)));
         });
 
+        addCategoryButton.setOnAction(e -> {
+            TextInputDialog dialog = new TextInputDialog();
+            dialog.setTitle("Add category"); dialog.setHeaderText("Create inventory category");
+            dialog.setContentText("Category name:");
+            dialog.showAndWait().ifPresent(name -> runBackground(() -> inventory.createCategory(name), id -> {
+                status.setText("Category created."); refreshLookups(categoryFilter, supplierFilter, loadPage, status);
+            }, error -> showError("Could not create category", error)));
+        });
+        addSupplierButton.setOnAction(e -> {
+            TextInputDialog dialog = new TextInputDialog();
+            dialog.setTitle("Add supplier"); dialog.setHeaderText("Create supplier");
+            dialog.setContentText("Supplier name:");
+            dialog.showAndWait().ifPresent(name -> runBackground(() -> inventory.createSupplier(name), id -> {
+                status.setText("Supplier created."); refreshLookups(categoryFilter, supplierFilter, loadPage, status);
+            }, error -> showError("Could not create supplier", error)));
+        });
+
         GridPane filters = new GridPane();
         filters.setHgap(8); filters.setVgap(8); filters.setPadding(new Insets(12, 20, 12, 20));
         filters.add(query, 0, 0, 4, 1); filters.add(searchButton, 4, 0); filters.add(clearButton, 5, 0);
@@ -166,7 +185,8 @@ public class MechMotorApplication extends Application {
         filters.add(minQty, 0, 2); filters.add(maxQty, 1, 2); filters.add(minPrice, 2, 2);
         filters.add(maxPrice, 3, 2); filters.add(new Label("Sort:"), 4, 2); filters.add(sort, 5, 2);
         for (int i = 0; i < 6; i++) GridPane.setHgrow(filters.getChildren().get(i), Priority.ALWAYS);
-        HBox actions = new HBox(8, addButton, editButton, deactivateButton, new Separator(), previousButton, nextButton, pageLabel);
+        HBox actions = new HBox(8, addButton, editButton, deactivateButton, addCategoryButton, addSupplierButton,
+                new Separator(), previousButton, nextButton, pageLabel);
         actions.setPadding(new Insets(8, 20, 8, 20));
         HBox.setHgrow(pageLabel, Priority.ALWAYS);
         VBox header = new VBox(5, brand, subtitle);
@@ -186,6 +206,17 @@ public class MechMotorApplication extends Application {
             supplierFilter.setItems(FXCollections.observableArrayList(suppliers));
             loadPage.run();
         }, error -> { status.setText("Could not load categories and suppliers."); showError("Database initialization failed", error); });
+    }
+
+    private void refreshLookups(ComboBox<LookupOption> categoryFilter,
+                                ComboBox<LookupOption> supplierFilter, Runnable reload, Label status) {
+        runBackground(() -> new Lookups(inventory.categories(), inventory.suppliers()), lookups -> {
+            categories = lookups.categories(); suppliers = lookups.suppliers();
+            categoryFilter.setItems(FXCollections.observableArrayList(categories));
+            supplierFilter.setItems(FXCollections.observableArrayList(suppliers));
+            status.setText("Categories and suppliers refreshed.");
+            reload.run();
+        }, error -> showError("Could not refresh categories and suppliers", error));
     }
 
     private void showPartDialog(Stage owner, PartDetails existing, Runnable onSaved, Label status) {
