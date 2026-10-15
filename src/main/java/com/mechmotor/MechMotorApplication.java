@@ -213,8 +213,8 @@ public class MechMotorApplication extends Application {
         ComboBox<LookupOption> supplier = new ComboBox<>(FXCollections.observableArrayList(suppliers));
         supplier.setPromptText("No supplier"); supplier.setMaxWidth(Double.MAX_VALUE);
         if (existing != null) {
-            category.setValue(categories.stream().filter(o -> o.id() == existing.categoryId()).findFirst().orElse(null));
-            supplier.setValue(suppliers.stream().filter(o -> o.id() == existing.supplierId()).findFirst().orElse(null));
+            category.setValue(categories.stream().filter(o -> existing.categoryId() != null && o.id() == existing.categoryId()).findFirst().orElse(null));
+            supplier.setValue(suppliers.stream().filter(o -> existing.supplierId() != null && o.id() == existing.supplierId()).findFirst().orElse(null));
         }
         GridPane form = new GridPane(); form.setHgap(10); form.setVgap(9); form.setPadding(new Insets(10));
         int row = 0;
