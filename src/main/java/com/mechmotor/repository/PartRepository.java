@@ -156,12 +156,12 @@ public class PartRepository {
             default -> { }
         }
         String orderColumn = switch (f.sortBy()) {
-            case "sku" -> "p.sku";
-            case "brand" -> "p.brand";
+            case "sku" -> "p.sku COLLATE NOCASE";
+            case "brand" -> "p.brand COLLATE NOCASE";
             case "quantity" -> "COALESCE(i.quantity_on_hand,0)";
             case "sellingPrice" -> "p.selling_price_paise";
             case "updatedAt" -> "p.updated_at";
-            default -> "p.name";
+            default -> "p.name COLLATE NOCASE";
         };
         String direction = f.ascending() ? " ASC" : " DESC";
         String rank = q.isEmpty() ? "" : "CASE WHEN lower(p.sku)=? THEN 0 WHEN lower(COALESCE(p.barcode,''))=? THEN 1 WHEN lower(COALESCE(p.part_number,''))=? THEN 2 ELSE 3 END, ";
@@ -170,7 +170,7 @@ public class PartRepository {
         String joins = " FROM parts p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN suppliers s ON s.id=p.supplier_id LEFT JOIN inventory i ON i.part_id=p.id ";
         String count = "SELECT COUNT(*)" + joins + where;
         String select = "SELECT p.id,p.sku,p.barcode,p.part_number,p.name,p.brand,p.company,p.material,p.color,COALESCE(c.name,'') category,COALESCE(s.name,'') supplier,COALESCE(i.quantity_on_hand,0) quantity,p.selling_price_paise"
-                + joins + where + " ORDER BY " + rank + orderColumn + direction + " COLLATE NOCASE, p.id ASC LIMIT ? OFFSET ?";
+                + joins + where + " ORDER BY " + rank + orderColumn + direction + ", p.id ASC LIMIT ? OFFSET ?";
         return new Query(count, select, args, selectArgs);
     }
 
