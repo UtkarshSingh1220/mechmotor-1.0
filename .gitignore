@@ -1,0 +1,14 @@
+target/
+.idea/
+.vscode/
+*.iml
+*.db
+*.db-shm
+*.db-wal
+*.log
+.env
+secrets/
+oauth-token.json
+*.p12
+*.jks
+.DS_Store
