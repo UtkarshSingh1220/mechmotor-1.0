@@ -82,6 +82,22 @@ class PartRepositoryTest {
     }
 
     @Test
+    void duplicateSupplierNamesReuseExistingSupplierCaseInsensitively() {
+        long duplicateId = repository.createSupplier("  north   supply  ");
+
+        assertEquals(supplier, duplicateId);
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM suppliers WHERE name = ? COLLATE NOCASE",
+                Integer.class, "NORTH SUPPLY"));
+
+        long createdId = repository.createSupplier("Local Parts");
+        assertEquals(createdId, repository.createSupplier("local parts"));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM suppliers WHERE name = ? COLLATE NOCASE",
+                Integer.class, "local parts"));
+    }
+
+    @Test
     void duplicateSkuIsRejectedByDatabaseConstraint() {
         repository.create(draft("DUP-1", "First", 0, "0", null, null));
         assertThrows(org.springframework.dao.DataAccessException.class,
