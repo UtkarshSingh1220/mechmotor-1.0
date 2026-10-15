@@ -93,6 +93,10 @@ public class PartRepository {
         long id = generated.longValue();
         jdbc.update("INSERT INTO inventory(part_id, quantity_on_hand, reorder_level) VALUES (?, ?, ?)",
                 id, draft.quantity(), draft.reorderLevel());
+        if (draft.quantity() > 0) {
+            jdbc.update("INSERT INTO stock_movements(part_id, movement_type, quantity, reason) VALUES (?, 'ADJUSTMENT', ?, ?)",
+                    id, draft.quantity(), "Opening inventory");
+        }
         return id;
     }
 
@@ -187,7 +191,8 @@ public class PartRepository {
         String direction = f.ascending() ? " ASC" : " DESC";
         String rank = q.isEmpty() ? "" : "CASE WHEN lower(p.sku)=? THEN 0 WHEN lower(COALESCE(p.barcode,''))=? THEN 1 WHEN lower(COALESCE(p.part_number,''))=? THEN 2 ELSE 3 END, ";
         List<Object> selectArgs = new ArrayList<>(args);
-        if (!q.isEmpty()) { selectArgs.add(0, q); selectArgs.add(1, q); selectArgs.add(2, q); }
+        // ORDER BY placeholders occur after all WHERE placeholders in the SQL.
+        if (!q.isEmpty()) { selectArgs.add(q); selectArgs.add(q); selectArgs.add(q); }
         String joins = " FROM parts p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN suppliers s ON s.id=p.supplier_id LEFT JOIN inventory i ON i.part_id=p.id ";
         String count = "SELECT COUNT(*)" + joins + where;
         String select = "SELECT p.id,p.sku,p.barcode,p.part_number,p.name,p.brand,p.company,p.material,p.color,COALESCE(c.name,'') category,COALESCE(s.name,'') supplier,COALESCE(i.quantity_on_hand,0) quantity,p.selling_price_paise"
