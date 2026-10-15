@@ -74,7 +74,10 @@ public class MechMotorApplication extends Application {
         Button addButton = new Button("＋ Add part");
         Button editButton = new Button("Edit selected");
         Button deactivateButton = new Button("Deactivate");
-        Button addCategoryButton = new Button("+ Category");
+        MenuItem addCategoryItem = new MenuItem("Add root / subcategory…");
+        MenuItem renameCategoryItem = new MenuItem("Rename selected category…");
+        MenuItem deactivateCategoryItem = new MenuItem("Deactivate selected category…");
+        MenuButton categoryMenu = new MenuButton("Categories", null, addCategoryItem, renameCategoryItem, deactivateCategoryItem);
         Button addSupplierButton = new Button("+ Supplier");
         Button backupButton = new Button("Backup database");
         Button restoreButton = new Button("Restore backup");
@@ -169,13 +172,56 @@ public class MechMotorApplication extends Application {
                             error -> showError("Could not deactivate part", error)));
         });
 
-        addCategoryButton.setOnAction(e -> {
-            TextInputDialog dialog = new TextInputDialog();
-            dialog.setTitle("Add category"); dialog.setHeaderText("Create inventory category");
-            dialog.setContentText("Category name:");
-            dialog.showAndWait().ifPresent(name -> runBackground(() -> inventory.createCategory(name), id -> {
-                status.setText("Category created."); refreshLookups(categoryFilter, supplierFilter, loadPage, status);
-            }, error -> showError("Could not create category", error)));
+        addCategoryItem.setOnAction(e -> {
+            Dialog<ButtonType> dialog = new Dialog<>();
+            dialog.initOwner(stage);
+            dialog.setTitle("Add category");
+            dialog.setHeaderText("Create a root category or a nested subcategory");
+            ButtonType createType = new ButtonType("Create category", ButtonBar.ButtonData.OK_DONE);
+            dialog.getDialogPane().getButtonTypes().addAll(createType, ButtonType.CANCEL);
+            TextField categoryName = new TextField();
+            categoryName.setPromptText("Category name");
+            ComboBox<LookupOption> parent = new ComboBox<>(FXCollections.observableArrayList(categories));
+            parent.setPromptText("Root category (no parent)");
+            parent.setMaxWidth(Double.MAX_VALUE);
+            GridPane form = new GridPane();
+            form.setHgap(10); form.setVgap(10); form.setPadding(new Insets(12));
+            form.add(new Label("Name"), 0, 0); form.add(categoryName, 1, 0);
+            form.add(new Label("Parent"), 0, 1); form.add(parent, 1, 1);
+            GridPane.setHgrow(categoryName, Priority.ALWAYS); GridPane.setHgrow(parent, Priority.ALWAYS);
+            dialog.getDialogPane().setContent(form);
+            Button create = (Button) dialog.getDialogPane().lookupButton(createType);
+            create.addEventFilter(ActionEvent.ACTION, event -> {
+                if (categoryName.getText() == null || categoryName.getText().isBlank()) {
+                    event.consume(); showError("Category name required", new IllegalArgumentException("Enter a category name."));
+                }
+            });
+            dialog.showAndWait().filter(createType::equals).ifPresent(button ->
+                runBackground(() -> inventory.createCategory(categoryName.getText(), parent.getValue() == null ? null : parent.getValue().id()), id -> {
+                    status.setText("Category created."); refreshLookups(categoryFilter, supplierFilter, loadPage, status);
+                }, error -> showError("Could not create category", error)));
+        });
+        renameCategoryItem.setOnAction(e -> {
+            LookupOption selected = categoryFilter.getValue();
+            if (selected == null) { showError("Select a category", new IllegalArgumentException("Choose a category in the category filter first.")); return; }
+            TextInputDialog dialog = new TextInputDialog(selected.name().substring(selected.name().lastIndexOf(" / ") + 3));
+            dialog.setTitle("Rename category"); dialog.setHeaderText("Rename " + selected.name());
+            dialog.setContentText("New category name:");
+            dialog.showAndWait().ifPresent(name -> runBackground(() -> { inventory.renameCategory(selected.id(), name); return Boolean.TRUE; }, ignored -> {
+                categoryFilter.setValue(null); status.setText("Category renamed."); refreshLookups(categoryFilter, supplierFilter, loadPage, status);
+            }, error -> showError("Could not rename category", error)));
+        });
+        deactivateCategoryItem.setOnAction(e -> {
+            LookupOption selected = categoryFilter.getValue();
+            if (selected == null) { showError("Select a category", new IllegalArgumentException("Choose a category in the category filter first.")); return; }
+            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
+                    "Deactivate '" + selected.name() + "'? Categories with active subcategories or active inventory items cannot be deactivated.",
+                    ButtonType.CANCEL, ButtonType.OK);
+            confirm.setTitle("Deactivate category"); confirm.setHeaderText("Confirm category deactivation");
+            confirm.showAndWait().filter(ButtonType.OK::equals).ifPresent(button ->
+                runBackground(() -> { inventory.deactivateCategory(selected.id()); return Boolean.TRUE; }, ignored -> {
+                    categoryFilter.setValue(null); status.setText("Category deactivated."); refreshLookups(categoryFilter, supplierFilter, loadPage, status);
+                }, error -> showError("Could not deactivate category", error)));
         });
         backupButton.setOnAction(e -> {
             DirectoryChooser chooser = new DirectoryChooser();
@@ -225,7 +271,7 @@ public class MechMotorApplication extends Application {
         filters.add(minQty, 0, 2); filters.add(maxQty, 1, 2); filters.add(minPrice, 2, 2);
         filters.add(maxPrice, 3, 2); filters.add(new Label("Sort:"), 4, 2); filters.add(sort, 5, 2);
         for (int i = 0; i < 6; i++) GridPane.setHgrow(filters.getChildren().get(i), Priority.ALWAYS);
-        HBox actions = new HBox(8, addButton, editButton, deactivateButton, addCategoryButton, addSupplierButton, backupButton, restoreButton,
+        HBox actions = new HBox(8, addButton, editButton, deactivateButton, categoryMenu, addSupplierButton, backupButton, restoreButton,
                 new Separator(), previousButton, nextButton, pageLabel);
         actions.setPadding(new Insets(8, 20, 8, 20));
         HBox.setHgrow(pageLabel, Priority.ALWAYS);

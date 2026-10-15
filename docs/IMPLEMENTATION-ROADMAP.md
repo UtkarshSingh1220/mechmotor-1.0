@@ -9,6 +9,8 @@
 
 ## Milestone status
 
+- **Category hierarchy management (in progress on feat/category-hierarchy-management):** recursive category path display, root/subcategory creation, rename and guarded soft-deactivation; requires CI and review before merge.
+
 - **Backup/restore hardening (in progress on `feat/backup-restore-hardening`):** add SQLite `VACUUM INTO` backups, integrity/schema validation, pre-restore safety snapshots, and desktop actions. Must pass CI and be reviewed before merge.
 1. **Inventory foundation — partially implemented:** part create/edit/deactivate, category/supplier selection and creation, global search, initial structured filters, allowlisted sorting, bounded pagination, stock-adjustment audit and repository regression tests are committed on `codex/inventory-foundation`. Still required: nested category editing, vehicle fitment, saved views, import/export, representative-catalog benchmarks, and a passing CI run for the latest commit.
 2. **Business workflows:** purchase receipts, sales/cart, returns, payment records, immutable stock movement audit, atomic transactions and invoice snapshots.
