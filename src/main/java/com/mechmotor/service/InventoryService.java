@@ -31,6 +31,12 @@ public class InventoryService {
     public List<LookupOption> suppliers() { return repository.suppliers(); }
 
     @Transactional
+    public long createCategory(String name) { return repository.createCategory(name); }
+
+    @Transactional
+    public long createSupplier(String name) { return repository.createSupplier(name); }
+
+    @Transactional
     public long create(PartDraft draft) {
         validateReferences(draft);
         return repository.create(draft);
