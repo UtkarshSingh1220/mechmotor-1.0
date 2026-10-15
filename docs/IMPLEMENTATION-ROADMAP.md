@@ -9,6 +9,9 @@
 
 ## Milestone status
 
+- **Category hierarchy management — merged:** recursive category paths, root/subcategory creation, rename and guarded deactivation; CI passed.
+- **Supplier management (in progress on `feat/supplier-management`):** edit supplier name, phone and unique code while preserving stable supplier IDs; CI pending.
+
 - **Category hierarchy management (in progress on feat/category-hierarchy-management):** recursive category path display, root/subcategory creation, rename and guarded soft-deactivation; requires CI and review before merge.
 
 - **Backup/restore hardening (in progress on `feat/backup-restore-hardening`):** add SQLite `VACUUM INTO` backups, integrity/schema validation, pre-restore safety snapshots, and desktop actions. Must pass CI and be reviewed before merge.
