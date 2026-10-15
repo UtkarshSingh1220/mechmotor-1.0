@@ -13,6 +13,20 @@ import java.nio.file.Path;
 public class DatabaseConfiguration {
     @Bean
     DataSource dataSource() throws Exception {
+        Path databaseFile = resolveDatabasePath();
+        Files.createDirectories(databaseFile.getParent());
+
+        // SQLite foreign-key enforcement is connection-specific. Configure the
+        // datasource so every connection enforces the schema's REFERENCES clauses.
+        SQLiteConfig sqliteConfig = new SQLiteConfig();
+        sqliteConfig.enforceForeignKeys(true);
+        SQLiteDataSource source = new SQLiteDataSource(sqliteConfig);
+        source.setUrl("jdbc:sqlite:" + databaseFile);
+        return source;
+    }
+
+    /** Resolve the same database file for startup and recovery operations. */
+    public static Path resolveDatabasePath() {
         String configured = System.getProperty("mechmotor.dataDir");
         String localAppData = System.getenv("LOCALAPPDATA");
         Path dataDir;
@@ -24,15 +38,6 @@ public class DatabaseConfiguration {
                     : Path.of(localAppData);
             dataDir = baseDir.resolve("MechMotor").resolve("data");
         }
-
-        Files.createDirectories(dataDir);
-
-        // SQLite foreign-key enforcement is connection-specific. Configure the
-        // datasource so every connection enforces the schema's REFERENCES clauses.
-        SQLiteConfig sqliteConfig = new SQLiteConfig();
-        sqliteConfig.enforceForeignKeys(true);
-        SQLiteDataSource source = new SQLiteDataSource(sqliteConfig);
-        source.setUrl("jdbc:sqlite:" + dataDir.resolve("mechmotor.db").toAbsolutePath());
-        return source;
+        return dataDir.resolve("mechmotor.db").toAbsolutePath().normalize();
     }
 }

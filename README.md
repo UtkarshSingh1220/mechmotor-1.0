@@ -7,6 +7,10 @@ MechMotor is designed as a lightweight desktop application for a single shop PC.
 
 > **Project status:** Inventory CRUD and the first advanced-search milestone are implemented on the working branch, with automated repository tests added. This remains an in-progress starter, not a production-ready release: saved views, vehicle fitment, imports/exports, purchasing, sales, reporting, licensing, backups and packaging remain incomplete. CI verification for the current branch must pass before this milestone is considered validated.
 
+## Backup and restore
+
+The inventory workspace includes local database backup and restore actions. Backups are created as verified SQLite snapshots in a folder you choose. Restore validates SQLite integrity and required MechMotor tables, stages the candidate, and creates a separate pre-restore backup before replacing the live database. Keep backups on a separate drive or secure storage; test restore procedures before relying on them. Close other MechMotor instances before restoring. This feature is not a substitute for off-device backups or release recovery drills.
+
 ## Contents
 
 - [Product goals](#product-goals)
