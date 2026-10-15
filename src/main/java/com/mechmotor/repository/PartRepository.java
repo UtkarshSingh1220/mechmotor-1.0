@@ -50,6 +50,25 @@ public class PartRepository {
                 (rs, row) -> new LookupOption(rs.getLong("id"), rs.getString("name")));
     }
 
+    public long createCategory(String rawName) {
+        String name = cleanRequiredName(rawName, "Category");
+        jdbc.update("INSERT INTO categories(name) VALUES (?)", name);
+        return jdbc.queryForObject("SELECT id FROM categories WHERE name=?", Long.class, name);
+    }
+
+    public long createSupplier(String rawName) {
+        String name = cleanRequiredName(rawName, "Supplier");
+        jdbc.update("INSERT INTO suppliers(name) VALUES (?)", name);
+        return jdbc.queryForObject("SELECT id FROM suppliers WHERE name=?", Long.class, name);
+    }
+
+    private static String cleanRequiredName(String rawName, String label) {
+        if (rawName == null || rawName.isBlank()) throw new IllegalArgumentException(label + " name is required.");
+        String name = rawName.strip().replaceAll("\\s+", " ");
+        if (name.length() > 160) throw new IllegalArgumentException(label + " name cannot exceed 160 characters.");
+        return name;
+    }
+
     public Part findById(long id) {
         List<Part> rows = jdbc.query(baseSelect() + " WHERE p.id = ?", PART_MAPPER, id);
         if (rows.isEmpty()) throw new IllegalArgumentException("Inventory item no longer exists.");
