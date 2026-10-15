@@ -8,19 +8,23 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.init.ScriptUtils;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.sqlite.SQLiteConfig;
 import org.sqlite.SQLiteDataSource;
 
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.util.List;
+import javax.sql.DataSource;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class PartRepositoryTest {
     @TempDir Path tempDir;
     private JdbcTemplate jdbc;
+    private DataSource dataSource;
     private PartRepository repository;
     private long brakesCategory;
     private long supplier;
@@ -29,8 +33,9 @@ class PartRepositoryTest {
     void setUp() throws Exception {
         SQLiteConfig config = new SQLiteConfig();
         config.enforceForeignKeys(true);
-        SQLiteDataSource dataSource = new SQLiteDataSource(config);
-        dataSource.setUrl("jdbc:sqlite:" + tempDir.resolve("inventory-test.db").toAbsolutePath());
+        SQLiteDataSource testDataSource = new SQLiteDataSource(config);
+        testDataSource.setUrl("jdbc:sqlite:" + tempDir.resolve("inventory-test.db").toAbsolutePath());
+        dataSource = testDataSource;
         try (Connection connection = dataSource.getConnection()) {
             ScriptUtils.executeSqlScript(connection, new org.springframework.core.io.ClassPathResource("schema.sql"));
         }
@@ -79,6 +84,23 @@ class PartRepositoryTest {
         assertEquals(0, filter.page());
         assertEquals(200, filter.pageSize());
         assertEquals("name", filter.sortBy());
+    }
+
+    @Test
+    void transactionRollsBackPartAndInventoryWhenOpeningStockLedgerWriteFails() {
+        jdbc.execute("""
+            CREATE TRIGGER fail_opening_stock BEFORE INSERT ON stock_movements
+            WHEN NEW.reason = 'Opening inventory'
+            BEGIN SELECT RAISE(ABORT, 'simulated stock ledger failure'); END
+            """);
+
+        TransactionTemplate transaction = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
+        assertThrows(org.springframework.dao.DataAccessException.class, () ->
+                transaction.execute(status -> repository.create(
+                        draft("ROLLBACK-1", "Rollback part", 3, "10.00", null, null))));
+
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM parts WHERE sku='ROLLBACK-1'", Integer.class));
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM inventory", Integer.class));
     }
 
     @Test
