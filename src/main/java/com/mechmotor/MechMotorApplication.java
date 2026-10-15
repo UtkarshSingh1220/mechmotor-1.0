@@ -6,6 +6,7 @@ import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.concurrent.Task;
+import javafx.event.ActionEvent;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
@@ -258,21 +259,28 @@ public class MechMotorApplication extends Application {
         addFormRow(form, row, "Opening / current quantity", quantity, "Reorder level", reorder);
         dialog.getDialogPane().setContent(form);
         dialog.getDialogPane().setPrefWidth(760);
-        dialog.setResultConverter(button -> {
-            if (button != saveType) return null;
+        java.util.function.Supplier<PartDraft> draftSupplier = () -> {
+            PartDraft draft = new PartDraft(sku.getText(), barcode.getText(), partNumber.getText(), name.getText(),
+                    brand.getText(), company.getText(), material.getText(), color.getText(),
+                    category.getValue() == null ? null : category.getValue().id(),
+                    supplier.getValue() == null ? null : supplier.getValue().id(),
+                    purchasePrice.getText(), sellingPrice.getText(),
+                    parseRequiredInteger(quantity.getText(), "Quantity"),
+                    parseRequiredInteger(reorder.getText(), "Reorder level"));
+            draft.purchasePricePaise();
+            draft.sellingPricePaise();
+            return draft;
+        };
+        Button saveButton = (Button) dialog.getDialogPane().lookupButton(saveType);
+        saveButton.addEventFilter(ActionEvent.ACTION, event -> {
             try {
-                return new PartDraft(sku.getText(), barcode.getText(), partNumber.getText(), name.getText(),
-                        brand.getText(), company.getText(), material.getText(), color.getText(),
-                        category.getValue() == null ? null : category.getValue().id(),
-                        supplier.getValue() == null ? null : supplier.getValue().id(),
-                        purchasePrice.getText(), sellingPrice.getText(),
-                        parseRequiredInteger(quantity.getText(), "Quantity"),
-                        parseRequiredInteger(reorder.getText(), "Reorder level"));
+                draftSupplier.get();
             } catch (IllegalArgumentException ex) {
+                event.consume();
                 showError("Please correct the part details", ex);
-                return null;
             }
         });
+        dialog.setResultConverter(button -> button == saveType ? draftSupplier.get() : null);
         dialog.showAndWait().ifPresent(draft -> {
             if (existing == null) {
                 runBackground(() -> inventory.create(draft), id -> {
