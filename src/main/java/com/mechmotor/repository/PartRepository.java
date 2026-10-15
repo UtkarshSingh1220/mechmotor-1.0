@@ -33,7 +33,7 @@ public class PartRepository {
     public InventoryPage findPage(InventoryFilter filter) {
         Query query = buildQuery(filter);
         Long total = jdbc.queryForObject(query.countSql(), Long.class, query.args().toArray());
-        List<Object> pageArgs = new ArrayList<>(query.args());
+        List<Object> pageArgs = new ArrayList<>(query.selectArgs());
         pageArgs.add(filter.pageSize());
         pageArgs.add((long) filter.page() * filter.pageSize());
         List<Part> items = jdbc.query(query.selectSql(), PART_MAPPER, pageArgs.toArray());
@@ -190,11 +190,9 @@ public class PartRepository {
     }
 
     private record Query(String countSql, String selectSql, List<Object> args, List<Object> selectArgs) {
-        private Query(String countSql, String selectSql, List<Object> args, List<Object> selectArgs) {
-            this.countSql = countSql;
-            this.selectSql = selectSql;
-            this.args = List.copyOf(args);
-            this.selectArgs = List.copyOf(selectArgs);
+        private Query {
+            args = List.copyOf(args);
+            selectArgs = List.copyOf(selectArgs);
         }
     }
 }
