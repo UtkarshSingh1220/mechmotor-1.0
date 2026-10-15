@@ -56,6 +56,27 @@ public class PartRepository {
         return rows.get(0);
     }
 
+    public PartDetails findDetailsById(long id) {
+        List<PartDetails> rows = jdbc.query("""
+            SELECT p.id,p.sku,p.barcode,p.part_number,p.name,p.brand,p.company,p.material,p.color,
+                   p.category_id,p.supplier_id,p.purchase_price_paise,p.selling_price_paise,
+                   COALESCE(i.quantity_on_hand,0) quantity,COALESCE(i.reorder_level,0) reorder_level
+            FROM parts p LEFT JOIN inventory i ON i.part_id=p.id WHERE p.id=? AND p.active=1
+            """, (rs, row) -> {
+                long category = rs.getLong("category_id");
+                Long categoryId = rs.wasNull() ? null : category;
+                long supplier = rs.getLong("supplier_id");
+                Long supplierId = rs.wasNull() ? null : supplier;
+                return new PartDetails(rs.getLong("id"), rs.getString("sku"), rs.getString("barcode"),
+                    rs.getString("part_number"), rs.getString("name"), rs.getString("brand"),
+                    rs.getString("company"), rs.getString("material"), rs.getString("color"),
+                    categoryId, supplierId, rs.getLong("purchase_price_paise"),
+                    rs.getLong("selling_price_paise"), rs.getInt("quantity"), rs.getInt("reorder_level"));
+            }, id);
+        if (rows.isEmpty()) throw new IllegalArgumentException("Inventory item no longer exists or is inactive.");
+        return rows.get(0);
+    }
+
     public long create(PartDraft draft) {
         KeyHolder key = new GeneratedKeyHolder();
         jdbc.update((PreparedStatementCreator) connection -> {
