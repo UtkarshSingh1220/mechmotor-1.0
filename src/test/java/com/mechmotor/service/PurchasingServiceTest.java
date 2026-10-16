@@ -4,6 +4,8 @@ import com.mechmotor.domain.PartDraft;
 import com.mechmotor.domain.PurchaseDraft;
 import com.mechmotor.domain.PurchaseReceipt;
 import com.mechmotor.domain.SupplierDraft;
+import com.mechmotor.config.DatabaseMigrationRunner;
+import org.springframework.boot.DefaultApplicationArguments;
 import com.mechmotor.repository.PartRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,7 +13,6 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.init.ScriptUtils;
 import org.sqlite.SQLiteConfig;
 import org.sqlite.SQLiteDataSource;
 
@@ -34,9 +35,7 @@ class PurchasingServiceTest {
         config.enforceForeignKeys(true);
         SQLiteDataSource source = new SQLiteDataSource(config);
         source.setUrl("jdbc:sqlite:" + tempDir.resolve("purchase-test.db").toAbsolutePath());
-        try (Connection connection = source.getConnection()) {
-            ScriptUtils.executeSqlScript(connection, new org.springframework.core.io.ClassPathResource("schema.sql"));
-        }
+        new DatabaseMigrationRunner(source).run(new DefaultApplicationArguments(new String[0]));
         jdbc = new JdbcTemplate(source);
         parts = new PartRepository(jdbc);
         purchasing = new PurchasingService(jdbc, parts, new DataSourceTransactionManager(source));

@@ -120,6 +120,7 @@ public class MechMotorApplication extends Application {
         Button invoiceButton = new Button("Sales invoice PDF…");
         Button salesHistoryButton = new Button("Sales history");
         Button receiveStockButton = new Button("Receive stock");
+        Button purchaseHistoryButton = new Button("Purchase history / cancel");
         Button fitmentButton = new Button("Vehicle fitment");
         MenuItem addCategoryItem = new MenuItem("Add root / subcategory…");
         MenuItem renameCategoryItem = new MenuItem("Rename selected category…");
@@ -435,6 +436,14 @@ public class MechMotorApplication extends Application {
             showPurchaseDialog(stage, selected, supplierFilter.getValue(), status, loadPage);
         });
 
+        purchaseHistoryButton.setOnAction(e -> {
+            if (!licenseService.status().features().contains("PURCHASING")) {
+                showError("Feature not licensed", new IllegalArgumentException("Your activation key does not include PURCHASING."));
+                return;
+            }
+            showPurchaseHistoryDialog(stage, status, loadPage);
+        });
+
         fitmentButton.setOnAction(e -> {
             Part selected = table.getSelectionModel().getSelectedItem();
             if (selected == null) {
@@ -556,7 +565,7 @@ public class MechMotorApplication extends Application {
         GridPane.setHgrow(savedViewsMenu, Priority.ALWAYS);
         for (int i = 0; i < 6; i++) GridPane.setHgrow(filters.getChildren().get(i), Priority.ALWAYS);
         FlowPane actions = new FlowPane(8, 8, addButton, editButton, deactivateButton, sellButton,
-                voidSaleButton, returnsButton, invoiceButton, salesHistoryButton, receiveStockButton, fitmentButton,
+                voidSaleButton, returnsButton, invoiceButton, salesHistoryButton, receiveStockButton, purchaseHistoryButton, fitmentButton,
                 categoryMenu, supplierMenu, backupButton, restoreButton, csvMenu,
                 previousButton, nextButton, pageLabel);
         actions.setAlignment(Pos.CENTER_LEFT);
@@ -791,6 +800,106 @@ public class MechMotorApplication extends Application {
     private static void addHistoryColumn(TableView<SaleHistoryRow> table, String title,
                                          java.util.function.Function<SaleHistoryRow, String> value) {
         TableColumn<SaleHistoryRow, String> column = new TableColumn<>(title);
+        column.setCellValueFactory(cell ->
+                new javafx.beans.property.ReadOnlyStringWrapper(value.apply(cell.getValue())));
+        table.getColumns().add(column);
+    }
+
+    private void showPurchaseHistoryDialog(Stage owner, Label status, Runnable refreshInventory) {
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.initOwner(owner);
+        dialog.setTitle("Purchase history");
+        dialog.setHeaderText("Search supplier receipts and review cancellation history. A receipt can only be cancelled when current stock covers the full reversal.");
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+
+        TextField filter = new TextField();
+        filter.setPromptText("Search receipt, supplier, invoice reference or part");
+        Button search = new Button("Search");
+        Button cancelReceipt = new Button("Cancel selected receipt…");
+        cancelReceipt.setDisable(true);
+        TableView<PurchaseHistoryRow> table = new TableView<>();
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+        table.setPlaceholder(new Label("No purchase receipts match this search."));
+        table.setPrefSize(1050, 420);
+        addPurchaseHistoryColumn(table, "Receipt", row -> row.purchaseNumber());
+        addPurchaseHistoryColumn(table, "Supplier", row -> row.supplierName());
+        addPurchaseHistoryColumn(table, "Supplier invoice", row -> row.supplierInvoiceReference());
+        addPurchaseHistoryColumn(table, "Received at", row -> row.createdAt());
+        addPurchaseHistoryColumn(table, "Status", row -> row.status());
+        addPurchaseHistoryColumn(table, "Items", row -> row.itemSummary());
+        addPurchaseHistoryColumn(table, "Units", row -> Integer.toString(row.units()));
+        addPurchaseHistoryColumn(table, "Total", row -> "₹" + rupees(row.totalPaise()));
+        addPurchaseHistoryColumn(table, "Cancellation reason", row -> row.cancellationReason());
+
+        table.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, selected) ->
+                cancelReceipt.setDisable(selected == null || !"RECEIVED".equals(selected.status())));
+        Runnable load = () -> {
+            search.setDisable(true);
+            runBackground(() -> purchasingService.history(filter.getText(), 500), rows -> {
+                table.setItems(FXCollections.observableArrayList(rows));
+                search.setDisable(false);
+                status.setText("Purchase history • " + rows.size() + " receipt(s) shown");
+            }, error -> {
+                search.setDisable(false);
+                showError("Could not load purchase history", error);
+            });
+        };
+        search.setOnAction(e -> load.run());
+        filter.setOnAction(e -> load.run());
+        cancelReceipt.setOnAction(e -> {
+            PurchaseHistoryRow selected = table.getSelectionModel().getSelectedItem();
+            if (selected == null || !"RECEIVED".equals(selected.status())) {
+                showError("Select a received receipt", new IllegalArgumentException("Only a RECEIVED receipt can be cancelled."));
+                return;
+            }
+            TextInputDialog reasonDialog = new TextInputDialog();
+            reasonDialog.initOwner(owner);
+            reasonDialog.setTitle("Purchase cancellation reason");
+            reasonDialog.setHeaderText("Record why receipt " + selected.purchaseNumber() + " is being cancelled.");
+            reasonDialog.setContentText("Reason:");
+            reasonDialog.showAndWait().ifPresent(reason -> {
+                if (reason.isBlank()) {
+                    showError("Reason required", new IllegalArgumentException("Enter a cancellation reason."));
+                    return;
+                }
+                Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
+                        "This marks the receipt CANCELLED, reverses its received stock and writes an audit movement. It is allowed only if current on-hand stock covers the entire receipt. It does not process supplier refunds or accounts payable. Continue?",
+                        ButtonType.CANCEL, ButtonType.OK);
+                confirm.initOwner(owner);
+                confirm.setTitle("Confirm purchase cancellation");
+                confirm.setHeaderText("Reverse received stock?");
+                confirm.showAndWait().filter(ButtonType.OK::equals).ifPresent(button ->
+                    runBackground(() -> purchasingService.cancelPurchase(selected.purchaseNumber(), reason), receipt -> {
+                        status.setText("Purchase cancelled: " + receipt.purchaseNumber());
+                        refreshInventory.run();
+                        load.run();
+                        Alert info = new Alert(Alert.AlertType.INFORMATION,
+                                "Receipt: " + receipt.purchaseNumber()
+                                        + "\nLines reversed: " + receipt.lineCount()
+                                        + "\nUnits reversed: " + receipt.unitsReversed()
+                                        + "\nReceipt total: ₹" + rupees(receipt.totalPaise())
+                                        + "\nReason: " + receipt.reason()
+                                        + "\n\nNo supplier refund or payment transfer was performed.", ButtonType.OK);
+                        info.setTitle("Purchase cancelled");
+                        info.setHeaderText("Stock receipt reversed");
+                        info.show();
+                    }, error -> showError("Could not cancel purchase receipt", error)));
+            });
+        });
+        HBox controls = new HBox(8, filter, search, cancelReceipt);
+        HBox.setHgrow(filter, Priority.ALWAYS);
+        VBox content = new VBox(10, controls, table);
+        content.setPadding(new Insets(12));
+        VBox.setVgrow(table, Priority.ALWAYS);
+        dialog.getDialogPane().setContent(content);
+        dialog.getDialogPane().setPrefSize(1120, 530);
+        dialog.show();
+        load.run();
+    }
+
+    private static void addPurchaseHistoryColumn(TableView<PurchaseHistoryRow> table, String title,
+                                                  java.util.function.Function<PurchaseHistoryRow, String> value) {
+        TableColumn<PurchaseHistoryRow, String> column = new TableColumn<>(title);
         column.setCellValueFactory(cell ->
                 new javafx.beans.property.ReadOnlyStringWrapper(value.apply(cell.getValue())));
         table.getColumns().add(column);

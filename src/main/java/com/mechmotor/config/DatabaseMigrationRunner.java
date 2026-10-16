@@ -58,7 +58,7 @@ public final class DatabaseMigrationRunner implements ApplicationRunner {
                 applyMigration(connection, migration, migrationVersion);
                 version = migrationVersion;
             }
-            verifyCurrentSchema(connection);
+            verifyCurrentSchema(connection, version);
         }
     }
 
@@ -91,7 +91,7 @@ public final class DatabaseMigrationRunner implements ApplicationRunner {
             ScriptUtils.executeSqlScript(connection, new ClassPathResource("schema.sql"));
             normalizeLegacyTimestamps(connection);
             createCompatibilityIndexes(connection);
-            verifyCurrentSchema(connection);
+            verifyCurrentSchema(connection, 1);
             recordVersion(connection, 1);
             connection.commit();
         } catch (Exception ex) {
@@ -168,7 +168,7 @@ public final class DatabaseMigrationRunner implements ApplicationRunner {
         connection.setAutoCommit(false);
         try {
             ScriptUtils.executeSqlScript(connection, migration);
-            verifyCurrentSchema(connection);
+            verifyCurrentSchema(connection, version);
             recordVersion(connection, version);
             connection.commit();
         } catch (Exception ex) {
@@ -211,7 +211,7 @@ public final class DatabaseMigrationRunner implements ApplicationRunner {
         return migrationVersion(resource);
     }
 
-    private static void verifyCurrentSchema(Connection connection) throws SQLException {
+    private static void verifyCurrentSchema(Connection connection, int version) throws SQLException {
         for (Map.Entry<String, List<String>> table : REQUIRED_COLUMNS.entrySet()) {
             if (!tableExists(connection, table.getKey())) {
                 throw new IllegalStateException("Database is missing required table '" + table.getKey() + "'.");
@@ -221,6 +221,19 @@ public final class DatabaseMigrationRunner implements ApplicationRunner {
                     throw new IllegalStateException("Database table '" + table.getKey()
                             + "' is missing required column '" + column + "'.");
                 }
+            }
+        }
+        if (version >= 2) {
+            if (!tableExists(connection, "purchase_cancellations")) {
+                throw new IllegalStateException("Database is missing required table 'purchase_cancellations'.");
+            }
+            for (String column : List.of("id", "purchase_id", "reason", "created_at")) {
+                if (!columnExists(connection, "purchase_cancellations", column)) {
+                    throw new IllegalStateException("Database table 'purchase_cancellations' is missing required column '" + column + "'.");
+                }
+            }
+            if (!columnExists(connection, "purchase_items", "previous_purchase_price_paise")) {
+                throw new IllegalStateException("Database table 'purchase_items' is missing required column 'previous_purchase_price_paise'.");
             }
         }
     }
