@@ -36,7 +36,14 @@ public class DatabaseBackupService {
                     "material", "color", "category_id", "supplier_id", "purchase_price_paise",
                     "selling_price_paise", "active", "updated_at"),
             "inventory", Set.of("part_id", "quantity_on_hand", "reserved_quantity", "reorder_level"),
-            "stock_movements", Set.of("id", "part_id", "movement_type", "quantity", "reference", "reason", "created_at"));
+            "stock_movements", Set.of("id", "part_id", "movement_type", "quantity", "reference", "reason", "created_at"),
+            "part_fitments", Set.of("id", "part_id", "make", "model", "year_from", "year_to", "engine", "trim", "notes", "created_at"),
+            "saved_views", Set.of("id", "name", "query", "brand", "material", "color", "category_id", "supplier_id",
+                    "stock_status", "min_quantity", "max_quantity", "min_selling_price_paise",
+                    "max_selling_price_paise", "sort_by", "ascending", "created_at", "updated_at"),
+            "sales", Set.of("id", "sale_number", "customer_name", "subtotal_paise", "discount_paise", "total_paise", "status", "created_at"),
+            "sale_items", Set.of("id", "sale_id", "part_id", "sku_snapshot", "name_snapshot", "quantity", "unit_price_paise", "line_total_paise"),
+            "payments", Set.of("id", "sale_id", "method", "amount_paise", "reference", "created_at"));
 
     private final DataSource dataSource;
     private final Path databaseFile;
@@ -130,7 +137,13 @@ public class DatabaseBackupService {
 
     private static void verifyDatabase(Path candidate, boolean requireCurrentSchema) throws Exception {
         Map<String, Set<String>> requiredColumns = new HashMap<>(REQUIRED_COLUMNS);
-        if (!requireCurrentSchema) { requiredColumns.remove("part_fitments"); requiredColumns.remove("saved_views"); }
+        if (!requireCurrentSchema) {
+            requiredColumns.remove("part_fitments");
+            requiredColumns.remove("saved_views");
+            requiredColumns.remove("sales");
+            requiredColumns.remove("sale_items");
+            requiredColumns.remove("payments");
+        }
         try (Connection connection = DriverManager.getConnection("jdbc:sqlite:" + candidate.toAbsolutePath().normalize());
              Statement statement = connection.createStatement()) {
             try (ResultSet result = statement.executeQuery("PRAGMA integrity_check")) {

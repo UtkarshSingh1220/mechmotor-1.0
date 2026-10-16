@@ -104,7 +104,13 @@ public class LicenseService {
             Signature verifier = Signature.getInstance("Ed25519");
             verifier.initVerify(verificationKey);
             verifier.update(payloadBytes);
-            if (!verifier.verify(signatureBytes)) throw new IllegalArgumentException("Activation key signature is not valid.");
+            boolean valid;
+            try {
+                valid = verifier.verify(signatureBytes);
+            } catch (java.security.SignatureException ex) {
+                throw new IllegalArgumentException("Activation key signature is not valid.", ex);
+            }
+            if (!valid) throw new IllegalArgumentException("Activation key signature is not valid.");
         } catch (IllegalArgumentException ex) {
             throw ex;
         } catch (Exception ex) {

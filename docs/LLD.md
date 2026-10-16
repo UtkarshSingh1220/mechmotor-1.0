@@ -43,6 +43,13 @@ Never run JDBC, report generation or Gmail operations on the JavaFX Application 
 - Inject `Clock` in tests to make issue/expiry behavior deterministic. Local signing verification is not protection against a privileged attacker who patches the executable.
 
 
+## Sales checkout
+
+- The initial checkout flow posts a single selected part per sale. `SalesService` wraps the operation in a Spring `TransactionTemplate`.
+- It snapshots SKU/name/unit price/quantity into `sale_items`, stores subtotal/discount/total in `sales`, deducts stock with a conditional `quantity_on_hand >= requested` update, writes a negative `SALE` stock movement and records a payment when the total is greater than zero.
+- Any stock conflict or write failure rolls back the sale, payment and stock movement together. Sale numbers use a date prefix and random suffix; the database enforces uniqueness.
+- The current flow supports full payment by CASH, UPI, CARD or BANK_TRANSFER. Multi-item carts, partial payments, void/refund workflows and PDF invoices remain future work.
+
 ## Build and test
 - `mvn clean test`
 - `mvn javafx:run`

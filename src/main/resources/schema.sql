@@ -101,3 +101,36 @@ CREATE TABLE IF NOT EXISTS saved_views (
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_saved_views_name ON saved_views(name COLLATE NOCASE);
+
+CREATE TABLE IF NOT EXISTS sales (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sale_number TEXT NOT NULL UNIQUE,
+  customer_name TEXT,
+  subtotal_paise INTEGER NOT NULL CHECK(subtotal_paise >= 0),
+  discount_paise INTEGER NOT NULL CHECK(discount_paise >= 0),
+  total_paise INTEGER NOT NULL CHECK(total_paise >= 0),
+  status TEXT NOT NULL DEFAULT 'POSTED' CHECK(status IN ('POSTED','VOIDED')),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS sale_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sale_id INTEGER NOT NULL REFERENCES sales(id),
+  part_id INTEGER NOT NULL REFERENCES parts(id),
+  sku_snapshot TEXT NOT NULL,
+  name_snapshot TEXT NOT NULL,
+  quantity INTEGER NOT NULL CHECK(quantity > 0),
+  unit_price_paise INTEGER NOT NULL CHECK(unit_price_paise >= 0),
+  line_total_paise INTEGER NOT NULL CHECK(line_total_paise >= 0)
+);
+CREATE TABLE IF NOT EXISTS payments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sale_id INTEGER NOT NULL REFERENCES sales(id),
+  method TEXT NOT NULL CHECK(method IN ('CASH','UPI','CARD','BANK_TRANSFER')),
+  amount_paise INTEGER NOT NULL CHECK(amount_paise >= 0),
+  reference TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_sales_created_at ON sales(created_at);
+CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id);
+CREATE INDEX IF NOT EXISTS idx_sale_items_part_id ON sale_items(part_id);
+CREATE INDEX IF NOT EXISTS idx_payments_sale_id ON payments(sale_id);
