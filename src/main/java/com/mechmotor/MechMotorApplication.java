@@ -112,6 +112,7 @@ public class MechMotorApplication extends Application {
         Button editButton = new Button("Edit selected");
         Button deactivateButton = new Button("Deactivate");
         Button sellButton = new Button("Sell selected");
+        Button voidSaleButton = new Button("Void sale / refund…");
         Button receiveStockButton = new Button("Receive stock");
         Button fitmentButton = new Button("Vehicle fitment");
         MenuItem addCategoryItem = new MenuItem("Add root / subcategory…");
@@ -357,6 +358,14 @@ public class MechMotorApplication extends Application {
             showSaleDialog(stage, selected, status, loadPage);
         });
 
+        voidSaleButton.setOnAction(e -> {
+            if (!licenseService.status().features().contains("SALES")) {
+                showError("Feature not licensed", new IllegalArgumentException("Your activation key does not include SALES."));
+                return;
+            }
+            showVoidSaleDialog(stage, status, loadPage);
+        });
+
         receiveStockButton.setOnAction(e -> {
             if (!licenseService.status().features().contains("PURCHASING")) {
                 showError("Feature not licensed", new IllegalArgumentException("Your activation key does not include PURCHASING."));
@@ -490,7 +499,7 @@ public class MechMotorApplication extends Application {
         GridPane.setHgrow(savedViewSelector, Priority.ALWAYS);
         GridPane.setHgrow(savedViewsMenu, Priority.ALWAYS);
         for (int i = 0; i < 6; i++) GridPane.setHgrow(filters.getChildren().get(i), Priority.ALWAYS);
-        HBox actions = new HBox(8, addButton, editButton, deactivateButton, sellButton, receiveStockButton, fitmentButton, categoryMenu, supplierMenu, backupButton, restoreButton, csvMenu,
+        HBox actions = new HBox(8, addButton, editButton, deactivateButton, sellButton, voidSaleButton, receiveStockButton, fitmentButton, categoryMenu, supplierMenu, backupButton, restoreButton, csvMenu,
                 new Separator(), previousButton, nextButton, pageLabel);
         actions.setPadding(new Insets(8, 20, 8, 20));
         HBox.setHgrow(pageLabel, Priority.ALWAYS);
@@ -593,6 +602,71 @@ public class MechMotorApplication extends Application {
             return part.sku() + " — " + part.name() + " • qty " + quantity
                     + " × ₹" + rupees(unitPricePaise) + " = ₹" + lineTotal;
         }
+    }
+
+    private void showVoidSaleDialog(Stage owner, Label status, Runnable refreshInventory) {
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.initOwner(owner);
+        dialog.setTitle("Void sale and record refund");
+        dialog.setHeaderText("Enter the original sale number. Only posted sales can be voided.");
+        ButtonType voidType = new ButtonType("Void sale", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(voidType, ButtonType.CANCEL);
+
+        TextField saleNumber = new TextField();
+        saleNumber.setPromptText("e.g. MM-20261016-AB12CD34");
+        TextField reason = new TextField();
+        reason.setPromptText("Required audit reason");
+        TextField refundReference = new TextField();
+        refundReference.setPromptText("Optional cash voucher / UPI / card refund reference");
+        GridPane form = new GridPane();
+        form.setHgap(10); form.setVgap(10); form.setPadding(new Insets(12));
+        form.add(new Label("Sale number"), 0, 0); form.add(saleNumber, 1, 0);
+        form.add(new Label("Reason"), 0, 1); form.add(reason, 1, 1);
+        form.add(new Label("Refund reference"), 0, 2); form.add(refundReference, 1, 2);
+        GridPane.setHgrow(saleNumber, Priority.ALWAYS);
+        GridPane.setHgrow(reason, Priority.ALWAYS);
+        GridPane.setHgrow(refundReference, Priority.ALWAYS);
+        dialog.getDialogPane().setContent(form);
+        dialog.getDialogPane().setPrefWidth(560);
+
+        Button voidButton = (Button) dialog.getDialogPane().lookupButton(voidType);
+        voidButton.addEventFilter(ActionEvent.ACTION, event -> {
+            event.consume();
+            if (saleNumber.getText() == null || saleNumber.getText().isBlank()
+                    || reason.getText() == null || reason.getText().isBlank()) {
+                showError("Required fields missing", new IllegalArgumentException("Enter the sale number and a reason."));
+                return;
+            }
+            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
+                    "This marks the sale VOIDED, restores its stock and records a full refund audit. It does NOT send money through a bank, UPI app or card terminal; process the actual refund separately. Continue?",
+                    ButtonType.CANCEL, ButtonType.OK);
+            confirm.initOwner(owner);
+            confirm.setTitle("Confirm sale void");
+            confirm.setHeaderText("This operation changes inventory and sales records");
+            confirm.showAndWait().filter(ButtonType.OK::equals).ifPresent(button -> {
+                voidButton.setDisable(true);
+                runBackground(() -> salesService.voidSale(saleNumber.getText(), reason.getText(), refundReference.getText()),
+                        result -> {
+                            dialog.close();
+                            status.setText("Sale voided: " + result.saleNumber() + " • " + result.unitsRestored() + " unit(s) restored");
+                            refreshInventory.run();
+                            Alert info = new Alert(Alert.AlertType.INFORMATION,
+                                    "Sale: " + result.saleNumber()
+                                            + "\nUnits restored: " + result.unitsRestored()
+                                            + "\nRefund recorded: ₹" + rupees(result.amountRefundedPaise())
+                                            + "\nOriginal payment method: " + (result.refundMethod() == null ? "No payment recorded" : result.refundMethod())
+                                            + "\nReason: " + result.reason()
+                                            + "\n\nComplete the actual payment refund separately and retain its reference.", ButtonType.OK);
+                            info.setTitle("Sale void recorded");
+                            info.setHeaderText("Inventory and audit updated");
+                            info.show();
+                        }, error -> {
+                            voidButton.setDisable(false);
+                            showError("Could not void sale", error);
+                        });
+            });
+        });
+        dialog.showAndWait();
     }
 
     private void showSaleDialog(Stage owner, Part initialPart, Label status, Runnable refreshInventory) {

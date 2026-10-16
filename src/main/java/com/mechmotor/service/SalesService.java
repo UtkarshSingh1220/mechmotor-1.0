@@ -7,6 +7,7 @@ import com.mechmotor.domain.SaleDraft;
 import com.mechmotor.domain.SaleLineDraft;
 import com.mechmotor.domain.SaleLineReceipt;
 import com.mechmotor.domain.SaleReceipt;
+import com.mechmotor.domain.SaleVoidReceipt;
 import com.mechmotor.repository.PartRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.PreparedStatementCreator;
@@ -42,6 +43,77 @@ public class SalesService {
         this.transactions = new TransactionTemplate(transactionManager);
         this.clock = clock;
     }
+
+    public SaleVoidReceipt voidSale(String rawSaleNumber, String rawReason, String rawRefundReference) {
+        String saleNumber = rawSaleNumber == null ? "" : rawSaleNumber.strip();
+        if (saleNumber.isEmpty() || saleNumber.length() > 64) {
+            throw new IllegalArgumentException("Enter a valid sale number.");
+        }
+        String reason = rawReason == null ? "" : rawReason.strip().replaceAll("\\s+", " ");
+        if (reason.isEmpty()) throw new IllegalArgumentException("A reason is required to void a sale.");
+        if (reason.length() > 240) throw new IllegalArgumentException("Void reason cannot exceed 240 characters.");
+        String refundReference = rawRefundReference == null || rawRefundReference.isBlank()
+                ? null : rawRefundReference.strip().replaceAll("\\s+", " ");
+        if (refundReference != null && refundReference.length() > 120) {
+            throw new IllegalArgumentException("Refund reference cannot exceed 120 characters.");
+        }
+
+        return transactions.execute(status -> {
+            List<SaleHeader> headers = jdbc.query(
+                    "SELECT id,sale_number,total_paise,status FROM sales WHERE sale_number=? COLLATE NOCASE",
+                    (rs, row) -> new SaleHeader(rs.getLong("id"), rs.getString("sale_number"),
+                            rs.getLong("total_paise"), rs.getString("status")), saleNumber);
+            if (headers.isEmpty()) throw new IllegalArgumentException("Sale number was not found.");
+            SaleHeader sale = headers.get(0);
+            if (!"POSTED".equals(sale.status())) {
+                throw new IllegalStateException("Only a posted sale can be voided. This sale is already " + sale.status() + ".");
+            }
+
+            List<SaleLine> lines = jdbc.query(
+                    "SELECT part_id,quantity FROM sale_items WHERE sale_id=? ORDER BY id",
+                    (rs, row) -> new SaleLine(rs.getLong("part_id"), rs.getInt("quantity")), sale.id());
+            if (lines.isEmpty()) throw new IllegalStateException("Sale has no item lines; no changes were made.");
+
+            String refundMethod = null;
+            if (sale.totalPaise() > 0) {
+                List<String> methods = jdbc.query(
+                        "SELECT method FROM payments WHERE sale_id=? ORDER BY id LIMIT 1",
+                        (rs, row) -> rs.getString("method"), sale.id());
+                if (methods.isEmpty()) {
+                    throw new IllegalStateException("Sale payment record is missing. Resolve the payment audit before voiding.");
+                }
+                refundMethod = methods.get(0);
+            }
+
+            int marked = jdbc.update("UPDATE sales SET status='VOIDED' WHERE id=? AND status='POSTED'", sale.id());
+            if (marked != 1) throw new IllegalStateException("Sale status changed. Reload and try again.");
+
+            for (SaleLine line : lines) {
+                int restored = jdbc.update("""
+                    UPDATE inventory SET quantity_on_hand=quantity_on_hand+?
+                    WHERE part_id=? AND quantity_on_hand<=?
+                    """, line.quantity(), line.partId(), Integer.MAX_VALUE - line.quantity());
+                if (restored != 1) {
+                    throw new IllegalStateException("Could not safely restore stock for a sale item; the void was rolled back.");
+                }
+                jdbc.update("""
+                    INSERT INTO stock_movements(part_id,movement_type,quantity,reference,reason)
+                    VALUES (?,'REVERSAL',?,?,?)
+                    """, line.partId(), line.quantity(), sale.saleNumber(), "Sale void: " + reason);
+            }
+
+            jdbc.update("""
+                INSERT INTO sale_voids(sale_id,reason,amount_refunded_paise,refund_method,refund_reference)
+                VALUES (?,?,?,?,?)
+                """, sale.id(), reason, sale.totalPaise(), refundMethod, refundReference);
+
+            return new SaleVoidReceipt(sale.id(), sale.saleNumber(), lines.size(),
+                    lines.stream().mapToInt(SaleLine::quantity).sum(), sale.totalPaise(), refundMethod, reason);
+        });
+    }
+
+    private record SaleHeader(long id, String saleNumber, long totalPaise, String status) { }
+    private record SaleLine(long partId, int quantity) { }
 
     /** Backward-compatible single-item checkout entry point. */
     public SaleReceipt checkout(SaleDraft draft) {
