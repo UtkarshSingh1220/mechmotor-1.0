@@ -267,6 +267,10 @@ public class MechMotorApplication extends Application {
         });
 
         importCsvItem.setOnAction(e -> {
+            if (!licenseService.status().features().contains("CSV")) {
+                showError("Feature not licensed", new IllegalArgumentException("Your activation key does not include CSV import/export."));
+                return;
+            }
             FileChooser chooser = new FileChooser();
             chooser.setTitle("Import inventory from CSV");
             chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("CSV files", "*.csv"));
@@ -289,6 +293,10 @@ public class MechMotorApplication extends Application {
         });
 
         exportCsvItem.setOnAction(e -> {
+            if (!licenseService.status().features().contains("CSV")) {
+                showError("Feature not licensed", new IllegalArgumentException("Your activation key does not include CSV import/export."));
+                return;
+            }
             FileChooser chooser = new FileChooser();
             chooser.setTitle("Export filtered inventory to CSV");
             chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("CSV files", "*.csv"));

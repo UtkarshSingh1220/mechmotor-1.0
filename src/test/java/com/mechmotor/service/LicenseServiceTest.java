@@ -72,7 +72,7 @@ class LicenseServiceTest {
     }
 
     @Test
-    void requiresInventoryFeatureAndReportsMissingActivation() {
+    void requiresInventoryFeatureAndReportsMissingActivation() throws Exception {
         assertFalse(service.status().active());
         assertTrue(service.status().message().contains("No activation key"));
         String reportsOnly = token("MM-TEST-005", "Test Shop", LocalDate.of(2026, 10, 15),
