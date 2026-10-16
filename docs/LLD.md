@@ -50,6 +50,12 @@ Never run JDBC, report generation or Gmail operations on the JavaFX Application 
 - Any stock conflict or write failure rolls back the sale, payment and stock movement together. Sale numbers use a date prefix and random suffix; the database enforces uniqueness.
 - The current flow supports full payment by CASH, UPI, CARD or BANK_TRANSFER. Multi-item carts, partial payments, void/refund workflows and PDF invoices remain future work.
 
+## Sale voids and refund audit
+
+- `SalesService.voidSale` voids a posted sale inside a transaction, restores each item quantity with overflow protection, writes positive `REVERSAL` stock movements, and records a unique `sale_voids` audit row.
+- Repeated void requests are rejected; a stock-ledger failure rolls back the sale status, inventory and void record together.
+- The app records the full refund amount and original payment method but does not initiate a real bank, UPI or card refund. Staff must process that separately and retain the refund reference.
+
 ## Purchase receiving
 
 - `PurchasingService` posts one-item supplier receipts inside a `TransactionTemplate`.
