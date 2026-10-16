@@ -21,8 +21,8 @@
 
 ## Remaining production-readiness work
 1. **Sales lifecycle:** merged full-sale voids, per-item partial returns/refunds, discount-aware cumulative rounding and atomic stock reversal/return audit. Remaining: end-to-end cashier workflow validation.
-2. **Purchasing lifecycle:** multi-item receipts and supplier payment tracking are implemented. Remaining: formal purchase orders, supplier returns, supplier credit notes and end-to-end payable reconciliation.
-3. **Invoices and reports:** merged printable PDF sales invoices generated from immutable snapshots. Operational CSV exports for sales, supplier receipts and stock movements are implemented. Remaining: reconciliation-focused report review, shop profile/tax settings and invoice template review.
+2. **Purchasing lifecycle:** multi-item receipts and supplier payment tracking are implemented. Remaining: formal purchase orders, supplier returns, supplier credit notes and end-to-end payable reconciliation validation.
+3. **Invoices and reports:** merged printable PDF sales invoices generated from immutable snapshots. Operational CSV exports for sales, supplier receipts, stock movements and supplier payable reconciliation are implemented. Remaining: validate reconciliation against real shop records, shop profile/tax settings and invoice template review.
 4. **Windows distribution:** validated JavaFX runtime layout, jpackage EXE installer, clean-machine install/launch/upgrade/uninstall testing, preserving user data.
 5. **Release quality:** representative-catalog performance tests, accessibility and UI workflow tests, dependency/license/vulnerability scans, backup/restore drills and documented recovery procedures.
 6. **Operational readiness:** support diagnostics, structured local logs, safe application shutdown, data retention/export policies and a signed release process.

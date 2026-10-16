@@ -13,7 +13,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
 
-/** Bounded-date operational CSV exports for sales, supplier receipts, and stock ledger activity. */
+/** Bounded-date operational CSV exports for sales, supplier receipts, stock movements, and supplier payables. */
 @RequiresFeature("CSV")
 @Service
 public class OperationalReportsService {
@@ -41,6 +41,7 @@ public class OperationalReportsService {
                     case SALES -> writeSales(writer, from, through);
                     case PURCHASES -> writePurchases(writer, from, through);
                     case STOCK_MOVEMENTS -> writeStockMovements(writer, from, through);
+                    case SUPPLIER_PAYABLES -> writeSupplierPayables(writer, from, through);
                 };
             }
             // Do not request ATOMIC_MOVE: providers may replace an existing target under
@@ -106,6 +107,31 @@ public class OperationalReportsService {
         return rows.size();
     }
 
+
+    private long writeSupplierPayables(BufferedWriter writer, LocalDate from, LocalDate through) throws IOException {
+        row(writer, "Purchase number", "Purchase date", "Supplier", "Purchase status",
+                "Purchase total INR", "Posted payments INR", "Outstanding balance INR");
+        List<String[]> rows = jdbc.query("""
+            SELECT p.purchase_number,p.created_at,p.supplier_name_snapshot,p.status,
+                   CASE WHEN p.status='RECEIVED' THEN p.subtotal_paise ELSE 0 END AS payable_paise,
+                   COALESCE((SELECT SUM(sp.amount_paise) FROM supplier_payments sp
+                             WHERE sp.purchase_id=p.id AND sp.status='POSTED'),0) AS paid_paise
+            FROM purchases p
+            WHERE date(p.created_at) >= ? AND date(p.created_at) <= ?
+            ORDER BY p.created_at,p.id
+            """, (rs, n) -> {
+                long payable = rs.getLong("payable_paise");
+                long paid = rs.getLong("paid_paise");
+                return new String[]{
+                    rs.getString("purchase_number"), rs.getString("created_at"),
+                    rs.getString("supplier_name_snapshot"), rs.getString("status"),
+                    rupees(payable), rupees(paid), rupees(Math.subtractExact(payable, paid))
+                };
+            }, from.toString(), through.toString());
+        for (String[] values : rows) row(writer, values);
+        return rows.size();
+    }
+
     private static void validateRange(LocalDate from, LocalDate through) {
         if (from == null || through == null) throw new IllegalArgumentException("Choose both report dates.");
         if (through.isBefore(from)) throw new IllegalArgumentException("End date cannot be before start date.");
@@ -141,5 +167,5 @@ public class OperationalReportsService {
         writer.newLine();
     }
 
-    public enum ReportType { SALES, PURCHASES, STOCK_MOVEMENTS }
+    public enum ReportType { SALES, PURCHASES, STOCK_MOVEMENTS, SUPPLIER_PAYABLES }
 }
