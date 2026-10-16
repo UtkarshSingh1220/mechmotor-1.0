@@ -136,8 +136,8 @@ class OperationalReportsServiceTest {
                 LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31)));
 
         String csv = Files.readString(target, StandardCharsets.UTF_8);
-        assertTrue(csv.contains("\"PUR-RECON-1\",\"2026-10-10 09:00:00\",\"Central Auto\",\"RECEIVED\",\"100.00\",\"25.00\",\"75.00\""));
-        assertTrue(csv.contains("\"PUR-RECON-2\",\"2026-10-12 09:00:00\",\"Central Auto\",\"CANCELLED\",\"0.00\",\"0.00\",\"0.00\""));
+        assertTrue(csv.contains("\"PUR-RECON-1\",\"2026-10-10 09:00:00\",\"Central Auto\",\"RECEIVED\",\"100.00\",\"25.00\",\"25.00\",\"50.00\""));
+        assertTrue(csv.contains("\"PUR-RECON-2\",\"2026-10-12 09:00:00\",\"Central Auto\",\"CANCELLED\",\"0.00\",\"0.00\",\"0.00\",\"0.00\""));
         assertFalse(csv.contains("\"999\""), "Voided payment amounts must not be counted as posted payments");
     }
 
