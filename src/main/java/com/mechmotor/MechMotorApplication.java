@@ -4,6 +4,8 @@ import com.mechmotor.domain.*;
 import com.mechmotor.service.InventoryService;
 import com.mechmotor.service.DatabaseBackupService;
 import com.mechmotor.service.InventoryCsvService;
+import com.mechmotor.service.LicenseService;
+import com.mechmotor.service.LicenseStatus;
 import com.mechmotor.domain.SupplierDetails;
 import com.mechmotor.domain.SupplierDraft;
 import javafx.application.Application;
@@ -12,6 +14,7 @@ import javafx.collections.FXCollections;
 import javafx.concurrent.Task;
 import javafx.event.ActionEvent;
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
@@ -25,6 +28,7 @@ import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -40,6 +44,7 @@ public class MechMotorApplication extends Application {
     private InventoryService inventory;
     private DatabaseBackupService backupService;
     private InventoryCsvService csvService;
+    private LicenseService licenseService;
     private final List<LookupOption> noOptions = List.of();
     private List<LookupOption> categories = noOptions;
     private List<LookupOption> suppliers = noOptions;
@@ -51,11 +56,20 @@ public class MechMotorApplication extends Application {
 
     @Override public void start(Stage stage) {
         inventory = context.getBean(InventoryService.class);
+        licenseService = context.getBean(LicenseService.class);
         backupService = context.getBean(DatabaseBackupService.class);
         csvService = context.getBean(InventoryCsvService.class);
         Label brand = new Label("MECHMOTOR 1.0");
         brand.getStyleClass().add("brand");
         Label subtitle = new Label("Vehicle parts • Inventory workspace");
+        Label licenseStatusLabel = new Label("License: checking…");
+        licenseStatusLabel.getStyleClass().add("license-status");
+        Button activationButton = new Button("Activation…");
+        activationButton.setOnAction(e -> showActivationDialog(stage, false, licenseStatusLabel));
+        VBox brandBlock = new VBox(5, brand, subtitle);
+        HBox header = new HBox(16, brandBlock, licenseStatusLabel, activationButton);
+        header.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(brandBlock, Priority.ALWAYS);
         Label status = new Label("Connecting to local inventory…");
         status.getStyleClass().add("status");
         Label activePartsValue = new Label("—"); activePartsValue.getStyleClass().add("metric-value");
@@ -434,7 +448,6 @@ public class MechMotorApplication extends Application {
                 new Separator(), previousButton, nextButton, pageLabel);
         actions.setPadding(new Insets(8, 20, 8, 20));
         HBox.setHgrow(pageLabel, Priority.ALWAYS);
-        VBox header = new VBox(5, brand, subtitle);
         header.setPadding(new Insets(20)); header.getStyleClass().add("header");
         VBox root = new VBox(0, header, dashboard, filters, actions, table, status);
         VBox.setVgrow(table, Priority.ALWAYS);
@@ -443,7 +456,14 @@ public class MechMotorApplication extends Application {
         var css = getClass().getResource("/styles/app.css");
         if (css != null) scene.getStylesheets().add(css.toExternalForm());
         stage.setTitle("MechMotor 1.0 — Vehicle Parts Shop");
-        stage.setMinWidth(1000); stage.setMinHeight(650); stage.setScene(scene); stage.show();
+        stage.setMinWidth(1000); stage.setMinHeight(650); stage.setScene(scene);
+        stage.show();
+        LicenseStatus currentLicense = licenseService.status();
+        updateLicenseLabel(currentLicense, licenseStatusLabel);
+        if (!currentLicense.active() && !showActivationDialog(stage, true, licenseStatusLabel)) {
+            Platform.exit();
+            return;
+        }
 
         runBackground(() -> new Lookups(inventory.categories(), inventory.suppliers()), lookups -> {
             categories = lookups.categories(); suppliers = lookups.suppliers();
@@ -452,6 +472,80 @@ public class MechMotorApplication extends Application {
             refreshSavedViews(savedViewSelector, status, null);
             loadPage.run();
         }, error -> { status.setText("Could not load categories and suppliers."); showError("Database initialization failed", error); });
+    }
+
+    private boolean showActivationDialog(Stage owner, boolean required, Label licenseStatusLabel) {
+        LicenseStatus initial = licenseService.status();
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.initOwner(owner);
+        dialog.setTitle("MechMotor activation");
+        dialog.setHeaderText(required ? "Activation is required to use MechMotor." : "License and activation details");
+        ButtonType activateType = new ButtonType("Activate", ButtonBar.ButtonData.OK_DONE);
+        ButtonType closeType = new ButtonType(required ? "Exit" : "Close", ButtonBar.ButtonData.CANCEL_CLOSE);
+        dialog.getDialogPane().getButtonTypes().addAll(activateType, closeType);
+
+        Label status = new Label(initial.active()
+                ? "Status: Active — " + initial.message()
+                : "Status: Not active — " + initial.message());
+        Label path = new Label("Activation key file: " + initial.keyFile());
+        path.setWrapText(true);
+        Label licenseDetails = new Label(initial.active()
+                ? "License ID: " + initial.licenseId() + "\nCustomer: " + initial.customer()
+                    + "\nExpires: " + (initial.expiresOn().equals(LocalDate.MAX) ? "Never" : initial.expiresOn())
+                    + "\nFeatures: " + String.join(", ", initial.features().stream().sorted().toList())
+                : "No valid license details are available.");
+        TextArea storedKey = new TextArea();
+        storedKey.setEditable(false);
+        storedKey.setWrapText(true);
+        storedKey.setPrefRowCount(2);
+        String currentKey = initial.activationKey();
+        storedKey.setText(maskActivationKey(currentKey));
+        CheckBox reveal = new CheckBox("Reveal stored activation key");
+        reveal.setOnAction(e -> storedKey.setText(reveal.isSelected() ? currentKey : maskActivationKey(currentKey)));
+        TextArea newKey = new TextArea();
+        newKey.setPromptText("Paste the signed MM1 activation key here");
+        newKey.setWrapText(true);
+        newKey.setPrefRowCount(3);
+
+        VBox content = new VBox(8, status, licenseDetails, path,
+                new Label("Stored activation key"), storedKey, reveal,
+                new Label("Enter a new activation key"), newKey);
+        content.setPadding(new Insets(12));
+        dialog.getDialogPane().setContent(content);
+        dialog.getDialogPane().setPrefWidth(680);
+        Button activate = (Button) dialog.getDialogPane().lookupButton(activateType);
+        activate.addEventFilter(ActionEvent.ACTION, event -> {
+            try {
+                LicenseStatus activated = licenseService.activate(newKey.getText());
+                updateLicenseLabel(activated, licenseStatusLabel);
+            } catch (Exception ex) {
+                event.consume();
+                showError("Activation failed", ex);
+            }
+        });
+        dialog.showAndWait();
+        LicenseStatus after = licenseService.status();
+        updateLicenseLabel(after, licenseStatusLabel);
+        return after.active() || !required;
+    }
+
+    private static String maskActivationKey(String key) {
+        if (key == null || key.isBlank()) return "(no activation key installed)";
+        if (key.length() <= 20) return "•".repeat(key.length());
+        return key.substring(0, 10) + "…" + key.substring(key.length() - 8);
+    }
+
+    private static void updateLicenseLabel(LicenseStatus status, Label label) {
+        if (!status.active()) {
+            label.setText("License: Not activated");
+            label.getStyleClass().remove("license-active");
+            if (!label.getStyleClass().contains("license-inactive")) label.getStyleClass().add("license-inactive");
+            return;
+        }
+        String expiry = status.expiresOn().equals(LocalDate.MAX) ? "Never" : status.expiresOn().toString();
+        label.setText("License: Active · " + status.licenseId() + " · Expires " + expiry);
+        label.getStyleClass().remove("license-inactive");
+        if (!label.getStyleClass().contains("license-active")) label.getStyleClass().add("license-active");
     }
 
     private VBox metricCard(String title, Label value) {

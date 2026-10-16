@@ -22,6 +22,7 @@ The inventory workspace trims and normalizes whitespace and performs case-insens
 - Use database constraints and atomic transactions for stock-affecting workflows.
 - Never permit stock below zero; preserve posted transactions and stock history through reversals.
 - Keep license issuer private keys and OAuth secrets out of source control and logs.
+- Verify signed activation tokens locally with an embedded Ed25519 public key; keep the private issuer key offline and outside the repository. The activation token is stored in the per-user application data directory.
 - Offline license enforcement is best-effort against a privileged local attacker.
 - Backups and restore must be tested before real business data is entered.
 
