@@ -3,16 +3,15 @@ package com.mechmotor.service;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.init.ScriptUtils;
 import org.sqlite.SQLiteConfig;
 import org.sqlite.SQLiteDataSource;
+import com.mechmotor.config.DatabaseMigrationRunner;
+import org.springframework.boot.DefaultApplicationArguments;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.sql.Connection;
 import java.time.LocalDate;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -28,9 +27,7 @@ class OperationalReportsServiceTest {
         config.enforceForeignKeys(true);
         SQLiteDataSource source = new SQLiteDataSource(config);
         source.setUrl("jdbc:sqlite:" + tempDir.resolve("reports-test.db").toAbsolutePath());
-        try (Connection connection = source.getConnection()) {
-            ScriptUtils.executeSqlScript(connection, new ClassPathResource("schema.sql"));
-        }
+        new DatabaseMigrationRunner(source).run(new DefaultApplicationArguments(new String[0]));
         jdbc = new JdbcTemplate(source);
         reports = new OperationalReportsService(jdbc);
     }
@@ -90,6 +87,43 @@ class OperationalReportsServiceTest {
         assertTrue(csv.contains("\"-1\""), "Negative movement quantities must remain numeric");
         assertTrue(csv.contains("\"'=2+2\""), "Formula-like references should be neutralized");
         assertTrue(csv.contains("\"'@SUM(A1:A2)\""), "Formula-like reasons should be neutralized");
+    }
+
+
+    @Test
+    void supplierPayablesReportReconcilesPostedPaymentsAndExcludesVoidedPayments() throws Exception {
+        jdbc.update("INSERT INTO suppliers(name,supplier_code) VALUES (?,?)", "Central Auto", "SUP-RECON");
+        long supplierId = jdbc.queryForObject("SELECT id FROM suppliers WHERE supplier_code=?",
+                Long.class, "SUP-RECON");
+        jdbc.update("""
+            INSERT INTO purchases(purchase_number,supplier_id,supplier_name_snapshot,
+                supplier_invoice_reference,subtotal_paise,status,created_at)
+            VALUES (?,?,?,'INV-1',10000,'RECEIVED','2026-10-10 09:00:00')
+            """, "PUR-RECON-1", supplierId, "Central Auto");
+        long purchaseId = jdbc.queryForObject("SELECT id FROM purchases WHERE purchase_number=?",
+                Long.class, "PUR-RECON-1");
+        jdbc.update("""
+            INSERT INTO supplier_payments(purchase_id,method,amount_paise,reference,status)
+            VALUES (?,'BANK_TRANSFER',2500,'PAY-POSTED','POSTED')
+            """, purchaseId);
+        jdbc.update("""
+            INSERT INTO supplier_payments(purchase_id,method,amount_paise,reference,status,void_reason,voided_at)
+            VALUES (?,'BANK_TRANSFER',999,'PAY-VOIDED','VOIDED','Duplicate entry','2026-10-11 09:00:00')
+            """, purchaseId);
+        jdbc.update("""
+            INSERT INTO purchases(purchase_number,supplier_id,supplier_name_snapshot,
+                supplier_invoice_reference,subtotal_paise,status,created_at)
+            VALUES (?,?,?,'INV-CANCELLED',5000,'CANCELLED','2026-10-12 09:00:00')
+            """, "PUR-RECON-2", supplierId, "Central Auto");
+
+        Path target = tempDir.resolve("supplier-payables.csv");
+        assertEquals(2, reports.export(OperationalReportsService.ReportType.SUPPLIER_PAYABLES, target,
+                LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31)));
+
+        String csv = Files.readString(target, StandardCharsets.UTF_8);
+        assertTrue(csv.contains("\"PUR-RECON-1\",\"2026-10-10 09:00:00\",\"Central Auto\",\"RECEIVED\",\"100.00\",\"25.00\",\"75.00\""));
+        assertTrue(csv.contains("\"PUR-RECON-2\",\"2026-10-12 09:00:00\",\"Central Auto\",\"CANCELLED\",\"0.00\",\"0.00\",\"0.00\""));
+        assertFalse(csv.contains("\"999\""), "Voided payment amounts must not be counted as posted payments");
     }
 
     @Test
