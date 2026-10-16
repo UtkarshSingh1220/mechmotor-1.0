@@ -7,6 +7,10 @@ MechMotor is designed as a lightweight desktop application for a single shop PC.
 
 > **Project status:** Inventory CRUD and the first advanced-search milestone are implemented on the working branch, with automated repository tests added. This remains an in-progress starter, not a production-ready release: saved views, vehicle fitment, imports/exports, purchasing, sales, reporting, licensing, backups and packaging remain incomplete. CI verification for the current branch must pass before this milestone is considered validated.
 
+## CSV inventory import/export
+
+Use the **CSV** menu to export the currently applied inventory filters or import a CSV catalog. Import requires the exported column set, supports quoted commas/quotes/newlines, and is create-only: duplicate SKUs are not updated. The complete import is validated and committed atomically; a bad row or existing SKU rolls back the batch. Imports are limited to 25 MB and 20,000 rows. Create categories and suppliers before importing references to them. Vehicle fitments are managed separately and are not included in the CSV.
+
 ## Backup and restore
 
 The inventory workspace includes local database backup and restore actions. Backups are created as verified SQLite snapshots in a folder you choose. Restore validates SQLite integrity and required MechMotor tables, stages the candidate, and creates a separate pre-restore backup before replacing the live database. Keep backups on a separate drive or secure storage; test restore procedures before relying on them. Close other MechMotor instances before restoring. This feature is not a substitute for off-device backups or release recovery drills.

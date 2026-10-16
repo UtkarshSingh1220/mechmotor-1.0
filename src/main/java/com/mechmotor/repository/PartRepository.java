@@ -22,7 +22,7 @@ public class PartRepository {
             rs.getString("part_number"), rs.getString("name"), rs.getString("brand"),
             rs.getString("company"), rs.getString("material"), rs.getString("color"),
             rs.getString("category"), rs.getString("supplier"), rs.getInt("quantity"),
-            rs.getLong("selling_price_paise"));
+            rs.getLong("purchase_price_paise"), rs.getLong("selling_price_paise"), rs.getInt("reorder_level"));
 
     public PartRepository(JdbcTemplate jdbc) { this.jdbc = jdbc; }
 
@@ -413,7 +413,7 @@ public class PartRepository {
         if (!q.isEmpty()) { selectArgs.add(q); selectArgs.add(q); selectArgs.add(q); }
         String joins = " FROM parts p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN suppliers s ON s.id=p.supplier_id LEFT JOIN inventory i ON i.part_id=p.id ";
         String count = "SELECT COUNT(*)" + joins + where;
-        String select = "SELECT p.id,p.sku,p.barcode,p.part_number,p.name,p.brand,p.company,p.material,p.color,COALESCE(c.name,'') category,COALESCE(s.name,'') supplier,COALESCE(i.quantity_on_hand,0) quantity,p.selling_price_paise"
+        String select = "SELECT p.id,p.sku,p.barcode,p.part_number,p.name,p.brand,p.company,p.material,p.color,COALESCE(c.name,'') category,COALESCE(s.name,'') supplier,COALESCE(i.quantity_on_hand,0) quantity,p.purchase_price_paise,p.selling_price_paise,COALESCE(i.reorder_level,0) reorder_level"
                 + joins + where + " ORDER BY " + rank + orderColumn + direction + ", p.id ASC LIMIT ? OFFSET ?";
         return new Query(count, select, args, selectArgs);
     }
@@ -430,7 +430,7 @@ public class PartRepository {
     }
 
     private String baseSelect() {
-        return "SELECT p.id,p.sku,p.barcode,p.part_number,p.name,p.brand,p.company,p.material,p.color,COALESCE(c.name,'') category,COALESCE(s.name,'') supplier,COALESCE(i.quantity_on_hand,0) quantity,p.selling_price_paise FROM parts p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN suppliers s ON s.id=p.supplier_id LEFT JOIN inventory i ON i.part_id=p.id";
+        return "SELECT p.id,p.sku,p.barcode,p.part_number,p.name,p.brand,p.company,p.material,p.color,COALESCE(c.name,'') category,COALESCE(s.name,'') supplier,COALESCE(i.quantity_on_hand,0) quantity,p.purchase_price_paise,p.selling_price_paise,COALESCE(i.reorder_level,0) reorder_level FROM parts p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN suppliers s ON s.id=p.supplier_id LEFT JOIN inventory i ON i.part_id=p.id";
     }
 
     private record Query(String countSql, String selectSql, List<Object> args, List<Object> selectArgs) {

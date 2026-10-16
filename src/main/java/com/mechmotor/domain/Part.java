@@ -5,7 +5,14 @@ import java.math.RoundingMode;
 
 public record Part(long id, String sku, String barcode, String partNumber, String name,
                    String brand, String company, String material, String color,
-                   String category, String supplier, int quantity, long sellingPricePaise) {
+                   String category, String supplier, int quantity, long purchasePricePaise,
+                   long sellingPricePaise, int reorderLevel) {
+    public Part(long id, String sku, String barcode, String partNumber, String name,
+                String brand, String company, String material, String color,
+                String category, String supplier, int quantity, long sellingPricePaise) {
+        this(id, sku, barcode, partNumber, name, brand, company, material, color,
+                category, supplier, quantity, 0L, sellingPricePaise, 0);
+    }
     public String displayValue(String property) {
         return switch (property) {
             case "sku" -> safe(sku);

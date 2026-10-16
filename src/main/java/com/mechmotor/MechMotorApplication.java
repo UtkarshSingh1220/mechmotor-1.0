@@ -89,7 +89,9 @@ public class MechMotorApplication extends Application {
         MenuButton supplierMenu = new MenuButton("Suppliers", null, addSupplierItem, editSupplierItem);
         Button backupButton = new Button("Backup database");
         Button restoreButton = new Button("Restore backup");
-        Button exportButton = new Button("Export CSV");
+        MenuItem exportCsvItem = new MenuItem("Export inventory CSV…");
+        MenuItem importCsvItem = new MenuItem("Import inventory CSV…");
+        MenuButton csvMenu = new MenuButton("CSV", null, exportCsvItem, importCsvItem);
         ComboBox<LookupOption> savedViewSelector = new ComboBox<>();
         savedViewSelector.setPromptText("Choose saved view");
         savedViewSelector.setPrefWidth(230);
@@ -237,7 +239,29 @@ public class MechMotorApplication extends Application {
                     }, error -> showError("Could not delete saved view", error)));
         });
 
-        exportButton.setOnAction(e -> {
+        importCsvItem.setOnAction(e -> {
+            FileChooser chooser = new FileChooser();
+            chooser.setTitle("Import inventory from CSV");
+            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("CSV files", "*.csv"));
+            java.io.File selected = chooser.showOpenDialog(stage);
+            if (selected == null) return;
+            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
+                    "Import creates new inventory items only. Existing SKUs are never overwritten. If any row is invalid or conflicts with an existing SKU, the entire import is rolled back. Vehicle fitments are managed separately.",
+                    ButtonType.CANCEL, ButtonType.OK);
+            confirm.setTitle("Confirm inventory import");
+            confirm.setHeaderText("Import CSV inventory?");
+            confirm.showAndWait().filter(ButtonType.OK::equals).ifPresent(button ->
+                    runBackground(() -> csvService.importFrom(selected.toPath()), count -> {
+                        page[0] = 0;
+                        status.setText("Imported " + count + " inventory item(s) from " + selected.getName());
+                        loadPage.run();
+                        Alert info = new Alert(Alert.AlertType.INFORMATION,
+                                "Imported " + count + " new inventory item(s). No existing items were overwritten.", ButtonType.OK);
+                        info.setTitle("CSV import complete"); info.setHeaderText("Inventory imported"); info.show();
+                    }, error -> showError("Inventory CSV import failed", error)));
+        });
+
+        exportCsvItem.setOnAction(e -> {
             FileChooser chooser = new FileChooser();
             chooser.setTitle("Export filtered inventory to CSV");
             chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("CSV files", "*.csv"));
@@ -393,7 +417,7 @@ public class MechMotorApplication extends Application {
         GridPane.setHgrow(savedViewSelector, Priority.ALWAYS);
         GridPane.setHgrow(savedViewsMenu, Priority.ALWAYS);
         for (int i = 0; i < 6; i++) GridPane.setHgrow(filters.getChildren().get(i), Priority.ALWAYS);
-        HBox actions = new HBox(8, addButton, editButton, deactivateButton, fitmentButton, categoryMenu, supplierMenu, backupButton, restoreButton, exportButton,
+        HBox actions = new HBox(8, addButton, editButton, deactivateButton, fitmentButton, categoryMenu, supplierMenu, backupButton, restoreButton, csvMenu,
                 new Separator(), previousButton, nextButton, pageLabel);
         actions.setPadding(new Insets(8, 20, 8, 20));
         HBox.setHgrow(pageLabel, Priority.ALWAYS);
