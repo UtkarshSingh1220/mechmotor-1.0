@@ -3,6 +3,7 @@ package com.mechmotor;
 import com.mechmotor.domain.*;
 import com.mechmotor.service.InventoryService;
 import com.mechmotor.service.DatabaseBackupService;
+import com.mechmotor.service.InventoryCsvService;
 import com.mechmotor.domain.SupplierDetails;
 import com.mechmotor.domain.SupplierDraft;
 import javafx.application.Application;
@@ -38,6 +39,7 @@ public class MechMotorApplication extends Application {
     });
     private InventoryService inventory;
     private DatabaseBackupService backupService;
+    private InventoryCsvService csvService;
     private final List<LookupOption> noOptions = List.of();
     private List<LookupOption> categories = noOptions;
     private List<LookupOption> suppliers = noOptions;
@@ -50,6 +52,7 @@ public class MechMotorApplication extends Application {
     @Override public void start(Stage stage) {
         inventory = context.getBean(InventoryService.class);
         backupService = context.getBean(DatabaseBackupService.class);
+        csvService = context.getBean(InventoryCsvService.class);
         Label brand = new Label("MECHMOTOR 1.0");
         brand.getStyleClass().add("brand");
         Label subtitle = new Label("Vehicle parts • Inventory workspace");
@@ -85,6 +88,7 @@ public class MechMotorApplication extends Application {
         MenuButton supplierMenu = new MenuButton("Suppliers", null, addSupplierItem, editSupplierItem);
         Button backupButton = new Button("Backup database");
         Button restoreButton = new Button("Restore backup");
+        Button exportButton = new Button("Export CSV");
         Button previousButton = new Button("← Previous");
         Button nextButton = new Button("Next →");
         Label pageLabel = new Label("Page 1");
@@ -102,6 +106,7 @@ public class MechMotorApplication extends Application {
         addColumn(table, "Selling price", "sellingPrice");
 
         int[] page = {0};
+        InventoryFilter[] activeFilter = {InventoryFilter.defaults(null)};
         InventoryPage[] lastPage = {new InventoryPage(List.of(), 0, 0, 50)};
         Runnable loadPage = () -> {
             try {
@@ -114,6 +119,7 @@ public class MechMotorApplication extends Application {
                         parsePaise(minPrice.getText(), "Minimum price"),
                         parsePaise(maxPrice.getText(), "Maximum price"), page[0], 50,
                         sort.getValue(), true);
+                activeFilter[0] = filter;
                 searchButton.setDisable(true);
                 status.setText("Searching local inventory…");
                 Task<InventoryPage> task = new Task<>() {
@@ -154,6 +160,20 @@ public class MechMotorApplication extends Application {
         previousButton.setOnAction(e -> { if (page[0] > 0) { page[0]--; loadPage.run(); } });
         nextButton.setOnAction(e -> { if (page[0] + 1 < lastPage[0].totalPages()) { page[0]++; loadPage.run(); } });
         sort.setOnAction(e -> { page[0] = 0; loadPage.run(); });
+        exportButton.setOnAction(e -> {
+            FileChooser chooser = new FileChooser();
+            chooser.setTitle("Export filtered inventory to CSV");
+            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("CSV files", "*.csv"));
+            chooser.setInitialFileName("mechmotor-inventory.csv");
+            java.io.File target = chooser.showSaveDialog(stage);
+            if (target == null) return;
+            runBackground(() -> csvService.export(target.toPath(), activeFilter[0]), count -> {
+                status.setText("Exported " + count + " inventory item(s) to " + target.getName());
+                Alert info = new Alert(Alert.AlertType.INFORMATION,
+                        "Exported " + count + " matching active inventory item(s) to:\n" + target, ButtonType.OK);
+                info.setTitle("CSV export complete"); info.setHeaderText("Inventory export ready"); info.show();
+            }, error -> showError("Could not export inventory", error));
+        });
 
         addButton.setOnAction(e -> showPartDialog(stage, null, () -> { page[0] = 0; loadPage.run(); }, status));
         editButton.setOnAction(e -> {
@@ -280,7 +300,7 @@ public class MechMotorApplication extends Application {
         filters.add(minQty, 0, 2); filters.add(maxQty, 1, 2); filters.add(minPrice, 2, 2);
         filters.add(maxPrice, 3, 2); filters.add(new Label("Sort:"), 4, 2); filters.add(sort, 5, 2);
         for (int i = 0; i < 6; i++) GridPane.setHgrow(filters.getChildren().get(i), Priority.ALWAYS);
-        HBox actions = new HBox(8, addButton, editButton, deactivateButton, categoryMenu, supplierMenu, backupButton, restoreButton,
+        HBox actions = new HBox(8, addButton, editButton, deactivateButton, categoryMenu, supplierMenu, backupButton, restoreButton, exportButton,
                 new Separator(), previousButton, nextButton, pageLabel);
         actions.setPadding(new Insets(8, 20, 8, 20));
         HBox.setHgrow(pageLabel, Priority.ALWAYS);
