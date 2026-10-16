@@ -338,6 +338,24 @@ public final class DatabaseMigrationRunner implements ApplicationRunner {
                 }
             }
         }
+        if (version >= 6) {
+            if (!tableExists(connection, "supplier_returns")
+                    || !tableExists(connection, "supplier_return_items")) {
+                throw new IllegalStateException("Database is missing supplier return / credit note tables.");
+            }
+            for (String column : List.of("id", "return_number", "purchase_id", "supplier_id", "reason",
+                    "credit_note_reference", "total_paise", "status", "created_at")) {
+                if (!columnExists(connection, "supplier_returns", column)) {
+                    throw new IllegalStateException("Database table 'supplier_returns' is missing required column '" + column + "'.");
+                }
+            }
+            for (String column : List.of("id", "supplier_return_id", "purchase_item_id", "part_id", "sku_snapshot",
+                    "name_snapshot", "quantity", "unit_cost_paise", "line_total_paise")) {
+                if (!columnExists(connection, "supplier_return_items", column)) {
+                    throw new IllegalStateException("Database table 'supplier_return_items' is missing required column '" + column + "'.");
+                }
+            }
+        }
     }
 
     private static boolean tableExists(Connection connection, String table) throws SQLException {
