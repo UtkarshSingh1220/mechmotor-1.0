@@ -84,3 +84,12 @@ Never run JDBC, report generation or Gmail operations on the JavaFX Application 
 
 ## Windows packaging
 Package only after validating the JavaFX native libraries, launcher configuration and dependency layout. Use `jpackage --type exe` on Windows; test install, offline launch, upgrade and uninstall on a clean machine. Installer generation may require WiX tooling depending on JDK packaging support.
+
+## Operational report exports
+
+- `OperationalReportsService` exports sales, supplier receipt, and stock-ledger rows for an inclusive date range.
+- The report range is validated and bounded to 366 days; result rows are ordered by timestamp and stable database ID.
+- Money is formatted from integer paise. CSV values are quoted and spreadsheet-formula mitigation is applied to text values.
+- Output is generated in a temporary file before publication; an existing destination is rejected rather than silently overwritten.
+- The JavaFX report picker parses dates before scheduling the export on the existing background database executor. Export requires the existing `CSV` feature entitlement.
+- Reports are operational exports, not accounting/tax certification. Recorded sale payments are not proof that an external payment settled.
