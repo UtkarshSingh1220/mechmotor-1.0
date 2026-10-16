@@ -16,6 +16,8 @@ import com.mechmotor.domain.PurchaseBalance;
 import com.mechmotor.domain.FormalPurchaseOrderDraft;
 import com.mechmotor.domain.FormalPurchaseOrderReceipt;
 import com.mechmotor.domain.FormalPurchaseOrderRow;
+import com.mechmotor.domain.FormalPurchaseOrderLineRow;
+import com.mechmotor.domain.PurchaseOrderReceiveLine;
 import com.mechmotor.repository.PartRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.PreparedStatementCreator;
@@ -319,15 +321,21 @@ public class PurchasingService {
         int limit = Math.max(1, Math.min(requestedLimit, 500));
         String pattern = "%" + escapeLike(query) + "%";
         return jdbc.query("""
-            SELECT o.id,o.order_number,o.supplier_name_snapshot,o.status,o.created_at,
+            SELECT o.id,o.order_number,o.supplier_name_snapshot,
+                   CASE WHEN o.status='ORDERED' AND EXISTS (
+                     SELECT 1 FROM purchase_order_items partial_line
+                     WHERE partial_line.purchase_order_id=o.id AND partial_line.received_quantity>0
+                   ) THEN 'PARTIALLY_RECEIVED' ELSE o.status END AS status,o.created_at,
                    COALESCE(o.expected_date,'') AS expected_date,COALESCE(o.notes,'') AS notes,
-                   COALESCE((SELECT group_concat(i.sku_snapshot || ' x' || i.quantity, ', ')
+                   COALESCE((SELECT group_concat(i.sku_snapshot || ' x' || i.quantity || ' (received ' || i.received_quantity || ')', ', ')
                              FROM purchase_order_items i WHERE i.purchase_order_id=o.id),'') AS item_summary,
                    (SELECT COUNT(*) FROM purchase_order_items i WHERE i.purchase_order_id=o.id) AS line_count,
                    COALESCE((SELECT SUM(i.quantity) FROM purchase_order_items i WHERE i.purchase_order_id=o.id),0) AS units,
-                   o.subtotal_paise,COALESCE(p.purchase_number,'') AS receipt_number,
+                   o.subtotal_paise,COALESCE((SELECT group_concat(receipt.purchase_number, ', ')
+                       FROM purchase_order_receipts r JOIN purchases receipt ON receipt.id=r.purchase_id
+                       WHERE r.purchase_order_id=o.id),'') AS receipt_number,
                    COALESCE(o.cancellation_reason,'') AS cancellation_reason
-            FROM purchase_orders o LEFT JOIN purchases p ON p.id=o.receipt_purchase_id
+            FROM purchase_orders o
             WHERE (?='' OR o.order_number LIKE ? ESCAPE '!'
                 OR o.supplier_name_snapshot LIKE ? ESCAPE '!'
                 OR COALESCE(o.notes,'') LIKE ? ESCAPE '!'
@@ -343,9 +351,57 @@ public class PurchasingService {
                 query,pattern,pattern,pattern,pattern,pattern,limit);
     }
 
-    /** Receives all outstanding order lines as one atomic stock receipt. */
+    /** Receives all remaining order quantities as one atomic stock receipt. */
     public FormalPurchaseOrderReceipt receivePurchaseOrder(String rawOrderNumber, String supplierInvoiceReference) {
         String orderNumber = cleanOrderNumber(rawOrderNumber);
+        List<FormalPurchaseOrderLineRow> remaining = purchaseOrderLines(orderNumber).stream()
+                .filter(line -> line.remainingQuantity() > 0).toList();
+        if (remaining.isEmpty()) throw new IllegalStateException("Purchase order has no outstanding quantities.");
+        List<PurchaseOrderReceiveLine> quantities = remaining.stream()
+                .map(line -> new PurchaseOrderReceiveLine(line.partId(), line.remainingQuantity())).toList();
+        return receivePurchaseOrder(orderNumber, supplierInvoiceReference, quantities);
+    }
+
+    /** Returns the ordered, received and outstanding quantities for an order. */
+    public List<FormalPurchaseOrderLineRow> purchaseOrderLines(String rawOrderNumber) {
+        String orderNumber = cleanOrderNumber(rawOrderNumber);
+        List<Long> ids = jdbc.query("SELECT id FROM purchase_orders WHERE order_number=? COLLATE NOCASE",
+                (rs,row) -> rs.getLong(1), orderNumber);
+        if (ids.isEmpty()) throw new IllegalArgumentException("Purchase order was not found.");
+        return jdbc.query("""
+            SELECT i.id,i.part_id,i.sku_snapshot,i.name_snapshot,i.quantity,
+                   i.received_quantity,i.quantity-i.received_quantity AS remaining_quantity,
+                   i.unit_cost_paise
+            FROM purchase_order_items i
+            JOIN purchase_orders o ON o.id=i.purchase_order_id
+            WHERE o.id=?
+            ORDER BY i.id
+            """, (rs,row) -> new FormalPurchaseOrderLineRow(rs.getLong("id"),rs.getLong("part_id"),
+                rs.getString("sku_snapshot"),rs.getString("name_snapshot"),rs.getInt("quantity"),
+                rs.getInt("received_quantity"),rs.getInt("remaining_quantity"),rs.getLong("unit_cost_paise")),
+                ids.get(0));
+    }
+
+    /**
+     * Posts a partial or complete receipt. Requested quantities are validated against each
+     * order line's remaining quantity; receipt, stock, ledger and order-receipt links share
+     * the same transaction so any failed write rolls the entire receipt back.
+     */
+    public FormalPurchaseOrderReceipt receivePurchaseOrder(String rawOrderNumber, String supplierInvoiceReference,
+                                                            List<PurchaseOrderReceiveLine> requestedLines) {
+        String orderNumber = cleanOrderNumber(rawOrderNumber);
+        if (requestedLines == null || requestedLines.isEmpty()) {
+            throw new IllegalArgumentException("Enter at least one quantity to receive.");
+        }
+        if (requestedLines.stream().anyMatch(java.util.Objects::isNull)) {
+            throw new IllegalArgumentException("Received order lines cannot be null.");
+        }
+        java.util.Map<Long,Integer> requested = new java.util.LinkedHashMap<>();
+        for (PurchaseOrderReceiveLine line : requestedLines) {
+            if (requested.putIfAbsent(line.partId(), line.quantity()) != null) {
+                throw new IllegalArgumentException("A part can appear only once in a receipt.");
+            }
+        }
         return transactions.execute(status -> {
             List<FormalOrderHeader> headers = jdbc.query("""
                 SELECT id,order_number,supplier_id,status FROM purchase_orders
@@ -355,21 +411,84 @@ public class PurchasingService {
             if (headers.isEmpty()) throw new IllegalArgumentException("Purchase order was not found.");
             FormalOrderHeader order = headers.get(0);
             if (!"ORDERED".equals(order.status())) {
-                throw new IllegalStateException("Only an ORDERED purchase order can be received. Current status: " + order.status() + ".");
+                throw new IllegalStateException("Only an open purchase order can be received. Current status: "
+                        + order.status() + ".");
             }
-            List<PurchaseLineDraft> lines = jdbc.query("""
-                SELECT part_id,quantity,unit_cost_paise FROM purchase_order_items
-                WHERE purchase_order_id=? ORDER BY id
-                """, (rs,row) -> new PurchaseLineDraft(rs.getLong("part_id"),rs.getInt("quantity"),
-                    rs.getLong("unit_cost_paise")), order.id());
-            if (lines.isEmpty()) throw new IllegalStateException("Purchase order has no lines.");
+            List<FormalPurchaseOrderLineRow> allLines = jdbc.query("""
+                SELECT id,part_id,sku_snapshot,name_snapshot,quantity,received_quantity,
+                       quantity-received_quantity AS remaining_quantity,unit_cost_paise
+                FROM purchase_order_items WHERE purchase_order_id=? ORDER BY id
+                """, (rs,row) -> new FormalPurchaseOrderLineRow(rs.getLong("id"),rs.getLong("part_id"),
+                    rs.getString("sku_snapshot"),rs.getString("name_snapshot"),rs.getInt("quantity"),
+                    rs.getInt("received_quantity"),rs.getInt("remaining_quantity"),rs.getLong("unit_cost_paise")),
+                    order.id());
+            if (allLines.isEmpty()) throw new IllegalStateException("Purchase order has no lines.");
+            java.util.Map<Long,FormalPurchaseOrderLineRow> byPart = new java.util.HashMap<>();
+            for (FormalPurchaseOrderLineRow line : allLines) byPart.put(line.partId(), line);
+            for (Long partId : requested.keySet()) {
+                if (!byPart.containsKey(partId)) {
+                    throw new IllegalArgumentException("A selected part does not belong to this purchase order.");
+                }
+            }
+            List<PurchaseLineDraft> receiptLines = new java.util.ArrayList<>();
+            for (FormalPurchaseOrderLineRow line : allLines) {
+                Integer quantity = requested.get(line.partId());
+                if (quantity == null) continue;
+                if (quantity <= 0) throw new IllegalArgumentException("Received quantities must be greater than zero.");
+                if (quantity > line.remainingQuantity()) {
+                    throw new IllegalArgumentException("Received quantity for " + line.sku()
+                            + " exceeds the outstanding quantity of " + line.remainingQuantity() + ".");
+                }
+                receiptLines.add(new PurchaseLineDraft(line.partId(), quantity, line.unitCostPaise()));
+            }
+            if (receiptLines.isEmpty()) throw new IllegalArgumentException("Enter at least one quantity to receive.");
+
             PurchaseOrderReceipt receipt = receive(new PurchaseOrderDraft(order.supplierId(),
-                    supplierInvoiceReference, lines));
-            int changed = jdbc.update("""
-                UPDATE purchase_orders SET status='RECEIVED',receipt_purchase_id=?
-                WHERE id=? AND status='ORDERED'
-                """, receipt.purchaseId(), order.id());
-            if (changed != 1) throw new IllegalStateException("Purchase order status changed; no receipt should be committed.");
+                    supplierInvoiceReference, receiptLines));
+            KeyHolder receiptKey = new GeneratedKeyHolder();
+            jdbc.update((PreparedStatementCreator) connection -> {
+                PreparedStatement ps = connection.prepareStatement("""
+                    INSERT INTO purchase_order_receipts(purchase_order_id,purchase_id)
+                    VALUES (?,?)
+                    """, Statement.RETURN_GENERATED_KEYS);
+                ps.setLong(1, order.id());
+                ps.setLong(2, receipt.purchaseId());
+                return ps;
+            }, receiptKey);
+            Number receiptGenerated = receiptKey.getKey();
+            if (receiptGenerated == null) throw new IllegalStateException("Database did not return the order receipt ID.");
+            long orderReceiptId = receiptGenerated.longValue();
+
+            for (PurchaseLineDraft receivedLine : receiptLines) {
+                FormalPurchaseOrderLineRow orderLine = byPart.get(receivedLine.partId());
+                List<Long> purchaseItemIds = jdbc.query("""
+                    SELECT id FROM purchase_items WHERE purchase_id=? AND part_id=?
+                    """, (rs,row) -> rs.getLong(1), receipt.purchaseId(), receivedLine.partId());
+                if (purchaseItemIds.isEmpty()) throw new IllegalStateException("Could not link a received part to its stock receipt.");
+                int linked = jdbc.update("""
+                    INSERT INTO purchase_order_receipt_items(
+                        purchase_order_receipt_id,purchase_order_item_id,purchase_item_id,quantity)
+                    VALUES (?,?,?,?)
+                    """, orderReceiptId, orderLine.id(), purchaseItemIds.get(0), receivedLine.quantity());
+                if (linked != 1) throw new IllegalStateException("Could not record the purchase order receipt line.");
+                int updated = jdbc.update("""
+                    UPDATE purchase_order_items SET received_quantity=received_quantity+?
+                    WHERE id=? AND received_quantity+?<=quantity
+                    """, receivedLine.quantity(), orderLine.id(), receivedLine.quantity());
+                if (updated != 1) throw new IllegalStateException("Outstanding quantity changed; no receipt was committed.");
+            }
+            Long remainingLines = jdbc.queryForObject("""
+                SELECT COUNT(*) FROM purchase_order_items
+                WHERE purchase_order_id=? AND received_quantity<quantity
+                """, Long.class, order.id());
+            if (remainingLines != null && remainingLines == 0) {
+                int marked = jdbc.update("""
+                    UPDATE purchase_orders SET status='RECEIVED',
+                        receipt_purchase_id=COALESCE(receipt_purchase_id,?)
+                    WHERE id=? AND status='ORDERED'
+                    """, receipt.purchaseId(), order.id());
+                if (marked != 1) throw new IllegalStateException("Purchase order status changed; receipt was rolled back.");
+            }
             return new FormalPurchaseOrderReceipt(order.orderNumber(),receipt.purchaseNumber(),
                     receipt.lineCount(),receipt.units(),receipt.totalPaise());
         });
@@ -385,9 +504,16 @@ public class PurchasingService {
             int changed = jdbc.update("""
                 UPDATE purchase_orders SET status='CANCELLED',cancellation_reason=?,cancelled_at=CURRENT_TIMESTAMP
                 WHERE order_number=? COLLATE NOCASE AND status='ORDERED'
+                  AND NOT EXISTS (SELECT 1 FROM purchase_order_items i
+                                  WHERE i.purchase_order_id=purchase_orders.id AND i.received_quantity>0)
                 """, reason, orderNumber);
             if (changed != 1) {
-                List<String> states = jdbc.query("SELECT status FROM purchase_orders WHERE order_number=? COLLATE NOCASE",
+                List<String> states = jdbc.query("""
+                        SELECT CASE WHEN o.status='ORDERED' AND EXISTS (
+                          SELECT 1 FROM purchase_order_items i WHERE i.purchase_order_id=o.id AND i.received_quantity>0
+                        ) THEN 'PARTIALLY_RECEIVED' ELSE o.status END
+                        FROM purchase_orders o WHERE o.order_number=? COLLATE NOCASE
+                        """,
                         (rs,row) -> rs.getString(1), orderNumber);
                 if (states.isEmpty()) throw new IllegalArgumentException("Purchase order was not found.");
                 throw new IllegalStateException("Only an ORDERED purchase order can be cancelled. Current status: " + states.get(0) + ".");
@@ -399,15 +525,21 @@ public class PurchasingService {
     private FormalPurchaseOrderRow purchaseOrder(String rawOrderNumber) {
         String number = cleanOrderNumber(rawOrderNumber);
         List<FormalPurchaseOrderRow> rows = jdbc.query("""
-            SELECT o.id,o.order_number,o.supplier_name_snapshot,o.status,o.created_at,
+            SELECT o.id,o.order_number,o.supplier_name_snapshot,
+                   CASE WHEN o.status='ORDERED' AND EXISTS (
+                     SELECT 1 FROM purchase_order_items partial_line
+                     WHERE partial_line.purchase_order_id=o.id AND partial_line.received_quantity>0
+                   ) THEN 'PARTIALLY_RECEIVED' ELSE o.status END AS status,o.created_at,
                    COALESCE(o.expected_date,'') AS expected_date,COALESCE(o.notes,'') AS notes,
-                   COALESCE((SELECT group_concat(i.sku_snapshot || ' x' || i.quantity, ', ')
+                   COALESCE((SELECT group_concat(i.sku_snapshot || ' x' || i.quantity || ' (received ' || i.received_quantity || ')', ', ')
                              FROM purchase_order_items i WHERE i.purchase_order_id=o.id),'') AS item_summary,
                    (SELECT COUNT(*) FROM purchase_order_items i WHERE i.purchase_order_id=o.id) AS line_count,
                    COALESCE((SELECT SUM(i.quantity) FROM purchase_order_items i WHERE i.purchase_order_id=o.id),0) AS units,
-                   o.subtotal_paise,COALESCE(p.purchase_number,'') AS receipt_number,
+                   o.subtotal_paise,COALESCE((SELECT group_concat(receipt.purchase_number, ', ')
+                       FROM purchase_order_receipts r JOIN purchases receipt ON receipt.id=r.purchase_id
+                       WHERE r.purchase_order_id=o.id),'') AS receipt_number,
                    COALESCE(o.cancellation_reason,'') AS cancellation_reason
-            FROM purchase_orders o LEFT JOIN purchases p ON p.id=o.receipt_purchase_id
+            FROM purchase_orders o
             WHERE o.order_number=? COLLATE NOCASE
             """, (rs,row) -> new FormalPurchaseOrderRow(
                 rs.getLong("id"),rs.getString("order_number"),rs.getString("supplier_name_snapshot"),

@@ -317,6 +317,27 @@ public final class DatabaseMigrationRunner implements ApplicationRunner {
                 }
             }
         }
+        if (version >= 5) {
+            for (String column : List.of("received_quantity")) {
+                if (!columnExists(connection, "purchase_order_items", column)) {
+                    throw new IllegalStateException("Database table 'purchase_order_items' is missing required column '" + column + "'.");
+                }
+            }
+            if (!tableExists(connection, "purchase_order_receipts")
+                    || !tableExists(connection, "purchase_order_receipt_items")) {
+                throw new IllegalStateException("Database is missing partial purchase order receipt tables.");
+            }
+            for (String column : List.of("id", "purchase_order_id", "purchase_id", "created_at")) {
+                if (!columnExists(connection, "purchase_order_receipts", column)) {
+                    throw new IllegalStateException("Database table 'purchase_order_receipts' is missing required column '" + column + "'.");
+                }
+            }
+            for (String column : List.of("id", "purchase_order_receipt_id", "purchase_order_item_id", "purchase_item_id", "quantity")) {
+                if (!columnExists(connection, "purchase_order_receipt_items", column)) {
+                    throw new IllegalStateException("Database table 'purchase_order_receipt_items' is missing required column '" + column + "'.");
+                }
+            }
+        }
     }
 
     private static boolean tableExists(Connection connection, String table) throws SQLException {
