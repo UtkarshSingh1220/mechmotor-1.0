@@ -74,3 +74,9 @@ CREATE INDEX IF NOT EXISTS idx_fitments_make_model_year
   ON part_fitments(make COLLATE NOCASE, model COLLATE NOCASE, year_from, year_to);
 CREATE INDEX IF NOT EXISTS idx_fitments_part
   ON part_fitments(part_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_fitments_unique_compatibility
+  ON part_fitments(
+    part_id, make COLLATE NOCASE, model COLLATE NOCASE, year_from, year_to,
+    COALESCE(engine, '') COLLATE NOCASE, COALESCE(trim, '') COLLATE NOCASE
+  );
