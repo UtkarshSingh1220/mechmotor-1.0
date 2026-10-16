@@ -35,3 +35,6 @@ Sale voids are audited transactions: sale status, stock restoration, reversal le
 
 
 Partial returns are tracked per sale item. Sale-level discounts are allocated proportionally across lines with deterministic paise rounding; full returns across all lines refund exactly the original net sale total. Return inventory, refund audit and stock-ledger entries commit atomically. Full-sale voids are blocked once any partial return exists.
+
+
+Invoice PDFs are generated locally from immutable sale/item snapshots plus payment, return and void audit records. The PDF is a business record, not proof of external refund settlement.

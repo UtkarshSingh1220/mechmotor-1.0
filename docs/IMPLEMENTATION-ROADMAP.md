@@ -12,12 +12,12 @@
 - Windows CI on Java 21 with Maven clean verify.
 
 ## Current milestone
-- **Multi-item sales cart — in progress on feat/multi-item-sales-cart:** allow up to 100 distinct items in one checkout, with overflow-safe totals and atomic sale snapshots, stock deductions, ledger movements and payment. Must pass CI before merge.
+- **Multi-item sales cart — merged:** up to 100 distinct items, overflow-safe totals, atomic sale snapshots, stock deductions, ledger movements and payment.
 
 ## Remaining production-readiness work
-1. **Sales lifecycle:** void/refund and customer returns, explicit refund records, stock return/reversal rules, idempotency and transaction audit.
+1. **Sales lifecycle:** merged full-sale voids, per-item partial returns/refunds, discount-aware cumulative rounding and atomic stock reversal/return audit. Remaining: sales history/reporting and end-to-end cashier workflow validation.
 2. **Purchasing lifecycle:** multi-item purchase orders/receipts, cancellations/returns, supplier payments and accounts payable.
-3. **Invoices and reports:** printable/PDF receipts, invoices and operational reports.
+3. **Invoices and reports:** merged printable PDF sales invoices generated from immutable snapshots. Remaining: operational reports, shop profile/tax settings and invoice template review.
 4. **Windows distribution:** validated JavaFX runtime layout, jpackage EXE installer, clean-machine install/launch/upgrade/uninstall testing, preserving user data.
 5. **Release quality:** representative-catalog performance tests, accessibility and UI workflow tests, dependency/license/vulnerability scans, backup/restore drills and documented recovery procedures.
 6. **Operational readiness:** support diagnostics, structured local logs, safe application shutdown, data retention/export policies and a signed release process.
