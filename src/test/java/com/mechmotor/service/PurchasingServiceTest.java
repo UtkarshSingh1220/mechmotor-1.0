@@ -122,7 +122,30 @@ class PurchasingServiceTest {
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM purchases WHERE id=?", Integer.class, receipt.purchaseId()));
         assertEquals("INV-2026-44", jdbc.queryForObject("SELECT supplier_invoice_reference FROM purchases WHERE id=?", String.class, receipt.purchaseId()));
         assertEquals(5, jdbc.queryForObject("SELECT quantity FROM purchase_items WHERE purchase_id=?", Integer.class, receipt.purchaseId()));
+        assertEquals(1000L, jdbc.queryForObject("SELECT previous_purchase_price_paise FROM purchase_items WHERE purchase_id=?",
+                Long.class, receipt.purchaseId()));
         assertEquals(5, jdbc.queryForObject("SELECT quantity FROM stock_movements WHERE reference=?", Integer.class, receipt.purchaseNumber()));
+    }
+
+    @Test
+    void cancellingLegacyReceiptDoesNotGuessUnknownPreviousPurchaseCost() {
+        jdbc.update("UPDATE parts SET purchase_price_paise=1500 WHERE id=?", partId);
+        jdbc.update("""
+            INSERT INTO purchases(purchase_number,supplier_id,supplier_name_snapshot,supplier_invoice_reference,subtotal_paise,status)
+            VALUES ('PO-LEGACY-1',?,?,?,1500,'RECEIVED')
+            """, supplierId, "Central Auto", "LEGACY-INVOICE");
+        Long purchaseId = jdbc.queryForObject("SELECT id FROM purchases WHERE purchase_number='PO-LEGACY-1'", Long.class);
+        jdbc.update("""
+            INSERT INTO purchase_items(purchase_id,part_id,sku_snapshot,name_snapshot,quantity,unit_cost_paise,line_total_paise)
+            VALUES (?,?,?,?,1,1500,1500)
+            """, purchaseId, partId, "PUR-001", "Air filter");
+
+        purchasing.cancelPurchase("PO-LEGACY-1", "Legacy receipt correction");
+
+        assertEquals(2, parts.findById(partId).quantity());
+        assertEquals(1500L, parts.findDetailsById(partId).purchasePricePaise());
+        assertNull(jdbc.queryForObject("SELECT previous_purchase_price_paise FROM purchase_items WHERE purchase_id=?",
+                Long.class, purchaseId));
     }
 
     @Test
