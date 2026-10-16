@@ -744,6 +744,9 @@ public class PurchasingService {
             if (!"RECEIVED".equals(balance.status())) {
                 throw new IllegalStateException("Payments can only be recorded against a RECEIVED purchase.");
             }
+            if (balance.outstandingPaise() <= 0) {
+                throw new IllegalStateException("No payable balance remains for this receipt. Review supplier credits before recording another payment.");
+            }
             if (draft.amountPaise() > balance.outstandingPaise()) {
                 throw new IllegalArgumentException("Payment exceeds outstanding balance of ₹"
                         + BigDecimal.valueOf(balance.outstandingPaise(), 2).toPlainString() + ".");
