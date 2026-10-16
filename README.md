@@ -25,7 +25,7 @@ Use the **CSV** menu to export the currently applied inventory filters or import
 
 ## Sales checkout
 
-Select an inventory row and choose **Sell selected**. Checkout supports quantity, unit price, discount, optional customer/payment reference, and CASH/UPI/CARD/BANK_TRANSFER. The sale header, item snapshot, payment, stock decrement and stock-ledger movement commit atomically. Insufficient stock or a failed write prevents the sale from being posted. Checkout supports up to 100 distinct cart lines and full payment only. Sale voids restore stock and record a refund audit; actual payment refunds must be processed separately. Partial returns/refunds are supported; Sales invoice PDFs are supported; operational summary reports remain future work.
+Select an inventory row and choose **Sell selected**. Checkout supports quantity, unit price, discount, optional customer/payment reference, and CASH/UPI/CARD/BANK_TRANSFER. The sale header, item snapshot, payment, stock decrement and stock-ledger movement commit atomically. Insufficient stock or a failed write prevents the sale from being posted. Checkout supports up to 100 distinct cart lines and full payment only. Sale voids restore stock and record a refund audit; actual payment refunds must be processed separately. Partial returns/refunds are supported; Sales invoice PDFs are supported; operational CSV reports are available for sales, supplier receipts and stock movements.
 
 ## Sale voids and refund recording
 
@@ -527,3 +527,7 @@ This is not yet certified production-ready. Do not use it as the sole system of 
 ## Security
 
 Never commit API keys, OAuth tokens, license issuer private keys, production activation material, real customer records or production database files. Use test credentials only in local environments and mock external integrations in CI.
+
+## Operational reports
+
+Choose **Operational reports…** in the inventory workspace to export a date-bounded CSV for sales, supplier receipts, or stock-ledger movements. Dates are inclusive, the maximum range is 366 days, exports run off the JavaFX Application Thread, and existing destination files are not overwritten. Report exports require the CSV license feature. These exports are operational records, not tax/accounting-certified statements; recorded payment amounts do not confirm external settlement.
