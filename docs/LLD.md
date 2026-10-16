@@ -72,10 +72,12 @@ Never run JDBC, report generation or Gmail operations on the JavaFX Application 
 
 ## Purchase receiving
 
-- `PurchasingService` posts one-item supplier receipts inside a `TransactionTemplate`.
+- `PurchasingService` posts one-item and multi-item supplier receipts inside a `TransactionTemplate`.
 - The receipt snapshots supplier name, SKU/name, quantity and unit cost, adds received units with an overflow-guarded upsert, updates the part's latest purchase cost, and writes a positive `PURCHASE` stock movement.
 - The purchase header, item, inventory update and stock ledger share one transaction. Any failure rolls back the complete receipt.
-- Supplier payments/accounts payable, multi-item purchase orders, cancellations/returns and supplier statements remain future work.
+- `FormalPurchaseOrderDraft` validates supplier, optional ISO expected date, notes and up to 100 distinct item lines; money remains integer paise.
+- `purchase_orders` and `purchase_order_items` are added by migration V4. Creating an order snapshots supplier and item details without changing stock. Order states are `ORDERED`, `RECEIVED`, and `CANCELLED`; cancellation requires a reason and is allowed only before receipt.
+- `PurchasingService.receivePurchaseOrder` receives the complete ordered quantities in one transaction, creates a linked supplier receipt, updates stock/cost/ledger, then marks the order received. Partial receipt/backorder quantities are not yet supported; supplier returns and credit notes remain future work.
 
 ## Build and test
 - `mvn clean test`
