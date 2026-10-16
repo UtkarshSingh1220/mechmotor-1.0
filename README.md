@@ -25,7 +25,7 @@ Use the **CSV** menu to export the currently applied inventory filters or import
 
 ## Sales checkout
 
-Select an inventory row and choose **Sell selected**. Checkout supports quantity, unit price, discount, optional customer/payment reference, and CASH/UPI/CARD/BANK_TRANSFER. The sale header, item snapshot, payment, stock decrement and stock-ledger movement commit atomically. Insufficient stock or a failed write prevents the sale from being posted. Checkout supports up to 100 distinct cart lines and full payment only. Sale voids restore stock and record a refund audit; actual payment refunds must be processed separately. Partial returns/refunds are supported; Sales invoice PDFs are supported; operational CSV reports are available for sales, supplier receipts and stock movements.
+Select an inventory row and choose **Sell selected**. Checkout supports quantity, unit price, discount, optional customer/payment reference, and CASH/UPI/CARD/BANK_TRANSFER. The sale header, item snapshot, payment, stock decrement and stock-ledger movement commit atomically. Insufficient stock or a failed write prevents the sale from being posted. Checkout supports up to 100 distinct cart lines and full payment only. Sale voids restore stock and record a refund audit; actual payment refunds must be processed separately. Partial returns/refunds are supported; Sales invoice PDFs are supported; operational CSV reports are available for sales, supplier receipts, stock movements and supplier payable reconciliation.
 
 ## Sale voids and refund recording
 
@@ -41,7 +41,7 @@ Use **Returns / refunds** and enter the original sale number. Select the item li
 
 ## Purchase receiving
 
-Select a part and choose **Receive stock**. Select the supplier, enter received quantity and unit cost, and optionally enter the supplier invoice/delivery-note reference. The app records a supplier receipt, snapshots item/supplier details, updates the latest purchase cost, increases inventory and writes a positive stock-ledger movement in one transaction. If any step fails, the complete receipt rolls back. Purchase history, guarded stock-receipt cancellation, multi-item stock receiving and supplier payment/account-payable tracking are supported. Payment entries are bookkeeping records only; they do not transfer money. Formal purchase orders and supplier returns remain future work.
+Select a part and choose **Receive stock**. Select the supplier, enter received quantity and unit cost, and optionally enter the supplier invoice/delivery-note reference. The app records a supplier receipt, snapshots item/supplier details, updates the latest purchase cost, increases inventory and writes a positive stock-ledger movement in one transaction. If any step fails, the complete receipt rolls back. Purchase history, guarded stock-receipt cancellation, multi-item stock receiving, supplier payment/account-payable tracking and a date-bounded supplier payable reconciliation CSV are supported. The report counts only posted supplier payments; voided payments are excluded. Payment entries are bookkeeping records only; they do not transfer money. Formal purchase orders and supplier returns remain future work.
 
 ## Database upgrades
 
