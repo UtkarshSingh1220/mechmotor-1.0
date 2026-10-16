@@ -321,10 +321,14 @@ public class PartRepository {
                   OR EXISTS (SELECT 1 FROM part_fitments vf WHERE vf.part_id=p.id AND (
                       lower(vf.make) LIKE ? ESCAPE '!' OR lower(vf.model) LIKE ? ESCAPE '!'
                       OR lower(COALESCE(vf.engine,'')) LIKE ? ESCAPE '!' OR lower(COALESCE(vf.trim,'')) LIKE ? ESCAPE '!'
-                      OR lower(COALESCE(vf.notes,'')) LIKE ? ESCAPE '!'))
+                      OR lower(COALESCE(vf.notes,'')) LIKE ? ESCAPE '!'
+                      OR (?=1 AND ? BETWEEN vf.year_from AND vf.year_to)))
                 """);
             args.add(exact); args.add(exact); args.add(exact);
             for (int i = 0; i < 15; i++) args.add(like);
+            boolean yearQuery = q.length() == 4 && q.chars().allMatch(Character::isDigit);
+            args.add(yearQuery ? 1 : 0);
+            args.add(yearQuery ? Integer.parseInt(q) : 0);
         }
         appendLike(where, args, "p.brand", f.brand());
         appendLike(where, args, "p.material", f.material());

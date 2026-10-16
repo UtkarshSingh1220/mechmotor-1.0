@@ -115,6 +115,7 @@ class PartRepositoryTest {
         assertTrue(repository.search("TOYOTA").stream().anyMatch(p -> p.id() == partId));
         assertTrue(repository.search("Corolla").stream().anyMatch(p -> p.id() == partId));
         assertTrue(repository.search("2.0L").stream().anyMatch(p -> p.id() == partId));
+        assertTrue(repository.search("2020").stream().anyMatch(p -> p.id() == partId));
         assertThrows(IllegalArgumentException.class, () -> repository.addFitment(partId, fitment));
 
         repository.removeFitment(partId, fitmentId);
