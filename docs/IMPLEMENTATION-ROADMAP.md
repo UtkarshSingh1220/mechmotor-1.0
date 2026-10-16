@@ -11,9 +11,9 @@
 
 - **Saved inventory views (in progress on `feat/saved-inventory-views`):** persist/load/delete filter presets with case-insensitive unique names; CI pending.
 
-- **Vehicle fitment (in progress on `feat/vehicle-fitment`):** per-part make/model/year compatibility records, fitment search, management UI and legacy-backup schema upgrade; CI pending.
+- **Vehicle fitment — merged:** per-part make/model/year compatibility records, fitment search, management UI and legacy-backup schema upgrade; CI passed.
 
-- **Filtered CSV export (in progress on `feat/inventory-csv-export`):** stream all rows matching the active filters to a spreadsheet-friendly CSV; CI pending.
+- **Filtered CSV export — merged:** paged filtered exports, spreadsheet-safe escaping and formula-injection mitigation; CI passed.
 
 - **Category hierarchy management — merged:** recursive category paths, root/subcategory creation, rename and guarded deactivation; CI passed.
 - **Supplier management — merged:** supplier name, phone and unique code editing with stable IDs; CI passed for the code commit.
