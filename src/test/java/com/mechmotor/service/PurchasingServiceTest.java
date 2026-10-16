@@ -2,6 +2,7 @@ package com.mechmotor.service;
 
 import com.mechmotor.domain.PartDraft;
 import com.mechmotor.domain.PurchaseDraft;
+import com.mechmotor.domain.FormalPurchaseOrderDraft;
 import com.mechmotor.domain.PurchaseReceipt;
 import com.mechmotor.domain.PurchaseOrderDraft;
 import com.mechmotor.domain.PurchaseLineDraft;
@@ -261,6 +262,73 @@ class PurchasingServiceTest {
         assertThrows(DataAccessException.class,
                 () -> purchasing.receive(new PurchaseDraft(partId, 5, 1250, supplierId, null)));
         assertEquals(3, parts.findById(partId).quantity());
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM purchases", Integer.class));
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM purchase_items", Integer.class));
+    }
+
+    @Test
+    void formalPurchaseOrderDoesNotChangeStockUntilItIsReceived() {
+        var order = purchasing.createPurchaseOrder(new FormalPurchaseOrderDraft(supplierId,
+                "2026-11-01", "Restock before month end",
+                java.util.List.of(new PurchaseLineDraft(partId, 5, 1250))));
+        assertTrue(order.orderNumber().startsWith("ORD-"));
+        assertEquals("ORDERED", order.status());
+        assertEquals(3, parts.findById(partId).quantity(), "Creating an order must not change inventory.");
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM purchase_order_items WHERE purchase_order_id=?",
+                Integer.class, order.id()));
+
+        var received = purchasing.receivePurchaseOrder(order.orderNumber(), "INV-FORMAL-1");
+        assertEquals(order.orderNumber(), received.orderNumber());
+        assertEquals(5, received.units());
+        assertEquals(6250L, received.totalPaise());
+        assertEquals(8, parts.findById(partId).quantity());
+        assertEquals("RECEIVED", purchasing.purchaseOrders(order.orderNumber(), 10).get(0).status());
+        assertEquals(received.receiptNumber(), purchasing.purchaseOrders(order.orderNumber(), 10).get(0).receiptNumber());
+        assertThrows(IllegalStateException.class,
+                () -> purchasing.receivePurchaseOrder(order.orderNumber(), "INV-DUPLICATE"));
+    }
+
+    @Test
+    void formalPurchaseOrderCancellationRequiresReasonAndNeverChangesStock() {
+        var order = purchasing.createPurchaseOrder(new FormalPurchaseOrderDraft(supplierId, null, null,
+                java.util.List.of(new PurchaseLineDraft(partId, 2, 1000))));
+        assertThrows(IllegalArgumentException.class,
+                () -> purchasing.cancelPurchaseOrder(order.orderNumber(), " "));
+        var cancelled = purchasing.cancelPurchaseOrder(order.orderNumber(), "Supplier discontinued item");
+        assertEquals("CANCELLED", cancelled.status());
+        assertEquals("Supplier discontinued item", cancelled.cancellationReason());
+        assertEquals(3, parts.findById(partId).quantity());
+        assertThrows(IllegalStateException.class,
+                () -> purchasing.receivePurchaseOrder(order.orderNumber(), null));
+        assertThrows(IllegalStateException.class,
+                () -> purchasing.cancelPurchaseOrder(order.orderNumber(), "Second cancellation"));
+    }
+
+    @Test
+    void formalPurchaseOrderRejectsDuplicatePartsAndInvalidExpectedDate() {
+        assertThrows(IllegalArgumentException.class, () -> new FormalPurchaseOrderDraft(supplierId, "01/11/2026", null,
+                java.util.List.of(new PurchaseLineDraft(partId, 1, 100))));
+        assertThrows(IllegalArgumentException.class, () -> new FormalPurchaseOrderDraft(supplierId, null, null,
+                java.util.List.of(new PurchaseLineDraft(partId, 1, 100), new PurchaseLineDraft(partId, 2, 200))));
+    }
+
+    @Test
+    void formalPurchaseOrderReceiptFailureRollsBackStockReceiptAndOrderStatus() {
+        long secondPart = parts.create(new PartDraft("PUR-PO-ROLLBACK", null, null, "Cabin filter",
+                "Brand", "Company", "Paper", "Grey", null, supplierId, "5.00", "12.00", 4, 1));
+        var order = purchasing.createPurchaseOrder(new FormalPurchaseOrderDraft(supplierId, null, null,
+                java.util.List.of(new PurchaseLineDraft(partId, 2, 1000),
+                        new PurchaseLineDraft(secondPart, 3, 500))));
+        jdbc.execute("CREATE TRIGGER fail_formal_order_receipt BEFORE INSERT ON stock_movements WHEN NEW.movement_type='PURCHASE' AND NEW.part_id="
+                + secondPart + " BEGIN SELECT RAISE(ABORT, 'simulated formal order receipt failure'); END");
+
+        assertThrows(DataAccessException.class,
+                () -> purchasing.receivePurchaseOrder(order.orderNumber(), "INV-ROLLBACK"));
+
+        assertEquals(3, parts.findById(partId).quantity());
+        assertEquals(4, parts.findById(secondPart).quantity());
+        assertEquals("ORDERED", purchasing.purchaseOrders(order.orderNumber(), 10).get(0).status());
+        assertEquals("", purchasing.purchaseOrders(order.orderNumber(), 10).get(0).receiptNumber());
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM purchases", Integer.class));
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM purchase_items", Integer.class));
     }

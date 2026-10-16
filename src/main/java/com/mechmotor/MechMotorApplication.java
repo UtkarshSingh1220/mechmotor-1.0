@@ -125,6 +125,7 @@ public class MechMotorApplication extends Application {
         Button receiveStockButton = new Button("Receive stock");
         Button receiveMultiStockButton = new Button("Receive multi-item");
         Button purchaseHistoryButton = new Button("Purchase history / cancel");
+        Button purchaseOrdersButton = new Button("Purchase orders");
         Button reportsButton = new Button("Operational reports…");
         Button supplierPaymentsButton = new Button("Supplier payments / payable");
         Button fitmentButton = new Button("Vehicle fitment");
@@ -458,6 +459,14 @@ public class MechMotorApplication extends Application {
             showPurchaseHistoryDialog(stage, status, loadPage);
         });
 
+        purchaseOrdersButton.setOnAction(e -> {
+            if (!licenseService.status().features().contains("PURCHASING")) {
+                showError("Feature not licensed", new IllegalArgumentException("Your activation key does not include PURCHASING."));
+                return;
+            }
+            showFormalPurchaseOrdersDialog(stage, status, loadPage, supplierFilter.getValue());
+        });
+
         supplierPaymentsButton.setOnAction(e -> {
             if (!licenseService.status().features().contains("PURCHASING")) {
                 showError("Feature not licensed", new IllegalArgumentException("Your activation key does not include PURCHASING."));
@@ -638,7 +647,7 @@ public class MechMotorApplication extends Application {
         GridPane.setHgrow(savedViewsMenu, Priority.ALWAYS);
         for (int i = 0; i < 6; i++) GridPane.setHgrow(filters.getChildren().get(i), Priority.ALWAYS);
         FlowPane actions = new FlowPane(8, 8, addButton, editButton, deactivateButton, sellButton,
-                voidSaleButton, returnsButton, invoiceButton, salesHistoryButton, receiveStockButton, receiveMultiStockButton, purchaseHistoryButton, supplierPaymentsButton, fitmentButton, reportsButton,
+                voidSaleButton, returnsButton, invoiceButton, salesHistoryButton, receiveStockButton, receiveMultiStockButton, purchaseHistoryButton, purchaseOrdersButton, supplierPaymentsButton, fitmentButton, reportsButton,
                 categoryMenu, supplierMenu, backupButton, restoreButton, csvMenu,
                 previousButton, nextButton, pageLabel);
         actions.setAlignment(Pos.CENTER_LEFT);
@@ -1154,6 +1163,267 @@ public class MechMotorApplication extends Application {
 
     private record PurchaseCartLine(Part part, int quantity, long unitCostPaise) {
         long lineTotalPaise() { return Math.multiplyExact((long) quantity, unitCostPaise); }
+    }
+
+    private void showFormalPurchaseOrdersDialog(Stage owner, Label status, Runnable refreshInventory, LookupOption defaultSupplier) {
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.initOwner(owner);
+        dialog.setTitle("Formal purchase orders");
+        dialog.setHeaderText("Create orders before delivery. Stock changes only when an ORDERED purchase order is received.");
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+
+        TextField filter = new TextField();
+        filter.setPromptText("Search order number, supplier, notes or part");
+        Button search = new Button("Search");
+        Button create = new Button("＋ Create order");
+        Button receive = new Button("Receive selected…");
+        Button cancel = new Button("Cancel selected…");
+        receive.setDisable(true);
+        cancel.setDisable(true);
+
+        TableView<FormalPurchaseOrderRow> table = new TableView<>();
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+        table.setPlaceholder(new Label("No purchase orders found."));
+        table.setPrefSize(1050, 420);
+        addPurchaseOrderColumn(table, "Order", row -> row.orderNumber());
+        addPurchaseOrderColumn(table, "Supplier", row -> row.supplierName());
+        addPurchaseOrderColumn(table, "Status", row -> row.status());
+        addPurchaseOrderColumn(table, "Created", row -> row.createdAt());
+        addPurchaseOrderColumn(table, "Expected", row -> row.expectedDate());
+        addPurchaseOrderColumn(table, "Items", row -> row.itemSummary());
+        addPurchaseOrderColumn(table, "Units", row -> Integer.toString(row.units()));
+        addPurchaseOrderColumn(table, "Total", row -> "₹" + rupees(row.totalPaise()));
+        addPurchaseOrderColumn(table, "Receipt", row -> row.receiptNumber());
+        addPurchaseOrderColumn(table, "Cancellation reason", row -> row.cancellationReason());
+
+        table.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, selected) -> {
+            receive.setDisable(selected == null || !"ORDERED".equals(selected.status()));
+            cancel.setDisable(selected == null || !"ORDERED".equals(selected.status()));
+        });
+        Runnable load = () -> {
+            search.setDisable(true);
+            runBackground(() -> purchasingService.purchaseOrders(filter.getText(), 500), rows -> {
+                table.setItems(FXCollections.observableArrayList(rows));
+                search.setDisable(false);
+                status.setText("Purchase orders • " + rows.size() + " order(s) shown");
+            }, error -> {
+                search.setDisable(false);
+                showError("Could not load purchase orders", error);
+            });
+        };
+        search.setOnAction(e -> load.run());
+        filter.setOnAction(e -> load.run());
+        create.setOnAction(e -> showCreatePurchaseOrderDialog(owner, defaultSupplier, load));
+        receive.setOnAction(e -> {
+            FormalPurchaseOrderRow selected = table.getSelectionModel().getSelectedItem();
+            if (selected == null || !"ORDERED".equals(selected.status())) return;
+            TextInputDialog invoiceDialog = new TextInputDialog();
+            invoiceDialog.initOwner(owner);
+            invoiceDialog.setTitle("Receive purchase order");
+            invoiceDialog.setHeaderText("Receive all ordered quantities for " + selected.orderNumber() + ".");
+            invoiceDialog.setContentText("Supplier invoice / delivery note (optional):");
+            invoiceDialog.showAndWait().ifPresent(invoice -> {
+                Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
+                        "This posts the full order as one receipt, increases stock and records stock ledger movements atomically. Check the delivery against the order before continuing.",
+                        ButtonType.CANCEL, ButtonType.OK);
+                confirm.initOwner(owner);
+                confirm.setTitle("Confirm goods received");
+                confirm.setHeaderText("Post received stock?");
+                confirm.showAndWait().filter(ButtonType.OK::equals).ifPresent(button ->
+                    runBackground(() -> purchasingService.receivePurchaseOrder(selected.orderNumber(), invoice), receipt -> {
+                        status.setText("Purchase order received: " + receipt.orderNumber());
+                        refreshInventory.run();
+                        load.run();
+                        Alert info = new Alert(Alert.AlertType.INFORMATION,
+                                "Order: " + receipt.orderNumber() + "\nReceipt: " + receipt.receiptNumber()
+                                        + "\nLines: " + receipt.lineCount() + "\nUnits received: " + receipt.units()
+                                        + "\nTotal: ₹" + rupees(receipt.totalPaise()), ButtonType.OK);
+                        info.setTitle("Purchase order received");
+                        info.setHeaderText("Stock receipt posted");
+                        info.show();
+                    }, error -> showError("Could not receive purchase order", error)));
+            });
+        });
+        cancel.setOnAction(e -> {
+            FormalPurchaseOrderRow selected = table.getSelectionModel().getSelectedItem();
+            if (selected == null || !"ORDERED".equals(selected.status())) return;
+            TextInputDialog reasonDialog = new TextInputDialog();
+            reasonDialog.initOwner(owner);
+            reasonDialog.setTitle("Cancel purchase order");
+            reasonDialog.setHeaderText("Record why " + selected.orderNumber() + " is being cancelled.");
+            reasonDialog.setContentText("Reason:");
+            reasonDialog.showAndWait().ifPresent(reason -> {
+                Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
+                        "Only the order will be cancelled. No inventory or supplier payment records will be changed.",
+                        ButtonType.CANCEL, ButtonType.OK);
+                confirm.initOwner(owner);
+                confirm.setTitle("Confirm order cancellation");
+                confirm.setHeaderText("Cancel this order?");
+                confirm.showAndWait().filter(ButtonType.OK::equals).ifPresent(button ->
+                    runBackground(() -> purchasingService.cancelPurchaseOrder(selected.orderNumber(), reason), cancelled -> {
+                        status.setText("Purchase order cancelled: " + cancelled.orderNumber());
+                        load.run();
+                    }, error -> showError("Could not cancel purchase order", error)));
+            });
+        });
+
+        HBox controls = new HBox(8, filter, search, create, receive, cancel);
+        HBox.setHgrow(filter, Priority.ALWAYS);
+        VBox box = new VBox(10, controls, table);
+        box.setPadding(new Insets(12));
+        VBox.setVgrow(table, Priority.ALWAYS);
+        dialog.getDialogPane().setContent(box);
+        dialog.getDialogPane().setPrefSize(1120, 540);
+        dialog.show();
+        load.run();
+    }
+
+    private void showCreatePurchaseOrderDialog(Stage owner, LookupOption defaultSupplier, Runnable onCreated) {
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.initOwner(owner);
+        dialog.setTitle("Create formal purchase order");
+        dialog.setHeaderText("This records an order only; inventory remains unchanged until you receive it.");
+        ButtonType createType = new ButtonType("Create order", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(createType, ButtonType.CANCEL);
+
+        ComboBox<LookupOption> supplier = new ComboBox<>(FXCollections.observableArrayList(suppliers));
+        supplier.setPromptText("Supplier");
+        if (defaultSupplier != null) supplier.setValue(suppliers.stream()
+                .filter(s -> s.id() == defaultSupplier.id()).findFirst().orElse(null));
+        supplier.setMaxWidth(Double.MAX_VALUE);
+        TextField expectedDate = new TextField();
+        expectedDate.setPromptText("Expected date YYYY-MM-DD (optional)");
+        TextField notes = new TextField();
+        notes.setPromptText("Notes (optional, max 500 characters)");
+        TextField partQuery = new TextField();
+        partQuery.setPromptText("Search SKU, barcode or part name");
+        Button searchParts = new Button("Find parts");
+        ComboBox<Part> partPicker = new ComboBox<>();
+        partPicker.setPromptText("Select part");
+        partPicker.setMaxWidth(Double.MAX_VALUE);
+        partPicker.setConverter(new javafx.util.StringConverter<>() {
+            @Override public String toString(Part part) { return part == null ? "" : part.sku() + " — " + part.name() + " (stock " + part.quantity() + ")"; }
+            @Override public Part fromString(String value) { return null; }
+        });
+        TextField quantity = new TextField("1");
+        TextField unitCost = new TextField();
+        unitCost.setPromptText("Unit cost ₹");
+        Button addLine = new Button("Add line");
+        Button removeLine = new Button("Remove selected");
+        TableView<PurchaseCartLine> cart = new TableView<>();
+        cart.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+        cart.setPrefHeight(240);
+        TableColumn<PurchaseCartLine,String> itemCol = new TableColumn<>("SKU / Part");
+        itemCol.setCellValueFactory(c -> new javafx.beans.property.ReadOnlyStringWrapper(
+                c.getValue().part().sku() + " — " + c.getValue().part().name()));
+        TableColumn<PurchaseCartLine,String> qtyCol = new TableColumn<>("Qty ordered");
+        qtyCol.setCellValueFactory(c -> new javafx.beans.property.ReadOnlyStringWrapper(
+                Integer.toString(c.getValue().quantity())));
+        TableColumn<PurchaseCartLine,String> costCol = new TableColumn<>("Unit cost");
+        costCol.setCellValueFactory(c -> new javafx.beans.property.ReadOnlyStringWrapper(
+                "₹" + rupees(c.getValue().unitCostPaise())));
+        TableColumn<PurchaseCartLine,String> totalCol = new TableColumn<>("Line total");
+        totalCol.setCellValueFactory(c -> new javafx.beans.property.ReadOnlyStringWrapper(
+                "₹" + rupees(c.getValue().lineTotalPaise())));
+        cart.getColumns().addAll(itemCol,qtyCol,costCol,totalCol);
+        Label totalLabel = new Label("0 line(s) • Total ₹0.00");
+        Label searchStatus = new Label("Search inventory to add ordered items.");
+
+        Runnable findParts = () -> {
+            searchParts.setDisable(true);
+            runBackground(() -> inventory.search(InventoryFilter.defaults(partQuery.getText())), page -> {
+                partPicker.setItems(FXCollections.observableArrayList(page.items()));
+                searchStatus.setText(page.totalItems() + " matching part(s); first " + page.items().size() + " shown.");
+                searchParts.setDisable(false);
+            }, error -> {
+                searchParts.setDisable(false);
+                showError("Could not search inventory", error);
+            });
+        };
+        searchParts.setOnAction(e -> findParts.run());
+        partQuery.setOnAction(e -> findParts.run());
+        partPicker.valueProperty().addListener((obs, old, selected) -> {
+            if (selected != null) unitCost.setText(rupees(selected.purchasePricePaise()));
+        });
+        addLine.setOnAction(e -> {
+            try {
+                Part selected = partPicker.getValue();
+                if (selected == null) throw new IllegalArgumentException("Search and select a part.");
+                if (cart.getItems().size() >= 100) throw new IllegalArgumentException("A purchase order can contain at most 100 distinct parts.");
+                if (cart.getItems().stream().anyMatch(line -> line.part().id() == selected.id()))
+                    throw new IllegalArgumentException("This part is already on the order. Remove it before adding it again.");
+                PurchaseCartLine line = new PurchaseCartLine(selected,
+                        parseRequiredInteger(quantity.getText(), "Quantity ordered"),
+                        parsePaise(unitCost.getText(), "Unit cost"));
+                if (line.quantity() > 100_000) throw new IllegalArgumentException("Quantity cannot exceed 100,000 per part.");
+                line.lineTotalPaise();
+                cart.getItems().add(line);
+                updatePurchaseCartTotal(cart, totalLabel);
+            } catch (IllegalArgumentException | ArithmeticException ex) {
+                showError("Check purchase order line", ex);
+            }
+        });
+        removeLine.setOnAction(e -> {
+            PurchaseCartLine selected = cart.getSelectionModel().getSelectedItem();
+            if (selected != null) cart.getItems().remove(selected);
+            updatePurchaseCartTotal(cart, totalLabel);
+        });
+
+        GridPane form = new GridPane();
+        form.setHgap(8); form.setVgap(8); form.setPadding(new Insets(12));
+        form.add(new Label("Supplier"),0,0); form.add(supplier,1,0);
+        form.add(new Label("Expected date"),0,1); form.add(expectedDate,1,1);
+        form.add(new Label("Notes"),0,2); form.add(notes,1,2);
+        form.add(new Label("Find part"),0,3); form.add(new HBox(8,partQuery,searchParts),1,3);
+        form.add(new Label("Part"),0,4); form.add(partPicker,1,4);
+        form.add(new Label("Quantity"),0,5); form.add(quantity,1,5);
+        form.add(new Label("Unit cost ₹"),0,6); form.add(unitCost,1,6);
+        form.add(new HBox(8,addLine,removeLine),1,7);
+        form.add(searchStatus,0,8,2,1);
+        form.add(cart,0,9,2,1);
+        form.add(totalLabel,0,10,2,1);
+        GridPane.setHgrow(supplier,Priority.ALWAYS); GridPane.setHgrow(expectedDate,Priority.ALWAYS);
+        GridPane.setHgrow(notes,Priority.ALWAYS); GridPane.setHgrow(partQuery,Priority.ALWAYS);
+        GridPane.setHgrow(partPicker,Priority.ALWAYS); GridPane.setHgrow(cart,Priority.ALWAYS);
+        GridPane.setVgrow(cart,Priority.ALWAYS);
+        dialog.getDialogPane().setContent(form);
+        dialog.getDialogPane().setPrefSize(850,720);
+        Button submit = (Button) dialog.getDialogPane().lookupButton(createType);
+        submit.addEventFilter(ActionEvent.ACTION,event -> {
+            event.consume();
+            try {
+                if (supplier.getValue()==null) throw new IllegalArgumentException("Choose a supplier.");
+                if (cart.getItems().isEmpty()) throw new IllegalArgumentException("Add at least one part.");
+                List<PurchaseLineDraft> lines = cart.getItems().stream()
+                        .map(line -> new PurchaseLineDraft(line.part().id(),line.quantity(),line.unitCostPaise())).toList();
+                FormalPurchaseOrderDraft draft = new FormalPurchaseOrderDraft(supplier.getValue().id(),
+                        expectedDate.getText(),notes.getText(),lines);
+                submit.setDisable(true);
+                runBackground(() -> purchasingService.createPurchaseOrder(draft), created -> {
+                    dialog.close();
+                    onCreated.run();
+                    Alert info = new Alert(Alert.AlertType.INFORMATION,
+                            "Order: " + created.orderNumber() + "\nSupplier: " + created.supplierName()
+                                    + "\nLines: " + created.lineCount() + "\nUnits: " + created.units()
+                                    + "\nOrder total: ₹" + rupees(created.totalPaise())
+                                    + "\nStock has not changed. Receive this order when goods arrive.", ButtonType.OK);
+                    info.setTitle("Purchase order created");
+                    info.setHeaderText("Order recorded");
+                    info.show();
+                }, error -> { submit.setDisable(false); showError("Could not create purchase order",error); });
+            } catch (IllegalArgumentException ex) {
+                showError("Check purchase order details",ex);
+            }
+        });
+        dialog.show();
+        findParts.run();
+    }
+
+    private static void addPurchaseOrderColumn(TableView<FormalPurchaseOrderRow> table, String title,
+                                               java.util.function.Function<FormalPurchaseOrderRow,String> value) {
+        TableColumn<FormalPurchaseOrderRow,String> column = new TableColumn<>(title);
+        column.setCellValueFactory(cell -> new javafx.beans.property.ReadOnlyStringWrapper(value.apply(cell.getValue())));
+        table.getColumns().add(column);
     }
 
     private void showMultiPurchaseDialog(Stage owner, LookupOption defaultSupplier,

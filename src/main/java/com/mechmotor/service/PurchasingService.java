@@ -13,6 +13,9 @@ import com.mechmotor.domain.SupplierPaymentDraft;
 import com.mechmotor.domain.SupplierPaymentReceipt;
 import com.mechmotor.domain.SupplierPaymentRow;
 import com.mechmotor.domain.PurchaseBalance;
+import com.mechmotor.domain.FormalPurchaseOrderDraft;
+import com.mechmotor.domain.FormalPurchaseOrderReceipt;
+import com.mechmotor.domain.FormalPurchaseOrderRow;
 import com.mechmotor.repository.PartRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.PreparedStatementCreator;
@@ -257,6 +260,172 @@ public class PurchasingService {
                     prepared.size(), totalUnits, total);
         });
     }
+
+    /** Creates a formal order without changing stock. */
+    public FormalPurchaseOrderRow createPurchaseOrder(FormalPurchaseOrderDraft draft) {
+        return transactions.execute(status -> {
+            LookupOption supplier = parts.suppliers().stream()
+                    .filter(option -> option.id() == draft.supplierId())
+                    .findFirst().orElseThrow(() -> new IllegalArgumentException("Selected supplier does not exist."));
+            List<PreparedPurchaseLine> prepared = new java.util.ArrayList<>();
+            long total = 0;
+            try {
+                for (PurchaseLineDraft line : draft.lines()) {
+                    PartDetails part = parts.findDetailsById(line.partId());
+                    long lineTotal = Math.multiplyExact((long) line.quantity(), line.unitCostPaise());
+                    total = Math.addExact(total, lineTotal);
+                    prepared.add(new PreparedPurchaseLine(part, line, lineTotal));
+                }
+            } catch (ArithmeticException ex) {
+                throw new IllegalArgumentException("Purchase order amount is too large.", ex);
+            }
+            String orderNumber = "ORD-" + LocalDate.now(clock).toString().replace("-", "")
+                    + "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(java.util.Locale.ROOT);
+            KeyHolder key = new GeneratedKeyHolder();
+            long orderTotal = total;
+            jdbc.update((PreparedStatementCreator) connection -> {
+                PreparedStatement ps = connection.prepareStatement("""
+                    INSERT INTO purchase_orders(order_number,supplier_id,supplier_name_snapshot,status,
+                                                expected_date,notes,subtotal_paise)
+                    VALUES (?,?,?,'ORDERED',?,?,?)
+                    """, Statement.RETURN_GENERATED_KEYS);
+                ps.setString(1, orderNumber);
+                ps.setLong(2, supplier.id());
+                ps.setString(3, supplier.name());
+                ps.setString(4, draft.expectedDate());
+                ps.setString(5, draft.notes());
+                ps.setLong(6, orderTotal);
+                return ps;
+            }, key);
+            Number generated = key.getKey();
+            if (generated == null) throw new IllegalStateException("Database did not return the purchase order ID.");
+            long orderId = generated.longValue();
+            for (PreparedPurchaseLine item : prepared) {
+                jdbc.update("""
+                    INSERT INTO purchase_order_items(purchase_order_id,part_id,sku_snapshot,name_snapshot,
+                                                     quantity,unit_cost_paise,line_total_paise)
+                    VALUES (?,?,?,?,?,?,?)
+                    """, orderId, item.part().id(), item.part().sku(), item.part().name(),
+                        item.draft().quantity(), item.draft().unitCostPaise(), item.lineTotalPaise());
+            }
+            return purchaseOrder(orderNumber);
+        });
+    }
+
+    /** Lists formal purchase orders, newest first, with a bounded search. */
+    public List<FormalPurchaseOrderRow> purchaseOrders(String rawQuery, int requestedLimit) {
+        String query = rawQuery == null ? "" : rawQuery.strip().replaceAll("\\s+", " ");
+        if (query.length() > 120) throw new IllegalArgumentException("Purchase order search cannot exceed 120 characters.");
+        int limit = Math.max(1, Math.min(requestedLimit, 500));
+        String pattern = "%" + escapeLike(query) + "%";
+        return jdbc.query("""
+            SELECT o.id,o.order_number,o.supplier_name_snapshot,o.status,o.created_at,
+                   COALESCE(o.expected_date,'') AS expected_date,COALESCE(o.notes,'') AS notes,
+                   COALESCE((SELECT group_concat(i.sku_snapshot || ' x' || i.quantity, ', ')
+                             FROM purchase_order_items i WHERE i.purchase_order_id=o.id),'') AS item_summary,
+                   (SELECT COUNT(*) FROM purchase_order_items i WHERE i.purchase_order_id=o.id) AS line_count,
+                   COALESCE((SELECT SUM(i.quantity) FROM purchase_order_items i WHERE i.purchase_order_id=o.id),0) AS units,
+                   o.subtotal_paise,COALESCE(p.purchase_number,'') AS receipt_number,
+                   COALESCE(o.cancellation_reason,'') AS cancellation_reason
+            FROM purchase_orders o LEFT JOIN purchases p ON p.id=o.receipt_purchase_id
+            WHERE (?='' OR o.order_number LIKE ? ESCAPE '!'
+                OR o.supplier_name_snapshot LIKE ? ESCAPE '!'
+                OR COALESCE(o.notes,'') LIKE ? ESCAPE '!'
+                OR EXISTS (SELECT 1 FROM purchase_order_items i WHERE i.purchase_order_id=o.id
+                           AND (i.sku_snapshot LIKE ? ESCAPE '!' OR i.name_snapshot LIKE ? ESCAPE '!')))
+            ORDER BY o.created_at DESC,o.id DESC LIMIT ?
+            """, (rs,row) -> new FormalPurchaseOrderRow(
+                rs.getLong("id"),rs.getString("order_number"),rs.getString("supplier_name_snapshot"),
+                rs.getString("status"),rs.getString("created_at"),rs.getString("expected_date"),
+                rs.getString("notes"),rs.getString("item_summary"),rs.getInt("line_count"),
+                rs.getInt("units"),rs.getLong("subtotal_paise"),rs.getString("receipt_number"),
+                rs.getString("cancellation_reason")),
+                query,pattern,pattern,pattern,pattern,pattern,limit);
+    }
+
+    /** Receives all outstanding order lines as one atomic stock receipt. */
+    public FormalPurchaseOrderReceipt receivePurchaseOrder(String rawOrderNumber, String supplierInvoiceReference) {
+        String orderNumber = cleanOrderNumber(rawOrderNumber);
+        return transactions.execute(status -> {
+            List<FormalOrderHeader> headers = jdbc.query("""
+                SELECT id,order_number,supplier_id,status FROM purchase_orders
+                WHERE order_number=? COLLATE NOCASE
+                """, (rs,row) -> new FormalOrderHeader(rs.getLong("id"),rs.getString("order_number"),
+                    rs.getLong("supplier_id"),rs.getString("status")), orderNumber);
+            if (headers.isEmpty()) throw new IllegalArgumentException("Purchase order was not found.");
+            FormalOrderHeader order = headers.get(0);
+            if (!"ORDERED".equals(order.status())) {
+                throw new IllegalStateException("Only an ORDERED purchase order can be received. Current status: " + order.status() + ".");
+            }
+            List<PurchaseLineDraft> lines = jdbc.query("""
+                SELECT part_id,quantity,unit_cost_paise FROM purchase_order_items
+                WHERE purchase_order_id=? ORDER BY id
+                """, (rs,row) -> new PurchaseLineDraft(rs.getLong("part_id"),rs.getInt("quantity"),
+                    rs.getLong("unit_cost_paise")), order.id());
+            if (lines.isEmpty()) throw new IllegalStateException("Purchase order has no lines.");
+            PurchaseOrderReceipt receipt = receive(new PurchaseOrderDraft(order.supplierId(),
+                    supplierInvoiceReference, lines));
+            int changed = jdbc.update("""
+                UPDATE purchase_orders SET status='RECEIVED',receipt_purchase_id=?
+                WHERE id=? AND status='ORDERED'
+                """, receipt.purchaseId(), order.id());
+            if (changed != 1) throw new IllegalStateException("Purchase order status changed; no receipt should be committed.");
+            return new FormalPurchaseOrderReceipt(order.orderNumber(),receipt.purchaseNumber(),
+                    receipt.lineCount(),receipt.units(),receipt.totalPaise());
+        });
+    }
+
+    /** Cancels an order that has not yet been received; stock is not changed. */
+    public FormalPurchaseOrderRow cancelPurchaseOrder(String rawOrderNumber, String rawReason) {
+        String orderNumber = cleanOrderNumber(rawOrderNumber);
+        String reason = rawReason == null ? "" : rawReason.strip().replaceAll("\\s+", " ");
+        if (reason.isEmpty()) throw new IllegalArgumentException("A purchase order cancellation reason is required.");
+        if (reason.length() > 240) throw new IllegalArgumentException("Cancellation reason cannot exceed 240 characters.");
+        return transactions.execute(status -> {
+            int changed = jdbc.update("""
+                UPDATE purchase_orders SET status='CANCELLED',cancellation_reason=?,cancelled_at=CURRENT_TIMESTAMP
+                WHERE order_number=? COLLATE NOCASE AND status='ORDERED'
+                """, reason, orderNumber);
+            if (changed != 1) {
+                List<String> states = jdbc.query("SELECT status FROM purchase_orders WHERE order_number=? COLLATE NOCASE",
+                        (rs,row) -> rs.getString(1), orderNumber);
+                if (states.isEmpty()) throw new IllegalArgumentException("Purchase order was not found.");
+                throw new IllegalStateException("Only an ORDERED purchase order can be cancelled. Current status: " + states.get(0) + ".");
+            }
+            return purchaseOrder(orderNumber);
+        });
+    }
+
+    private FormalPurchaseOrderRow purchaseOrder(String rawOrderNumber) {
+        String number = cleanOrderNumber(rawOrderNumber);
+        List<FormalPurchaseOrderRow> rows = jdbc.query("""
+            SELECT o.id,o.order_number,o.supplier_name_snapshot,o.status,o.created_at,
+                   COALESCE(o.expected_date,'') AS expected_date,COALESCE(o.notes,'') AS notes,
+                   COALESCE((SELECT group_concat(i.sku_snapshot || ' x' || i.quantity, ', ')
+                             FROM purchase_order_items i WHERE i.purchase_order_id=o.id),'') AS item_summary,
+                   (SELECT COUNT(*) FROM purchase_order_items i WHERE i.purchase_order_id=o.id) AS line_count,
+                   COALESCE((SELECT SUM(i.quantity) FROM purchase_order_items i WHERE i.purchase_order_id=o.id),0) AS units,
+                   o.subtotal_paise,COALESCE(p.purchase_number,'') AS receipt_number,
+                   COALESCE(o.cancellation_reason,'') AS cancellation_reason
+            FROM purchase_orders o LEFT JOIN purchases p ON p.id=o.receipt_purchase_id
+            WHERE o.order_number=? COLLATE NOCASE
+            """, (rs,row) -> new FormalPurchaseOrderRow(
+                rs.getLong("id"),rs.getString("order_number"),rs.getString("supplier_name_snapshot"),
+                rs.getString("status"),rs.getString("created_at"),rs.getString("expected_date"),
+                rs.getString("notes"),rs.getString("item_summary"),rs.getInt("line_count"),
+                rs.getInt("units"),rs.getLong("subtotal_paise"),rs.getString("receipt_number"),
+                rs.getString("cancellation_reason")), number);
+        if (rows.isEmpty()) throw new IllegalArgumentException("Purchase order was not found.");
+        return rows.get(0);
+    }
+
+    private static String cleanOrderNumber(String raw) {
+        String number = raw == null ? "" : raw.strip();
+        if (number.isEmpty() || number.length() > 64) throw new IllegalArgumentException("Enter a valid purchase order number.");
+        return number;
+    }
+
+    private record FormalOrderHeader(long id, String orderNumber, long supplierId, String status) { }
 
     public PurchaseBalance balance(String rawPurchaseNumber) {
         String number = cleanPurchaseNumber(rawPurchaseNumber);

@@ -41,7 +41,7 @@ Use **Returns / refunds** and enter the original sale number. Select the item li
 
 ## Purchase receiving
 
-Select a part and choose **Receive stock**. Select the supplier, enter received quantity and unit cost, and optionally enter the supplier invoice/delivery-note reference. The app records a supplier receipt, snapshots item/supplier details, updates the latest purchase cost, increases inventory and writes a positive stock-ledger movement in one transaction. If any step fails, the complete receipt rolls back. Purchase history, guarded stock-receipt cancellation, multi-item stock receiving, supplier payment/account-payable tracking and a date-bounded supplier payable reconciliation CSV are supported. The report counts only posted supplier payments; voided payments are excluded. Payment entries are bookkeeping records only; they do not transfer money. Formal purchase orders and supplier returns remain future work.
+Select a part and choose **Receive stock**. Select the supplier, enter received quantity and unit cost, and optionally enter the supplier invoice/delivery-note reference. The app records a supplier receipt, snapshots item/supplier details, updates the latest purchase cost, increases inventory and writes a positive stock-ledger movement in one transaction. If any step fails, the complete receipt rolls back. Purchase history, guarded stock-receipt cancellation, multi-item stock receiving, supplier payment/account-payable tracking and a date-bounded supplier payable reconciliation CSV are supported. Formal purchase orders can be created before delivery, searched, cancelled with a reason, and received as an atomic stock receipt; creating an order does not change stock. Receiving currently posts all ordered lines together and does not support partial receipts. The report counts only posted supplier payments; voided payments are excluded. Payment entries are bookkeeping records only; they do not transfer money. Supplier returns and credit notes remain future work.
 
 ## Database upgrades
 
@@ -147,7 +147,7 @@ The table below describes the **intended product scope** from the HLD/LLD. It is
 | Sorting and pagination | Sort by allowed columns, page controls, bounded result sizes and retained filter state | Implemented: allowlisted sort keys, 50-row pages, bounded page size and previous/next controls |
 | Saved views | Store reusable filter presets such as low stock, a brand or a part category | Planned |
 | Classification | Nested categories, vehicle types/models, manufacturers and part compatibility/fitment mapping | Category creation and category selection implemented; nested hierarchy management and vehicle fitment remain planned |
-| Suppliers & purchasing | Supplier CRUD, purchase orders, goods receipt, purchase lines and supplier returns | Planned |
+| Suppliers & purchasing | Supplier CRUD, formal purchase orders, goods receipt, purchase lines and supplier returns | Partially implemented: order creation/search/cancellation/full receipt and payment tracking; partial receipt and supplier returns remain planned |
 | Sales & customers | Customer CRUD, cart, discounts, taxes, checkout, payment records, invoice and returns workflow | Planned |
 | Stock ledger | Auditable stock movements for purchases, sales, returns, adjustments and reversals | Schema foundation exists; transactional workflows planned |
 | Reports | Daily sales, purchases, inventory valuation, low stock and stock movement reports; PDF/CSV export | Planned |
@@ -511,7 +511,7 @@ The launcher JAR and input layout in this example must be adapted to the actual 
 
 ### Remaining release blockers
 - Sale voids/refunds and return workflows with explicit reversal records.
-- Multi-item purchase orders, purchase cancellation/returns and supplier payment/accounting workflows.
+- Formal purchase orders with atomic full receipt; partial receiving, supplier returns/credit notes and end-to-end accounting reconciliation remain in progress.
 - PDF invoices and reports, shop settings and report scheduling/email integration.
 - Windows EXE installer and clean-machine install/upgrade/uninstall validation.
 - Representative inventory performance benchmarks, dependency/security/license scanning, restore drills and end-to-end shop workflow tests.
