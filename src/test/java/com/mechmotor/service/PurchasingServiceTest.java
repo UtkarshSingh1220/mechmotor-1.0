@@ -311,4 +311,25 @@ class PurchasingServiceTest {
         assertThrows(IllegalArgumentException.class, () -> new FormalPurchaseOrderDraft(supplierId, null, null,
                 java.util.List.of(new PurchaseLineDraft(partId, 1, 100), new PurchaseLineDraft(partId, 2, 200))));
     }
+
+    @Test
+    void formalPurchaseOrderReceiptFailureRollsBackStockReceiptAndOrderStatus() {
+        long secondPart = parts.create(new PartDraft("PUR-PO-ROLLBACK", null, null, "Cabin filter",
+                "Brand", "Company", "Paper", "Grey", null, supplierId, "5.00", "12.00", 4, 1));
+        var order = purchasing.createPurchaseOrder(new FormalPurchaseOrderDraft(supplierId, null, null,
+                java.util.List.of(new PurchaseLineDraft(partId, 2, 1000),
+                        new PurchaseLineDraft(secondPart, 3, 500))));
+        jdbc.execute("CREATE TRIGGER fail_formal_order_receipt BEFORE INSERT ON stock_movements WHEN NEW.movement_type='PURCHASE' AND NEW.part_id="
+                + secondPart + " BEGIN SELECT RAISE(ABORT, 'simulated formal order receipt failure'); END");
+
+        assertThrows(DataAccessException.class,
+                () -> purchasing.receivePurchaseOrder(order.orderNumber(), "INV-ROLLBACK"));
+
+        assertEquals(3, parts.findById(partId).quantity());
+        assertEquals(4, parts.findById(secondPart).quantity());
+        assertEquals("ORDERED", purchasing.purchaseOrders(order.orderNumber(), 10).get(0).status());
+        assertEquals("", purchasing.purchaseOrders(order.orderNumber(), 10).get(0).receiptNumber());
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM purchases", Integer.class));
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM purchase_items", Integer.class));
+    }
 }
