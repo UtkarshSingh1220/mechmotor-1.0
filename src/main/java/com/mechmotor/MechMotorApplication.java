@@ -587,9 +587,11 @@ public class MechMotorApplication extends Application {
 
     private record CartLine(Part part, int quantity, long unitPricePaise) {
         @Override public String toString() {
+            String lineTotal;
+            try { lineTotal = rupees(Math.multiplyExact((long) quantity, unitPricePaise)); }
+            catch (ArithmeticException ex) { lineTotal = "amount too large"; }
             return part.sku() + " — " + part.name() + " • qty " + quantity
-                    + " × ₹" + rupees(unitPricePaise)
-                    + " = ₹" + rupees(Math.multiplyExact((long) quantity, unitPricePaise));
+                    + " × ₹" + rupees(unitPricePaise) + " = ₹" + lineTotal;
         }
     }
 
@@ -688,7 +690,8 @@ public class MechMotorApplication extends Application {
                 List<SaleLineDraft> lines = cart.stream()
                         .map(line -> new SaleLineDraft(line.part().id(), line.quantity(), line.unitPricePaise()))
                         .toList();
-                CartSaleDraft draft = new CartSaleDraft(lines, parsePaise(discount.getText(), "Sale discount"),
+                Long parsedDiscount = parsePaise(discount.getText(), "Sale discount");
+                CartSaleDraft draft = new CartSaleDraft(lines, parsedDiscount == null ? 0L : parsedDiscount,
                         customer.getText(), paymentMethod.getValue(), reference.getText());
                 checkout.setDisable(true);
                 runBackground(() -> salesService.checkout(draft), receipt -> {
@@ -775,7 +778,8 @@ public class MechMotorApplication extends Application {
                 subtotal = Math.addExact(subtotal,
                         Math.multiplyExact((long) line.quantity(), line.unitPricePaise()));
             }
-            long discount = parsePaise(discountText, "Sale discount");
+            Long parsedDiscount = parsePaise(discountText, "Sale discount");
+            long discount = parsedDiscount == null ? 0L : parsedDiscount;
             long total = Math.max(0, subtotal - discount);
             summary.setText("Subtotal: ₹" + rupees(subtotal) + " • Discount: ₹" + rupees(discount)
                     + " • Total: ₹" + rupees(total) + (discount > subtotal ? " (discount exceeds subtotal)" : ""));
