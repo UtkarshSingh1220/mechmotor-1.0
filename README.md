@@ -5,7 +5,7 @@ Java 21 · Spring Boot · JavaFX · Spring JDBC · SQLite · Maven
 
 MechMotor is designed as a lightweight desktop application for a single shop PC. It aims to manage parts inventory, classification, suppliers, customers, purchasing, sales, stock movements, invoices, local reports, scheduled Gmail reports and activation licensing. Core shop workflows are intended to remain available without internet access; Gmail delivery requires internet access and valid Google OAuth authorization.
 
-> **Project status:** Inventory CRUD and the first advanced-search milestone are implemented on the working branch, with automated repository tests added. This remains an in-progress starter, not a production-ready release: saved views, vehicle fitment, imports/exports, purchasing, sales, reporting, licensing, backups and packaging remain incomplete. CI verification for the current branch must pass before this milestone is considered validated.
+> **Project status:** The current main branch includes inventory search/filters, category hierarchy, vehicle fitment, saved views, CSV import/export, inventory metrics, signed activation, service-layer feature gating, single- and multi-item sales, voids/returns, supplier stock receiving, PDF sales invoices, backup/restore and sales history. Database versioning, full purchasing lifecycle, operational reports, Windows installer acceptance, and release security/performance checks are still being hardened. This is not yet a production-ready release.
 
 ## Activation and licensing
 
@@ -42,6 +42,10 @@ Use **Returns / refunds** and enter the original sale number. Select the item li
 ## Purchase receiving
 
 Select a part and choose **Receive stock**. Select the supplier, enter received quantity and unit cost, and optionally enter the supplier invoice/delivery-note reference. The app records a supplier receipt, snapshots item/supplier details, updates the latest purchase cost, increases inventory and writes a positive stock-ledger movement in one transaction. If any step fails, the complete receipt rolls back. Supplier payments, multi-item purchase orders and returns are not yet implemented.
+
+## Database upgrades
+
+On first startup, MechMotor now bootstraps a versioned schema and records the applied version in `schema_version`. Legacy inventory databases receive additive compatibility columns before the current schema is validated. Later schema changes belong in ordered `src/main/resources/db/migration/V<number>__description.sql` files; do not rely on `CREATE TABLE IF NOT EXISTS` to add columns to existing tables. If a migration fails, startup stops rather than continuing against an incomplete schema. Make an independent backup before installing a release that changes database behavior.
 
 ## Backup and restore
 
