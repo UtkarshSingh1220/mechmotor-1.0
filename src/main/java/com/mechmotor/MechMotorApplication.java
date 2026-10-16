@@ -6,6 +6,7 @@ import com.mechmotor.service.DatabaseBackupService;
 import com.mechmotor.service.InventoryCsvService;
 import com.mechmotor.service.LicenseService;
 import com.mechmotor.service.LicenseStatus;
+import com.mechmotor.service.SalesService;
 import com.mechmotor.domain.SupplierDetails;
 import com.mechmotor.domain.SupplierDraft;
 import javafx.application.Application;
@@ -45,6 +46,7 @@ public class MechMotorApplication extends Application {
     private DatabaseBackupService backupService;
     private InventoryCsvService csvService;
     private LicenseService licenseService;
+    private SalesService salesService;
     private final List<LookupOption> noOptions = List.of();
     private List<LookupOption> categories = noOptions;
     private List<LookupOption> suppliers = noOptions;
@@ -57,6 +59,7 @@ public class MechMotorApplication extends Application {
     @Override public void start(Stage stage) {
         inventory = context.getBean(InventoryService.class);
         licenseService = context.getBean(LicenseService.class);
+        salesService = context.getBean(SalesService.class);
         backupService = context.getBean(DatabaseBackupService.class);
         csvService = context.getBean(InventoryCsvService.class);
         Label brand = new Label("MECHMOTOR 1.0");
@@ -105,6 +108,7 @@ public class MechMotorApplication extends Application {
         Button addButton = new Button("＋ Add part");
         Button editButton = new Button("Edit selected");
         Button deactivateButton = new Button("Deactivate");
+        Button sellButton = new Button("Sell selected");
         Button fitmentButton = new Button("Vehicle fitment");
         MenuItem addCategoryItem = new MenuItem("Add root / subcategory…");
         MenuItem renameCategoryItem = new MenuItem("Rename selected category…");
@@ -332,6 +336,23 @@ public class MechMotorApplication extends Application {
                             error -> showError("Could not deactivate part", error)));
         });
 
+        sellButton.setOnAction(e -> {
+            if (!licenseService.status().features().contains("SALES")) {
+                showError("Feature not licensed", new IllegalArgumentException("Your activation key does not include SALES."));
+                return;
+            }
+            Part selected = table.getSelectionModel().getSelectedItem();
+            if (selected == null) {
+                showError("Select a part", new IllegalArgumentException("Choose an inventory item to sell."));
+                return;
+            }
+            if (selected.quantity() <= 0) {
+                showError("Out of stock", new IllegalArgumentException("This item has no available stock."));
+                return;
+            }
+            showSaleDialog(stage, selected, status, loadPage);
+        });
+
         fitmentButton.setOnAction(e -> {
             Part selected = table.getSelectionModel().getSelectedItem();
             if (selected == null) {
@@ -452,7 +473,7 @@ public class MechMotorApplication extends Application {
         GridPane.setHgrow(savedViewSelector, Priority.ALWAYS);
         GridPane.setHgrow(savedViewsMenu, Priority.ALWAYS);
         for (int i = 0; i < 6; i++) GridPane.setHgrow(filters.getChildren().get(i), Priority.ALWAYS);
-        HBox actions = new HBox(8, addButton, editButton, deactivateButton, fitmentButton, categoryMenu, supplierMenu, backupButton, restoreButton, csvMenu,
+        HBox actions = new HBox(8, addButton, editButton, deactivateButton, sellButton, fitmentButton, categoryMenu, supplierMenu, backupButton, restoreButton, csvMenu,
                 new Separator(), previousButton, nextButton, pageLabel);
         actions.setPadding(new Insets(8, 20, 8, 20));
         HBox.setHgrow(pageLabel, Priority.ALWAYS);
@@ -480,6 +501,74 @@ public class MechMotorApplication extends Application {
             refreshSavedViews(savedViewSelector, status, null);
             loadPage.run();
         }, error -> { status.setText("Could not load categories and suppliers."); showError("Database initialization failed", error); });
+    }
+
+    private void showSaleDialog(Stage owner, Part part, Label status, Runnable refreshInventory) {
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.initOwner(owner);
+        dialog.setTitle("Checkout sale");
+        dialog.setHeaderText(part.name() + " (" + part.sku() + ") — available: " + part.quantity());
+        ButtonType checkoutType = new ButtonType("Complete sale", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(checkoutType, ButtonType.CANCEL);
+
+        TextField quantity = new TextField("1");
+        TextField unitPrice = new TextField(rupees(part.sellingPricePaise()));
+        TextField discount = new TextField("0.00");
+        TextField customer = new TextField();
+        customer.setPromptText("Optional customer name");
+        ComboBox<String> paymentMethod = new ComboBox<>(FXCollections.observableArrayList("CASH", "UPI", "CARD", "BANK_TRANSFER"));
+        paymentMethod.setValue("CASH");
+        TextField reference = new TextField();
+        reference.setPromptText("Optional payment reference");
+        GridPane form = new GridPane();
+        form.setHgap(10); form.setVgap(10); form.setPadding(new Insets(12));
+        form.add(new Label("Quantity"), 0, 0); form.add(quantity, 1, 0);
+        form.add(new Label("Unit price (₹)"), 0, 1); form.add(unitPrice, 1, 1);
+        form.add(new Label("Discount (₹)"), 0, 2); form.add(discount, 1, 2);
+        form.add(new Label("Customer"), 0, 3); form.add(customer, 1, 3);
+        form.add(new Label("Payment method"), 0, 4); form.add(paymentMethod, 1, 4);
+        form.add(new Label("Reference"), 0, 5); form.add(reference, 1, 5);
+        GridPane.setHgrow(unitPrice, Priority.ALWAYS);
+        GridPane.setHgrow(customer, Priority.ALWAYS);
+        GridPane.setHgrow(paymentMethod, Priority.ALWAYS);
+        GridPane.setHgrow(reference, Priority.ALWAYS);
+        dialog.getDialogPane().setContent(form);
+        dialog.getDialogPane().setPrefWidth(480);
+
+        Button checkout = (Button) dialog.getDialogPane().lookupButton(checkoutType);
+        checkout.addEventFilter(ActionEvent.ACTION, event -> {
+            event.consume();
+            try {
+                SaleDraft draft = new SaleDraft(part.id(),
+                        parseRequiredInteger(quantity.getText(), "Quantity"),
+                        parsePaise(unitPrice.getText(), "Unit price"),
+                        parsePaise(discount.getText(), "Discount"),
+                        customer.getText(), paymentMethod.getValue(), reference.getText());
+                checkout.setDisable(true);
+                runBackground(() -> salesService.checkout(draft), receipt -> {
+                    dialog.close();
+                    status.setText("Sale posted: " + receipt.saleNumber() + " • total ₹" + rupees(receipt.totalPaise()));
+                    refreshInventory.run();
+                    Alert confirmation = new Alert(Alert.AlertType.INFORMATION,
+                            "Sale: " + receipt.saleNumber()
+                                    + "\nPart: " + receipt.sku() + " — " + receipt.partName()
+                                    + "\nQuantity: " + receipt.quantity()
+                                    + "\nSubtotal: ₹" + rupees(receipt.subtotalPaise())
+                                    + "\nDiscount: ₹" + rupees(receipt.discountPaise())
+                                    + "\nTotal paid: ₹" + rupees(receipt.totalPaise())
+                                    + "\nPayment: " + receipt.paymentMethod(), ButtonType.OK);
+                    confirmation.setTitle("Sale completed");
+                    confirmation.setHeaderText("Checkout successful");
+                    confirmation.show();
+                }, error -> {
+                    checkout.setDisable(false);
+                    showError("Checkout failed", error);
+                });
+            } catch (IllegalArgumentException ex) {
+                showError("Check sale details", ex);
+            }
+        });
+        dialog.showAndWait();
     }
 
     private boolean showActivationDialog(Stage owner, boolean required, Label licenseStatusLabel) {
