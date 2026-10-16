@@ -67,6 +67,22 @@ class DatabaseBackupServiceTest {
     }
 
     @Test
+    void restoreMigratesOlderBackupByAddingNewFitmentTable() throws Exception {
+        Path backup = service.backupToDirectory(tempDir.resolve("legacy-export"));
+        try (Connection connection = java.sql.DriverManager.getConnection("jdbc:sqlite:" + backup);
+             Statement statement = connection.createStatement()) {
+            statement.execute("DROP TABLE part_fitments");
+        }
+
+        service.restoreFrom(backup);
+        try (Connection connection = dataSource.getConnection(); Statement statement = connection.createStatement();
+             var result = statement.executeQuery("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='part_fitments'")) {
+            assertTrue(result.next());
+            assertEquals(1, result.getInt(1));
+        }
+    }
+
+    @Test
     void structurallyIncompleteDatabaseIsRejected() throws Exception {
         Path incomplete = tempDir.resolve("incomplete.db");
         try (Connection connection = java.sql.DriverManager.getConnection("jdbc:sqlite:" + incomplete);

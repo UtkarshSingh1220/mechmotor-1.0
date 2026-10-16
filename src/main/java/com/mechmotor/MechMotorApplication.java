@@ -60,7 +60,7 @@ public class MechMotorApplication extends Application {
         status.getStyleClass().add("status");
 
         TextField query = new TextField();
-        query.setPromptText("Search SKU, barcode, part, brand, company, material, color, category or supplier");
+        query.setPromptText("Search SKU, barcode, brand, material, color, category, supplier or vehicle make/model/engine");
         TextField brandFilter = new TextField(); brandFilter.setPromptText("Brand");
         TextField materialFilter = new TextField(); materialFilter.setPromptText("Material");
         TextField colorFilter = new TextField(); colorFilter.setPromptText("Color");
@@ -79,6 +79,7 @@ public class MechMotorApplication extends Application {
         Button addButton = new Button("＋ Add part");
         Button editButton = new Button("Edit selected");
         Button deactivateButton = new Button("Deactivate");
+        Button fitmentButton = new Button("Vehicle fitment");
         MenuItem addCategoryItem = new MenuItem("Add root / subcategory…");
         MenuItem renameCategoryItem = new MenuItem("Rename selected category…");
         MenuItem deactivateCategoryItem = new MenuItem("Deactivate selected category…");
@@ -196,6 +197,17 @@ public class MechMotorApplication extends Application {
                             error -> showError("Could not deactivate part", error)));
         });
 
+        fitmentButton.setOnAction(e -> {
+            Part selected = table.getSelectionModel().getSelectedItem();
+            if (selected == null) {
+                showError("Select a part", new IllegalArgumentException("Choose an inventory item before managing vehicle fitment."));
+                return;
+            }
+            runBackground(() -> inventory.fitments(selected.id()),
+                    fitments -> showFitmentDialog(stage, selected, fitments, status),
+                    error -> showError("Could not load vehicle fitments", error));
+        });
+
         addCategoryItem.setOnAction(e -> {
             Dialog<ButtonType> dialog = new Dialog<>();
             dialog.initOwner(stage);
@@ -300,7 +312,7 @@ public class MechMotorApplication extends Application {
         filters.add(minQty, 0, 2); filters.add(maxQty, 1, 2); filters.add(minPrice, 2, 2);
         filters.add(maxPrice, 3, 2); filters.add(new Label("Sort:"), 4, 2); filters.add(sort, 5, 2);
         for (int i = 0; i < 6; i++) GridPane.setHgrow(filters.getChildren().get(i), Priority.ALWAYS);
-        HBox actions = new HBox(8, addButton, editButton, deactivateButton, categoryMenu, supplierMenu, backupButton, restoreButton, exportButton,
+        HBox actions = new HBox(8, addButton, editButton, deactivateButton, fitmentButton, categoryMenu, supplierMenu, backupButton, restoreButton, exportButton,
                 new Separator(), previousButton, nextButton, pageLabel);
         actions.setPadding(new Insets(8, 20, 8, 20));
         HBox.setHgrow(pageLabel, Priority.ALWAYS);
@@ -332,6 +344,78 @@ public class MechMotorApplication extends Application {
             status.setText("Categories and suppliers refreshed.");
             reload.run();
         }, error -> showError("Could not refresh categories and suppliers", error));
+    }
+
+    private void showFitmentDialog(Stage owner, Part part, List<VehicleFitment> initial, Label status) {
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.initOwner(owner);
+        dialog.setTitle("Vehicle fitment — " + part.sku());
+        dialog.setHeaderText("Compatible vehicles for " + part.name());
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+
+        ListView<VehicleFitment> fitmentList = new ListView<>(FXCollections.observableArrayList(initial));
+        fitmentList.setPrefHeight(160);
+        TextField make = field("", "e.g. Toyota");
+        TextField model = field("", "e.g. Corolla");
+        TextField yearFrom = field("", "e.g. 2018");
+        TextField yearTo = field("", "e.g. 2024");
+        TextField engine = field("", "Optional engine");
+        TextField trim = field("", "Optional trim");
+        TextField notes = field("", "Optional notes");
+        GridPane form = new GridPane();
+        form.setHgap(8); form.setVgap(8); form.setPadding(new Insets(10));
+        addFormRow(form, 0, "Make *", make, "Model *", model);
+        addFormRow(form, 1, "Year from *", yearFrom, "Year to *", yearTo);
+        addFormRow(form, 2, "Engine", engine, "Trim", trim);
+        form.add(new Label("Notes"), 0, 3); form.add(notes, 1, 3, 3, 1);
+        GridPane.setHgrow(notes, Priority.ALWAYS);
+        Button add = new Button("Add fitment");
+        Button remove = new Button("Remove selected");
+        HBox buttons = new HBox(8, add, remove);
+        VBox content = new VBox(10, new Label("Existing fitments"), fitmentList, form, buttons);
+        content.setPadding(new Insets(8));
+        dialog.getDialogPane().setContent(content);
+        dialog.getDialogPane().setPrefWidth(720);
+
+        add.setOnAction(e -> {
+            try {
+                VehicleFitmentDraft draft = new VehicleFitmentDraft(make.getText(), model.getText(),
+                        parseRequiredInteger(yearFrom.getText(), "Start year"),
+                        parseRequiredInteger(yearTo.getText(), "End year"), engine.getText(), trim.getText(), notes.getText());
+                add.setDisable(true);
+                runBackground(() -> inventory.addFitment(part.id(), draft), id -> {
+                    make.clear(); model.clear(); yearFrom.clear(); yearTo.clear(); engine.clear(); trim.clear(); notes.clear();
+                    status.setText("Vehicle fitment added.");
+                    refreshFitmentList(part.id(), fitmentList, add, status);
+                }, error -> { add.setDisable(false); showError("Could not add vehicle fitment", error); });
+            } catch (IllegalArgumentException ex) {
+                showError("Check vehicle fitment details", ex);
+            }
+        });
+        remove.setOnAction(e -> {
+            VehicleFitment selected = fitmentList.getSelectionModel().getSelectedItem();
+            if (selected == null) {
+                showError("Select a fitment", new IllegalArgumentException("Choose a fitment to remove."));
+                return;
+            }
+            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
+                    "Remove compatibility with " + selected + "?", ButtonType.CANCEL, ButtonType.OK);
+            confirm.initOwner(dialog.getDialogPane().getScene().getWindow());
+            confirm.setTitle("Remove vehicle fitment");
+            confirm.showAndWait().filter(ButtonType.OK::equals).ifPresent(button ->
+                    runBackground(() -> { inventory.removeFitment(part.id(), selected.id()); return Boolean.TRUE; }, ignored -> {
+                        status.setText("Vehicle fitment removed.");
+                        refreshFitmentList(part.id(), fitmentList, add, status);
+                    }, error -> showError("Could not remove vehicle fitment", error)));
+        });
+        dialog.showAndWait();
+    }
+
+    private void refreshFitmentList(long partId, ListView<VehicleFitment> list, Button add, Label status) {
+        runBackground(() -> inventory.fitments(partId), fitments -> {
+            list.setItems(FXCollections.observableArrayList(fitments));
+            add.setDisable(false);
+        }, error -> { add.setDisable(false); showError("Could not refresh vehicle fitments", error); });
     }
 
     private void showSupplierDialog(Stage owner, SupplierDetails existing,

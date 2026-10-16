@@ -5,6 +5,7 @@ import com.mechmotor.domain.InventoryPage;
 import com.mechmotor.domain.Part;
 import com.mechmotor.domain.PartDraft;
 import com.mechmotor.domain.SupplierDraft;
+import com.mechmotor.domain.VehicleFitmentDraft;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -102,6 +103,32 @@ class PartRepositoryTest {
 
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM parts WHERE sku='ROLLBACK-1'", Integer.class));
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM inventory", Integer.class));
+    }
+
+    @Test
+    void vehicleFitmentsCanBeAddedSearchedAndRemoved() {
+        long partId = repository.create(draft("TOYOTA-001", "Air filter", 5, "25.00", null, null));
+        VehicleFitmentDraft fitment = new VehicleFitmentDraft("Toyota", "Corolla", 2018, 2022, "2.0L", "LE", "Front engine");
+        long fitmentId = repository.addFitment(partId, fitment);
+
+        assertEquals(1, repository.fitments(partId).size());
+        assertTrue(repository.search("TOYOTA").stream().anyMatch(p -> p.id() == partId));
+        assertTrue(repository.search("Corolla").stream().anyMatch(p -> p.id() == partId));
+        assertTrue(repository.search("2.0L").stream().anyMatch(p -> p.id() == partId));
+        assertTrue(repository.search("2020").stream().anyMatch(p -> p.id() == partId));
+        assertThrows(IllegalArgumentException.class, () -> repository.addFitment(partId, fitment));
+
+        repository.removeFitment(partId, fitmentId);
+        assertTrue(repository.fitments(partId).isEmpty());
+        assertTrue(repository.search("Corolla").isEmpty());
+    }
+
+    @Test
+    void vehicleFitmentRejectsInvalidYearRange() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new VehicleFitmentDraft("Toyota", "Corolla", 2025, 2020, null, null, null));
+        assertThrows(IllegalArgumentException.class,
+                () -> new VehicleFitmentDraft("Toyota", "Corolla", 1885, 2020, null, null, null));
     }
 
     @Test

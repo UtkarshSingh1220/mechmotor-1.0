@@ -55,3 +55,28 @@ CREATE INDEX IF NOT EXISTS idx_parts_material ON parts(material COLLATE NOCASE);
 CREATE INDEX IF NOT EXISTS idx_parts_color ON parts(color COLLATE NOCASE);
 CREATE INDEX IF NOT EXISTS idx_parts_part_number ON parts(part_number COLLATE NOCASE);
 CREATE INDEX IF NOT EXISTS idx_parts_updated ON parts(updated_at);
+
+
+CREATE TABLE IF NOT EXISTS part_fitments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  part_id INTEGER NOT NULL REFERENCES parts(id),
+  make TEXT NOT NULL COLLATE NOCASE,
+  model TEXT NOT NULL COLLATE NOCASE,
+  year_from INTEGER NOT NULL CHECK(year_from >= 1886 AND year_from <= 2100),
+  year_to INTEGER NOT NULL CHECK(year_to >= year_from AND year_to <= 2100),
+  engine TEXT,
+  trim TEXT,
+  notes TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_fitments_make_model_year
+  ON part_fitments(make COLLATE NOCASE, model COLLATE NOCASE, year_from, year_to);
+CREATE INDEX IF NOT EXISTS idx_fitments_part
+  ON part_fitments(part_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_fitments_unique_compatibility
+  ON part_fitments(
+    part_id, make COLLATE NOCASE, model COLLATE NOCASE, year_from, year_to,
+    COALESCE(engine, '') COLLATE NOCASE, COALESCE(trim, '') COLLATE NOCASE
+  );
