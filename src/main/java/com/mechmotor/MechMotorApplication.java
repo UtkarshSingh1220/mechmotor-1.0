@@ -7,6 +7,7 @@ import com.mechmotor.service.InventoryCsvService;
 import com.mechmotor.service.LicenseService;
 import com.mechmotor.service.LicenseStatus;
 import com.mechmotor.service.SalesService;
+import com.mechmotor.service.PurchasingService;
 import com.mechmotor.domain.SupplierDetails;
 import com.mechmotor.domain.SupplierDraft;
 import javafx.application.Application;
@@ -47,6 +48,7 @@ public class MechMotorApplication extends Application {
     private InventoryCsvService csvService;
     private LicenseService licenseService;
     private SalesService salesService;
+    private PurchasingService purchasingService;
     private final List<LookupOption> noOptions = List.of();
     private List<LookupOption> categories = noOptions;
     private List<LookupOption> suppliers = noOptions;
@@ -60,6 +62,7 @@ public class MechMotorApplication extends Application {
         inventory = context.getBean(InventoryService.class);
         licenseService = context.getBean(LicenseService.class);
         salesService = context.getBean(SalesService.class);
+        purchasingService = context.getBean(PurchasingService.class);
         backupService = context.getBean(DatabaseBackupService.class);
         csvService = context.getBean(InventoryCsvService.class);
         Label brand = new Label("MECHMOTOR 1.0");
@@ -109,6 +112,7 @@ public class MechMotorApplication extends Application {
         Button editButton = new Button("Edit selected");
         Button deactivateButton = new Button("Deactivate");
         Button sellButton = new Button("Sell selected");
+        Button receiveStockButton = new Button("Receive stock");
         Button fitmentButton = new Button("Vehicle fitment");
         MenuItem addCategoryItem = new MenuItem("Add root / subcategory…");
         MenuItem renameCategoryItem = new MenuItem("Rename selected category…");
@@ -353,6 +357,19 @@ public class MechMotorApplication extends Application {
             showSaleDialog(stage, selected, status, loadPage);
         });
 
+        receiveStockButton.setOnAction(e -> {
+            if (!licenseService.status().features().contains("PURCHASING")) {
+                showError("Feature not licensed", new IllegalArgumentException("Your activation key does not include PURCHASING."));
+                return;
+            }
+            Part selected = table.getSelectionModel().getSelectedItem();
+            if (selected == null) {
+                showError("Select a part", new IllegalArgumentException("Choose an inventory item to receive."));
+                return;
+            }
+            showPurchaseDialog(stage, selected, supplierFilter.getValue(), status, loadPage);
+        });
+
         fitmentButton.setOnAction(e -> {
             Part selected = table.getSelectionModel().getSelectedItem();
             if (selected == null) {
@@ -473,7 +490,7 @@ public class MechMotorApplication extends Application {
         GridPane.setHgrow(savedViewSelector, Priority.ALWAYS);
         GridPane.setHgrow(savedViewsMenu, Priority.ALWAYS);
         for (int i = 0; i < 6; i++) GridPane.setHgrow(filters.getChildren().get(i), Priority.ALWAYS);
-        HBox actions = new HBox(8, addButton, editButton, deactivateButton, sellButton, fitmentButton, categoryMenu, supplierMenu, backupButton, restoreButton, csvMenu,
+        HBox actions = new HBox(8, addButton, editButton, deactivateButton, sellButton, receiveStockButton, fitmentButton, categoryMenu, supplierMenu, backupButton, restoreButton, csvMenu,
                 new Separator(), previousButton, nextButton, pageLabel);
         actions.setPadding(new Insets(8, 20, 8, 20));
         HBox.setHgrow(pageLabel, Priority.ALWAYS);
@@ -501,6 +518,71 @@ public class MechMotorApplication extends Application {
             refreshSavedViews(savedViewSelector, status, null);
             loadPage.run();
         }, error -> { status.setText("Could not load categories and suppliers."); showError("Database initialization failed", error); });
+    }
+
+    private void showPurchaseDialog(Stage owner, Part part, LookupOption defaultSupplier,
+                                    Label status, Runnable refreshInventory) {
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.initOwner(owner);
+        dialog.setTitle("Receive supplier stock");
+        dialog.setHeaderText(part.name() + " (" + part.sku() + ") — current stock: " + part.quantity());
+        ButtonType receiveType = new ButtonType("Receive stock", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(receiveType, ButtonType.CANCEL);
+
+        ComboBox<LookupOption> supplier = new ComboBox<>(FXCollections.observableArrayList(suppliers));
+        supplier.setPromptText("Select supplier");
+        supplier.setMaxWidth(Double.MAX_VALUE);
+        if (defaultSupplier != null) supplier.setValue(suppliers.stream()
+                .filter(option -> option.id() == defaultSupplier.id()).findFirst().orElse(null));
+        TextField quantity = new TextField("1");
+        TextField unitCost = new TextField(rupees(part.purchasePricePaise()));
+        TextField invoiceReference = new TextField();
+        invoiceReference.setPromptText("Optional supplier invoice / delivery note");
+        GridPane form = new GridPane();
+        form.setHgap(10); form.setVgap(10); form.setPadding(new Insets(12));
+        form.add(new Label("Supplier"), 0, 0); form.add(supplier, 1, 0);
+        form.add(new Label("Quantity received"), 0, 1); form.add(quantity, 1, 1);
+        form.add(new Label("Unit cost (₹)"), 0, 2); form.add(unitCost, 1, 2);
+        form.add(new Label("Invoice reference"), 0, 3); form.add(invoiceReference, 1, 3);
+        GridPane.setHgrow(supplier, Priority.ALWAYS);
+        GridPane.setHgrow(invoiceReference, Priority.ALWAYS);
+        dialog.getDialogPane().setContent(form);
+        dialog.getDialogPane().setPrefWidth(520);
+
+        Button receive = (Button) dialog.getDialogPane().lookupButton(receiveType);
+        receive.addEventFilter(ActionEvent.ACTION, event -> {
+            event.consume();
+            try {
+                LookupOption selectedSupplier = supplier.getValue();
+                if (selectedSupplier == null) throw new IllegalArgumentException("Choose a supplier.");
+                PurchaseDraft draft = new PurchaseDraft(part.id(),
+                        parseRequiredInteger(quantity.getText(), "Quantity received"),
+                        parsePaise(unitCost.getText(), "Unit cost"),
+                        selectedSupplier.id(), invoiceReference.getText());
+                receive.setDisable(true);
+                runBackground(() -> purchasingService.receive(draft), receipt -> {
+                    dialog.close();
+                    status.setText("Stock received: " + receipt.purchaseNumber() + " • " + receipt.quantity() + " unit(s)");
+                    refreshInventory.run();
+                    Alert confirmation = new Alert(Alert.AlertType.INFORMATION,
+                            "Purchase receipt: " + receipt.purchaseNumber()
+                                    + "\nSupplier: " + receipt.supplierName()
+                                    + "\nPart: " + receipt.sku() + " — " + receipt.partName()
+                                    + "\nQuantity received: " + receipt.quantity()
+                                    + "\nUnit cost: ₹" + rupees(receipt.unitCostPaise())
+                                    + "\nReceipt total: ₹" + rupees(receipt.totalPaise()), ButtonType.OK);
+                    confirmation.setTitle("Stock received");
+                    confirmation.setHeaderText("Supplier receipt posted");
+                    confirmation.show();
+                }, error -> {
+                    receive.setDisable(false);
+                    showError("Could not receive stock", error);
+                });
+            } catch (IllegalArgumentException ex) {
+                showError("Check receipt details", ex);
+            }
+        });
+        dialog.showAndWait();
     }
 
     private void showSaleDialog(Stage owner, Part part, Label status, Runnable refreshInventory) {

@@ -76,13 +76,15 @@ class DatabaseBackupServiceTest {
             statement.execute("DROP TABLE payments");
             statement.execute("DROP TABLE sale_items");
             statement.execute("DROP TABLE sales");
+            statement.execute("DROP TABLE purchase_items");
+            statement.execute("DROP TABLE purchases");
         }
 
         service.restoreFrom(backup);
         try (Connection connection = dataSource.getConnection(); Statement statement = connection.createStatement();
-             var result = statement.executeQuery("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('part_fitments','saved_views','sales','sale_items','payments')")) {
+             var result = statement.executeQuery("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('part_fitments','saved_views','sales','sale_items','payments','purchases','purchase_items')")) {
             assertTrue(result.next());
-            assertEquals(5, result.getInt(1));
+            assertEquals(7, result.getInt(1));
         }
     }
 

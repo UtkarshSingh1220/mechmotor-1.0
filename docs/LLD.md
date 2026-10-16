@@ -50,6 +50,13 @@ Never run JDBC, report generation or Gmail operations on the JavaFX Application 
 - Any stock conflict or write failure rolls back the sale, payment and stock movement together. Sale numbers use a date prefix and random suffix; the database enforces uniqueness.
 - The current flow supports full payment by CASH, UPI, CARD or BANK_TRANSFER. Multi-item carts, partial payments, void/refund workflows and PDF invoices remain future work.
 
+## Purchase receiving
+
+- `PurchasingService` posts one-item supplier receipts inside a `TransactionTemplate`.
+- The receipt snapshots supplier name, SKU/name, quantity and unit cost, adds received units with an overflow-guarded upsert, updates the part's latest purchase cost, and writes a positive `PURCHASE` stock movement.
+- The purchase header, item, inventory update and stock ledger share one transaction. Any failure rolls back the complete receipt.
+- Supplier payments/accounts payable, multi-item purchase orders, cancellations/returns and supplier statements remain future work.
+
 ## Build and test
 - `mvn clean test`
 - `mvn javafx:run`
