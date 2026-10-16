@@ -9,6 +9,7 @@ import com.mechmotor.service.LicenseStatus;
 import com.mechmotor.service.SalesService;
 import com.mechmotor.service.PurchasingService;
 import com.mechmotor.service.InvoiceService;
+import com.mechmotor.service.OperationalReportsService;
 import com.mechmotor.domain.SupplierDetails;
 import com.mechmotor.domain.SupplierDraft;
 import javafx.application.Application;
@@ -51,6 +52,7 @@ public class MechMotorApplication extends Application {
     private SalesService salesService;
     private PurchasingService purchasingService;
     private InvoiceService invoiceService;
+    private OperationalReportsService reportsService;
     private final List<LookupOption> noOptions = List.of();
     private List<LookupOption> categories = noOptions;
     private List<LookupOption> suppliers = noOptions;
@@ -66,6 +68,7 @@ public class MechMotorApplication extends Application {
         salesService = context.getBean(SalesService.class);
         purchasingService = context.getBean(PurchasingService.class);
         invoiceService = context.getBean(InvoiceService.class);
+        reportsService = context.getBean(OperationalReportsService.class);
         backupService = context.getBean(DatabaseBackupService.class);
         csvService = context.getBean(InventoryCsvService.class);
         Label brand = new Label("MECHMOTOR 1.0");
@@ -122,6 +125,7 @@ public class MechMotorApplication extends Application {
         Button receiveStockButton = new Button("Receive stock");
         Button receiveMultiStockButton = new Button("Receive multi-item");
         Button purchaseHistoryButton = new Button("Purchase history / cancel");
+        Button reportsButton = new Button("Operational reports…");
         Button fitmentButton = new Button("Vehicle fitment");
         MenuItem addCategoryItem = new MenuItem("Add root / subcategory…");
         MenuItem renameCategoryItem = new MenuItem("Rename selected category…");
@@ -326,6 +330,57 @@ public class MechMotorApplication extends Application {
                         "Exported " + count + " matching active inventory item(s) to:\n" + target, ButtonType.OK);
                 info.setTitle("CSV export complete"); info.setHeaderText("Inventory export ready"); info.show();
             }, error -> showError("Could not export inventory", error));
+        });
+
+        reportsButton.setOnAction(e -> {
+            if (!licenseService.status().features().contains("CSV")) {
+                showError("Feature not licensed", new IllegalArgumentException("Your activation key does not include CSV/report export."));
+                return;
+            }
+            ChoiceDialog<OperationalReportsService.ReportType> typeDialog = new ChoiceDialog<>(
+                    OperationalReportsService.ReportType.SALES,
+                    OperationalReportsService.ReportType.values());
+            typeDialog.setTitle("Operational reports");
+            typeDialog.setHeaderText("Choose a CSV report");
+            typeDialog.setContentText("Report type:");
+            var chosenType = typeDialog.showAndWait();
+            if (chosenType.isEmpty()) return;
+            java.time.LocalDate defaultEnd = java.time.LocalDate.now();
+            java.time.LocalDate defaultStart = defaultEnd.minusDays(6);
+            TextInputDialog startDialog = new TextInputDialog(defaultStart.toString());
+            startDialog.setTitle("Operational reports");
+            startDialog.setHeaderText("Start date (inclusive)");
+            startDialog.setContentText("Use YYYY-MM-DD:");
+            var startText = startDialog.showAndWait();
+            if (startText.isEmpty()) return;
+            TextInputDialog endDialog = new TextInputDialog(defaultEnd.toString());
+            endDialog.setTitle("Operational reports");
+            endDialog.setHeaderText("End date (inclusive)");
+            endDialog.setContentText("Use YYYY-MM-DD:");
+            var endText = endDialog.showAndWait();
+            if (endText.isEmpty()) return;
+            final java.time.LocalDate from;
+            final java.time.LocalDate through;
+            try {
+                from = java.time.LocalDate.parse(startText.get().strip());
+                through = java.time.LocalDate.parse(endText.get().strip());
+            } catch (java.time.DateTimeException invalidDate) {
+                showError("Invalid report dates", new IllegalArgumentException("Enter dates in YYYY-MM-DD format.", invalidDate));
+                return;
+            }
+            FileChooser chooser = new FileChooser();
+            chooser.setTitle("Save operational report");
+            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("CSV files", "*.csv"));
+            chooser.setInitialFileName("mechmotor-" + chosenType.get().name().toLowerCase(java.util.Locale.ROOT).replace('_','-')
+                    + "-" + from + "-to-" + through + ".csv");
+            java.io.File target = chooser.showSaveDialog(stage);
+            if (target == null) return;
+            runBackground(() -> reportsService.export(chosenType.get(), target.toPath(), from, through), count -> {
+                status.setText("Exported " + count + " report row(s) to " + target.getName());
+                Alert info = new Alert(Alert.AlertType.INFORMATION,
+                        "Exported " + count + " row(s) to:\n" + target, ButtonType.OK);
+                info.setTitle("Report export complete"); info.setHeaderText("Operational report ready"); info.show();
+            }, error -> showError("Could not export report", error));
         });
 
         addButton.setOnAction(e -> showPartDialog(stage, null, () -> { page[0] = 0; loadPage.run(); }, status));
@@ -574,7 +629,7 @@ public class MechMotorApplication extends Application {
         GridPane.setHgrow(savedViewsMenu, Priority.ALWAYS);
         for (int i = 0; i < 6; i++) GridPane.setHgrow(filters.getChildren().get(i), Priority.ALWAYS);
         FlowPane actions = new FlowPane(8, 8, addButton, editButton, deactivateButton, sellButton,
-                voidSaleButton, returnsButton, invoiceButton, salesHistoryButton, receiveStockButton, receiveMultiStockButton, purchaseHistoryButton, fitmentButton,
+                voidSaleButton, returnsButton, invoiceButton, salesHistoryButton, receiveStockButton, receiveMultiStockButton, purchaseHistoryButton, fitmentButton, reportsButton,
                 categoryMenu, supplierMenu, backupButton, restoreButton, csvMenu,
                 previousButton, nextButton, pageLabel);
         actions.setAlignment(Pos.CENTER_LEFT);
