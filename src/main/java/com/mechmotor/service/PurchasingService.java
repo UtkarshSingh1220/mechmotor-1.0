@@ -109,7 +109,7 @@ public class PurchasingService {
             for (PurchaseLine line : lines) {
                 int changed = jdbc.update("""
                     UPDATE inventory SET quantity_on_hand=quantity_on_hand-?
-                    WHERE part_id=? AND quantity_on_hand>=?
+                    WHERE part_id=? AND quantity_on_hand-? >= reserved_quantity
                     """, line.quantity(),line.partId(),line.quantity());
                 if (changed != 1) {
                     throw new IllegalStateException("Cannot cancel receipt: current stock for " + line.sku()
@@ -156,22 +156,42 @@ public class PurchasingService {
         return value.replace("!","!!").replace("%","!%").replace("_","!_");
     }
 
+
     public PurchaseReceipt receive(PurchaseDraft draft) {
+        PurchaseOrderReceipt order = receive(new PurchaseOrderDraft(
+                draft.supplierId(), draft.supplierInvoiceReference(),
+                List.of(new PurchaseLineDraft(draft.partId(), draft.quantity(), draft.unitCostPaise()))));
+        PartDetails part = parts.findDetailsById(draft.partId());
+        long lineTotal = Math.multiplyExact((long) draft.quantity(), draft.unitCostPaise());
+        return new PurchaseReceipt(order.purchaseId(), order.purchaseNumber(), part.sku(), part.name(),
+                order.supplierName(), draft.quantity(), draft.unitCostPaise(), lineTotal);
+    }
+
+    /** Atomically receives up to 100 distinct inventory items on one supplier receipt. */
+    public PurchaseOrderReceipt receive(PurchaseOrderDraft draft) {
         return transactions.execute(status -> {
-            List<LookupOption> suppliers = parts.suppliers();
-            LookupOption supplier = suppliers.stream().filter(option -> option.id() == draft.supplierId())
+            LookupOption supplier = parts.suppliers().stream()
+                    .filter(option -> option.id() == draft.supplierId())
                     .findFirst().orElseThrow(() -> new IllegalArgumentException("Selected supplier does not exist."));
-            PartDetails part = parts.findDetailsById(draft.partId());
-            long total;
+            List<PreparedPurchaseLine> prepared = new java.util.ArrayList<>();
+            long total = 0;
+            int totalUnits = 0;
             try {
-                total = Math.multiplyExact((long) draft.quantity(), draft.unitCostPaise());
+                for (PurchaseLineDraft line : draft.lines()) {
+                    PartDetails part = parts.findDetailsById(line.partId());
+                    long lineTotal = Math.multiplyExact((long) line.quantity(), line.unitCostPaise());
+                    total = Math.addExact(total, lineTotal);
+                    totalUnits = Math.addExact(totalUnits, line.quantity());
+                    prepared.add(new PreparedPurchaseLine(part, line, lineTotal));
+                }
             } catch (ArithmeticException ex) {
-                throw new IllegalArgumentException("Purchase amount is too large.", ex);
+                throw new IllegalArgumentException("Purchase amount or total quantity is too large.", ex);
             }
+
             String purchaseNumber = "PO-" + LocalDate.now(clock).toString().replace("-", "")
                     + "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(java.util.Locale.ROOT);
-
             KeyHolder key = new GeneratedKeyHolder();
+            long receiptTotal = total;
             jdbc.update((PreparedStatementCreator) connection -> {
                 PreparedStatement ps = connection.prepareStatement("""
                     INSERT INTO purchases(purchase_number,supplier_id,supplier_name_snapshot,supplier_invoice_reference,subtotal_paise,status)
@@ -181,37 +201,44 @@ public class PurchasingService {
                 ps.setLong(2, supplier.id());
                 ps.setString(3, supplier.name());
                 ps.setString(4, draft.supplierInvoiceReference());
-                ps.setLong(5, total);
+                ps.setLong(5, receiptTotal);
                 return ps;
             }, key);
             Number generated = key.getKey();
             if (generated == null) throw new IllegalStateException("Database did not return the purchase ID.");
             long purchaseId = generated.longValue();
 
-            jdbc.update("""
-                INSERT INTO purchase_items(purchase_id,part_id,sku_snapshot,name_snapshot,quantity,unit_cost_paise,line_total_paise,previous_purchase_price_paise)
-                VALUES (?,?,?,?,?,?,?,?)
-                """, purchaseId, part.id(), part.sku(), part.name(), draft.quantity(), draft.unitCostPaise(), total, part.purchasePricePaise());
+            for (PreparedPurchaseLine item : prepared) {
+                PartDetails part = item.part();
+                PurchaseLineDraft line = item.draft();
+                jdbc.update("""
+                    INSERT INTO purchase_items(purchase_id,part_id,sku_snapshot,name_snapshot,quantity,unit_cost_paise,line_total_paise,previous_purchase_price_paise)
+                    VALUES (?,?,?,?,?,?,?,?)
+                    """, purchaseId, part.id(), part.sku(), part.name(), line.quantity(),
+                        line.unitCostPaise(), item.lineTotalPaise(), part.purchasePricePaise());
 
-            int changed = jdbc.update("""
-                INSERT INTO inventory(part_id,quantity_on_hand,reorder_level) VALUES (?,?,0)
-                ON CONFLICT(part_id) DO UPDATE
-                  SET quantity_on_hand=inventory.quantity_on_hand+excluded.quantity_on_hand
-                  WHERE inventory.quantity_on_hand <= ?
-                """, part.id(), draft.quantity(), Integer.MAX_VALUE - draft.quantity());
-            if (changed != 1) {
-                throw new IllegalStateException("Inventory quantity limit exceeded or inventory row could not be updated.");
+                int changed = jdbc.update("""
+                    INSERT INTO inventory(part_id,quantity_on_hand,reorder_level) VALUES (?,?,0)
+                    ON CONFLICT(part_id) DO UPDATE
+                      SET quantity_on_hand=inventory.quantity_on_hand+excluded.quantity_on_hand
+                      WHERE inventory.quantity_on_hand <= ?
+                    """, part.id(), line.quantity(), Integer.MAX_VALUE - line.quantity());
+                if (changed != 1) {
+                    throw new IllegalStateException("Inventory quantity limit exceeded for SKU " + part.sku() + ".");
+                }
+                int costUpdated = jdbc.update(
+                        "UPDATE parts SET purchase_price_paise=?, updated_at=CURRENT_TIMESTAMP WHERE id=? AND active=1",
+                        line.unitCostPaise(), part.id());
+                if (costUpdated != 1) throw new IllegalStateException("Inventory item " + part.sku() + " became inactive during receiving.");
+                jdbc.update("""
+                    INSERT INTO stock_movements(part_id,movement_type,quantity,reference,reason)
+                    VALUES (?,'PURCHASE',?,?,?)
+                    """, part.id(), line.quantity(), purchaseNumber, "Supplier stock receipt");
             }
-            int costUpdated = jdbc.update("UPDATE parts SET purchase_price_paise=?, updated_at=CURRENT_TIMESTAMP WHERE id=? AND active=1",
-                    draft.unitCostPaise(), part.id());
-            if (costUpdated != 1) throw new IllegalStateException("Inventory item became inactive during receiving.");
-            jdbc.update("""
-                INSERT INTO stock_movements(part_id,movement_type,quantity,reference,reason)
-                VALUES (?,'PURCHASE',?,?,?)
-                """, part.id(), draft.quantity(), purchaseNumber, "Supplier stock receipt");
-
-            return new PurchaseReceipt(purchaseId, purchaseNumber, part.sku(), part.name(), supplier.name(),
-                    draft.quantity(), draft.unitCostPaise(), total);
+            return new PurchaseOrderReceipt(purchaseId, purchaseNumber, supplier.name(),
+                    prepared.size(), totalUnits, total);
         });
     }
+
+    private record PreparedPurchaseLine(PartDetails part, PurchaseLineDraft draft, long lineTotalPaise) { }
 }
