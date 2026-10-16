@@ -23,6 +23,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
+import java.math.BigDecimal;
 import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.time.Clock;
@@ -137,12 +138,6 @@ public class PurchasingService {
             int marked = jdbc.update("UPDATE purchases SET status='CANCELLED' WHERE id=? AND status='RECEIVED'",purchase.id());
             if (marked != 1) throw new IllegalStateException("Purchase status changed. Reload history and try again.");
 
-            Long postedPayments = jdbc.queryForObject(
-                    "SELECT COALESCE(SUM(amount_paise),0) FROM supplier_payments WHERE purchase_id=? AND status='POSTED'",
-                    Long.class, purchase.id());
-            if (postedPayments != null && postedPayments > 0) {
-                throw new IllegalStateException("Cannot cancel a receipt with posted supplier payments. Void/reconcile payment records first; no stock changes were committed.");
-            }
             jdbc.update("INSERT INTO purchase_cancellations(purchase_id,reason) VALUES (?,?)",purchase.id(),reason);
             int totalUnits = 0;
             for (PurchaseLine line : lines) {
