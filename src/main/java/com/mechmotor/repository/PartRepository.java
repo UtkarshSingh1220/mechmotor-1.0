@@ -322,7 +322,7 @@ public class PartRepository {
                       lower(vf.make) LIKE ? ESCAPE '!' OR lower(vf.model) LIKE ? ESCAPE '!'
                       OR lower(COALESCE(vf.engine,'')) LIKE ? ESCAPE '!' OR lower(COALESCE(vf.trim,'')) LIKE ? ESCAPE '!'
                       OR lower(COALESCE(vf.notes,'')) LIKE ? ESCAPE '!'
-                      OR (?=1 AND ? BETWEEN vf.year_from AND vf.year_to)))
+                      OR (?=1 AND ? BETWEEN vf.year_from AND vf.year_to))))
                 """);
             args.add(exact); args.add(exact); args.add(exact);
             for (int i = 0; i < 15; i++) args.add(like);
