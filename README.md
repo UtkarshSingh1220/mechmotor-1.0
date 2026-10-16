@@ -511,7 +511,7 @@ The launcher JAR and input layout in this example must be adapted to the actual 
 
 ### Remaining release blockers
 - Sale voids/refunds and return workflows with explicit reversal records.
-- Formal purchase orders with atomic full receipt; partial receiving, supplier returns/credit notes and end-to-end accounting reconciliation remain in progress.
+- Formal purchase orders and partial receiving are implemented; supplier returns/credit notes are in review pending CI and Windows workflow acceptance. End-to-end accounting reconciliation remains a release gate.
 - PDF invoices and reports, shop settings and report scheduling/email integration.
 - Windows EXE installer and clean-machine install/upgrade/uninstall validation.
 - Representative inventory performance benchmarks, dependency/security/license scanning, restore drills and end-to-end shop workflow tests.
