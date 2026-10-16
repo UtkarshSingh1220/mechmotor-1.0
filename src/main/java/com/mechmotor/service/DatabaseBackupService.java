@@ -2,6 +2,8 @@ package com.mechmotor.service;
 
 import com.mechmotor.config.DatabaseConfiguration;
 import org.springframework.stereotype.Service;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.datasource.init.ScriptUtils;
 
 import javax.sql.DataSource;
 import java.io.IOException;
@@ -16,6 +18,7 @@ import java.sql.Statement;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -78,7 +81,7 @@ public class DatabaseBackupService {
             throw new IllegalArgumentException("The live database cannot be used as its own restore source.");
         }
         try {
-            verifyDatabase(source);
+            verifyDatabase(source, false);
         } catch (Exception ex) {
             throw new IllegalArgumentException("The selected file is not a valid, intact MechMotor database backup.", ex);
         }
@@ -87,6 +90,7 @@ public class DatabaseBackupService {
         Path staged = Files.createTempFile(databaseFile.getParent(), ".mechmotor-restore-", ".db");
         try {
             Files.copy(source, staged, StandardCopyOption.REPLACE_EXISTING);
+            applyAdditiveSchema(staged);
             verifyDatabase(staged);
 
             // Do not risk replacing the only copy of the user's current data.
@@ -120,7 +124,19 @@ public class DatabaseBackupService {
         }
     }
 
+    private static void applyAdditiveSchema(Path candidate) throws Exception {
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite:" + candidate.toAbsolutePath().normalize())) {
+            ScriptUtils.executeSqlScript(connection, new ClassPathResource("schema.sql"));
+        }
+    }
+
     private static void verifyDatabase(Path candidate) throws Exception {
+        verifyDatabase(candidate, true);
+    }
+
+    private static void verifyDatabase(Path candidate, boolean requireCurrentSchema) throws Exception {
+        Map<String, Set<String>> requiredColumns = new HashMap<>(REQUIRED_COLUMNS);
+        if (!requireCurrentSchema) requiredColumns.remove("part_fitments");
         verifyDatabase(candidate, true);
     }
 
