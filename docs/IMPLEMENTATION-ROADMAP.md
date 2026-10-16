@@ -12,13 +12,12 @@
 - Windows CI on Java 21 with Maven clean verify.
 
 ## Current milestone
-- **Sales history/reporting (in progress on `feat/sales-history-reporting`):** read-only bounded sales history with sale status, payment methods, unit counts and recorded refunds, searchable by sale number/customer.
-- **Service-layer feature enforcement — in progress on `feat/service-layer-license-enforcement`:** add `@RequiresFeature` and an AOP guard so feature entitlements are checked at service boundaries, not only in UI controls.
+- **Versioned database bootstrap (in progress on `feat/versioned-schema-migrations`):** replace repeat schema initialization with a one-time baseline, additive legacy-column upgrades, schema validation and ordered SQL migrations.
 
 - **Multi-item sales cart — merged:** up to 100 distinct items, overflow-safe totals, atomic sale snapshots, stock deductions, ledger movements and payment.
 
 ## Remaining production-readiness work
-1. **Sales lifecycle:** merged full-sale voids, per-item partial returns/refunds, discount-aware cumulative rounding and atomic stock reversal/return audit. Remaining: sales history/reporting and end-to-end cashier workflow validation.
+1. **Sales lifecycle:** merged full-sale voids, per-item partial returns/refunds, discount-aware cumulative rounding and atomic stock reversal/return audit. Remaining: end-to-end cashier workflow validation.
 2. **Purchasing lifecycle:** multi-item purchase orders/receipts, cancellations/returns, supplier payments and accounts payable.
 3. **Invoices and reports:** merged printable PDF sales invoices generated from immutable snapshots. Remaining: operational reports, shop profile/tax settings and invoice template review.
 4. **Windows distribution:** validated JavaFX runtime layout, jpackage EXE installer, clean-machine install/launch/upgrade/uninstall testing, preserving user data.
