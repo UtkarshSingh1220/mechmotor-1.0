@@ -56,6 +56,13 @@ Never run JDBC, report generation or Gmail operations on the JavaFX Application 
 - Repeated void requests are rejected; a stock-ledger failure rolls back the sale status, inventory and void record together.
 - The app records the full refund amount and original payment method but does not initiate a real bank, UPI or card refund. Staff must process that separately and retain the refund reference.
 
+## Sales returns and refunds
+
+- `SalesService.returnableSale` lists each item line on a posted sale and calculates each line's net total after a deterministic proportional allocation of the sale-level discount.
+- `SalesService.returnSale` records a return, restores inventory and writes a positive `RETURN` stock movement inside one transaction.
+- Return quantity and refund history are tracked per sale item. Cumulative integer rounding ensures returning every unit refunds exactly that line's net total without exceeding the sale total.
+- Full-sale void is rejected after any partial return. Refunds are audit records only; actual cash/UPI/card settlement is external.
+
 ## Purchase receiving
 
 - `PurchasingService` posts one-item supplier receipts inside a `TransactionTemplate`.

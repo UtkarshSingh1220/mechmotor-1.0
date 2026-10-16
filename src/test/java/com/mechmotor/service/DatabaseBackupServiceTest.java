@@ -73,6 +73,8 @@ class DatabaseBackupServiceTest {
              Statement statement = connection.createStatement()) {
             statement.execute("DROP TABLE part_fitments");
             statement.execute("DROP TABLE saved_views");
+            statement.execute("DROP TABLE sale_returns");
+            statement.execute("DROP TABLE sale_voids");
             statement.execute("DROP TABLE payments");
             statement.execute("DROP TABLE sale_items");
             statement.execute("DROP TABLE sales");
@@ -82,9 +84,9 @@ class DatabaseBackupServiceTest {
 
         service.restoreFrom(backup);
         try (Connection connection = dataSource.getConnection(); Statement statement = connection.createStatement();
-             var result = statement.executeQuery("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('part_fitments','saved_views','sales','sale_items','payments','purchases','purchase_items')")) {
+             var result = statement.executeQuery("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('part_fitments','saved_views','sales','sale_items','payments','purchases','purchase_items','sale_voids','sale_returns')")) {
             assertTrue(result.next());
-            assertEquals(7, result.getInt(1));
+            assertEquals(9, result.getInt(1));
         }
     }
 

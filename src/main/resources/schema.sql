@@ -171,3 +171,20 @@ CREATE TABLE IF NOT EXISTS sale_voids (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_sale_voids_created_at ON sale_voids(created_at);
+
+
+CREATE TABLE IF NOT EXISTS sale_returns (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  return_number TEXT NOT NULL UNIQUE,
+  sale_id INTEGER NOT NULL REFERENCES sales(id),
+  sale_item_id INTEGER NOT NULL REFERENCES sale_items(id),
+  quantity INTEGER NOT NULL CHECK(quantity > 0),
+  refund_paise INTEGER NOT NULL CHECK(refund_paise >= 0),
+  refund_method TEXT NOT NULL CHECK(refund_method IN ('CASH','UPI','CARD','BANK_TRANSFER')),
+  refund_reference TEXT,
+  reason TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_sale_returns_sale_id ON sale_returns(sale_id);
+CREATE INDEX IF NOT EXISTS idx_sale_returns_sale_item_id ON sale_returns(sale_item_id);
+CREATE INDEX IF NOT EXISTS idx_sale_returns_created_at ON sale_returns(created_at);
