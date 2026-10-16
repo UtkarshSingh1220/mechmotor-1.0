@@ -84,8 +84,8 @@ class InventoryCsvServiceTest {
                 null, null, null, null, null, null, "1.00", "2.00", 1, 0));
         Path input = tempDir.resolve("duplicate.csv");
         Files.writeString(input, "SKU,Barcode,Part Number,Name,Brand,Company,Material,Color,Category,Supplier,Quantity,Reorder Level,Purchase Price INR,Selling Price INR\r\n"
-                + "NEW-1,,,New part,,,,,,3,0,1.00,2.00\r\n"
-                + "DUP-1,,,Duplicate part,,,,,,3,0,1.00,2.00\r\n");
+                + "NEW-1,,,New part,,,,,,,3,0,1.00,2.00\r\n"
+                + "DUP-1,,,Duplicate part,,,,,,,3,0,1.00,2.00\r\n");
 
         assertThrows(IllegalStateException.class, () -> csvService.importFrom(input));
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM parts WHERE sku='NEW-1'", Integer.class));
