@@ -33,7 +33,6 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
-import java.math.BigDecimal;
 import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.time.Clock;
@@ -96,7 +95,7 @@ public class PurchasingService {
 
     /**
      * Cancels an un-settled stock receipt only when current on-hand quantity can
-     * cover the full reversal. This app does not track inventory lots or supplier refunds.
+     * cover the full reversal. Inventory is not lot-tracked; use supplier returns for partial credits.
      */
     public PurchaseCancellationReceipt cancelPurchase(String rawPurchaseNumber, String rawReason) {
         String purchaseNumber = rawPurchaseNumber == null ? "" : rawPurchaseNumber.strip();
