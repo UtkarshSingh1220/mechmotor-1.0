@@ -11,3 +11,7 @@
 .metric-card { -fx-background-color: #ffffff; -fx-border-color: #e0e7ef; -fx-border-radius: 10px; -fx-background-radius: 10px; -fx-padding: 12px 16px; }
 .metric-label { -fx-text-fill: #526579; -fx-font-size: 12px; }
 .metric-value { -fx-text-fill: #10243a; -fx-font-size: 21px; -fx-font-weight: bold; }
+
+.license-status { -fx-font-size: 12px; -fx-font-weight: bold; }
+.license-active { -fx-text-fill: #16794b; }
+.license-inactive { -fx-text-fill: #b45309; }

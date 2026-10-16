@@ -7,6 +7,18 @@ MechMotor is designed as a lightweight desktop application for a single shop PC.
 
 > **Project status:** Inventory CRUD and the first advanced-search milestone are implemented on the working branch, with automated repository tests added. This remains an in-progress starter, not a production-ready release: saved views, vehicle fitment, imports/exports, purchasing, sales, reporting, licensing, backups and packaging remain incomplete. CI verification for the current branch must pass before this milestone is considered validated.
 
+## Activation and licensing
+
+MechMotor validates signed Ed25519 activation tokens before loading inventory. The application contains only the public verification key; the signing private key must remain outside this repository and be protected offline.
+
+- Default activation file: `%LOCALAPPDATA%\\MechMotor\\license\\activation.key` on Windows.
+- Fallback when `LOCALAPPDATA` is unavailable: `%USERPROFILE%\\.mechmotor\\license\\activation.key`.
+- Override for testing or managed deployments: JVM property `-Dmechmotor.licenseFile=/path/to/activation.key`.
+- In the desktop header, select **Activation…** to view status, license ID, customer, expiry and features. Use **Reveal stored activation key** to view the installed token.
+- To issue a customer key, compile/run `tools/license-issuer/IssueLicense.java` with the offline private key. Never put that private key in Git, the installer, or the application JAR.
+
+See `docs/LLD.md` for token validation and issuer usage.
+
 ## CSV inventory import/export
 
 Use the **CSV** menu to export the currently applied inventory filters or import a CSV catalog. Import requires the exported column set, supports quoted commas/quotes/newlines, and is create-only: duplicate SKUs are not updated. The complete import is validated and committed atomically; a bad row or existing SKU rolls back the batch. Imports are limited to 25 MB and 20,000 rows. Create categories and suppliers before importing references to them. Vehicle fitments are managed separately and are not included in the CSV.

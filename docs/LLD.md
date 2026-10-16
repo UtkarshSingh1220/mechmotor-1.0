@@ -32,8 +32,16 @@ SQLite's built-in `lower()` is not complete Unicode case folding. If multilingua
 ## Threading
 Never run JDBC, report generation or Gmail operations on the JavaFX Application Thread. The desktop shell uses a single daemon database executor for bounded sequential work and JavaFX Tasks to return results to the UI thread. Future concurrent workloads must retain a bounded execution policy and stale-result handling.
 
-## Activation key design (planned)
-Menu: Help → License & Activation; shortcut: Settings → License. Mask key by default. Verify a signed canonical payload using Ed25519 and an embedded public key. Keep issuer private key in a separate offline tool. License is valid through 2028-01-31 in Asia/Kolkata; protected operations must be denied from 2028-02-01 00:00 Asia/Kolkata. Inject a Clock for deterministic tests. Expiry must not delete data or disable permitted read-only viewing/backup/export. This module is not implemented in the starter code.
+## Activation key design
+
+- `LicenseService` verifies `MM1.<base64url-payload>.<base64url-signature>` tokens using Ed25519 and the embedded public verification key.
+- Signed payload fields are version, license ID, customer, issued epoch day, expiry epoch day and comma-separated features. The license must include `INVENTORY`; unknown features, future issue dates, expired keys and invalid signatures are rejected.
+- The activation token is stored atomically at `%LOCALAPPDATA%/MechMotor/license/activation.key`; fallback is `~/.mechmotor/license/activation.key`. JVM property `-Dmechmotor.licenseFile` overrides the path.
+- The desktop header has **Activation…**. It displays license status, customer, license ID, expiry and features. The stored token is masked until the user selects **Reveal stored activation key**.
+- A valid activation is required before inventory data loads. An invalid/expired key does not delete the key or inventory; the activation dialog remains available to replace it.
+- `tools/license-issuer/IssueLicense.java` signs tokens using an external PKCS#8 Ed25519 private-key PEM. Never commit or package the issuer private key. Keep it offline and backed up securely.
+- Inject `Clock` in tests to make issue/expiry behavior deterministic. Local signing verification is not protection against a privileged attacker who patches the executable.
+
 
 ## Build and test
 - `mvn clean test`
