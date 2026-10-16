@@ -10,6 +10,8 @@
 - Signed Ed25519 activation/license verification and UI feature gating.
 - Single-item sales checkout and atomic single-item supplier stock receiving.
 - Windows CI on Java 21 with Maven clean verify.
+- Searchable sales history with payment and refund audit details.
+- Service-layer feature entitlement enforcement using `@RequiresFeature` and an AOP guard.
 
 ## Current milestone
 - **Versioned database bootstrap (in progress on `feat/versioned-schema-migrations`):** replace repeat schema initialization with a one-time baseline, additive legacy-column upgrades, schema validation and ordered SQL migrations.
