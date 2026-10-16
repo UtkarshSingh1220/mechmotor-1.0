@@ -197,7 +197,7 @@ class PurchasingServiceTest {
         assertThrows(IllegalArgumentException.class, () -> purchasing.recordSupplierReturn(
                 new SupplierReturnDraft(receipt.purchaseNumber(), "Wrong item", null,
                         java.util.List.of(new SupplierReturnLineDraft(purchaseItemId, 3)))));
-        jdbc.update("UPDATE inventory SET reserved_quantity=4 WHERE part_id=?", partId);
+        jdbc.update("UPDATE inventory SET reserved_quantity=5 WHERE part_id=?", partId);
         assertThrows(IllegalStateException.class, () -> purchasing.recordSupplierReturn(
                 new SupplierReturnDraft(receipt.purchaseNumber(), "Reserved", null,
                         java.util.List.of(new SupplierReturnLineDraft(purchaseItemId, 1)))));
