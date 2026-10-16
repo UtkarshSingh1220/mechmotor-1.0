@@ -102,7 +102,8 @@ class OperationalReportsServiceTest {
             """, "PUR-RECON-1", supplierId, "Central Auto");
         long purchaseId = jdbc.queryForObject("SELECT id FROM purchases WHERE purchase_number=?",
                 Long.class, "PUR-RECON-1");
-        long partId = jdbc.queryForObject("SELECT id FROM parts LIMIT 1", Long.class);
+        jdbc.update("INSERT INTO parts(sku,name) VALUES ('SKU-RECON','Air filter')");
+        long partId = jdbc.queryForObject("SELECT id FROM parts WHERE sku='SKU-RECON'", Long.class);
         jdbc.update("""
             INSERT INTO purchase_items(purchase_id,part_id,sku_snapshot,name_snapshot,quantity,unit_cost_paise,line_total_paise)
             VALUES (?,?,'SKU-RECON','Air filter',4,2500,10000)
