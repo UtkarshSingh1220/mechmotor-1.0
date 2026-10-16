@@ -464,7 +464,7 @@ public class MechMotorApplication extends Application {
                 showError("Feature not licensed", new IllegalArgumentException("Your activation key does not include PURCHASING."));
                 return;
             }
-            showFormalPurchaseOrdersDialog(stage, status, loadPage);
+            showFormalPurchaseOrdersDialog(stage, status, loadPage, supplierFilter.getValue());
         });
 
         supplierPaymentsButton.setOnAction(e -> {
@@ -1165,7 +1165,7 @@ public class MechMotorApplication extends Application {
         long lineTotalPaise() { return Math.multiplyExact((long) quantity, unitCostPaise); }
     }
 
-    private void showFormalPurchaseOrdersDialog(Stage owner, Label status, Runnable refreshInventory) {
+    private void showFormalPurchaseOrdersDialog(Stage owner, Label status, Runnable refreshInventory, LookupOption defaultSupplier) {
         Dialog<ButtonType> dialog = new Dialog<>();
         dialog.initOwner(owner);
         dialog.setTitle("Formal purchase orders");
@@ -1213,8 +1213,7 @@ public class MechMotorApplication extends Application {
         };
         search.setOnAction(e -> load.run());
         filter.setOnAction(e -> load.run());
-        create.setOnAction(e -> showCreatePurchaseOrderDialog(owner,
-                suppliers.isEmpty() ? null : suppliers.get(0), load));
+        create.setOnAction(e -> showCreatePurchaseOrderDialog(owner, defaultSupplier, load));
         receive.setOnAction(e -> {
             FormalPurchaseOrderRow selected = table.getSelectionModel().getSelectedItem();
             if (selected == null || !"ORDERED".equals(selected.status())) return;
