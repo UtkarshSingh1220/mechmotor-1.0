@@ -49,14 +49,25 @@ class OperationalReportsServiceTest {
     }
 
     @Test
-    void rejectsInvalidOrExcessiveDateRangesBeforeWriting() {
+    void acceptsExactly366CalendarDaysAndRejectsLongerRangesBeforeWriting() throws Exception {
+        Path target = tempDir.resolve("boundary.csv");
+        assertEquals(0, reports.export(OperationalReportsService.ReportType.SALES, target,
+                LocalDate.of(2025, 1, 1), LocalDate.of(2026, 1, 1)));
+        assertTrue(Files.exists(target));
+
+        Path excessive = tempDir.resolve("excessive.csv");
+        assertThrows(IllegalArgumentException.class, () -> reports.export(
+                OperationalReportsService.ReportType.SALES, excessive,
+                LocalDate.of(2025, 1, 1), LocalDate.of(2026, 1, 2)));
+        assertFalse(Files.exists(excessive));
+    }
+
+    @Test
+    void rejectsReversedDateRangeBeforeWriting() {
         Path target = tempDir.resolve("invalid.csv");
         assertThrows(IllegalArgumentException.class, () -> reports.export(
                 OperationalReportsService.ReportType.SALES, target,
                 LocalDate.of(2026, 2, 1), LocalDate.of(2026, 1, 1)));
-        assertThrows(IllegalArgumentException.class, () -> reports.export(
-                OperationalReportsService.ReportType.SALES, target,
-                LocalDate.of(2025, 1, 1), LocalDate.of(2026, 1, 1)));
         assertFalse(Files.exists(target));
     }
 
