@@ -128,6 +128,7 @@ public class MechMotorApplication extends Application {
         Button purchaseOrdersButton = new Button("Purchase orders");
         Button reportsButton = new Button("Operational reports…");
         Button supplierPaymentsButton = new Button("Supplier payments / payable");
+        Button supplierReturnsButton = new Button("Supplier returns / credit notes");
         Button fitmentButton = new Button("Vehicle fitment");
         MenuItem addCategoryItem = new MenuItem("Add root / subcategory…");
         MenuItem renameCategoryItem = new MenuItem("Rename selected category…");
@@ -475,6 +476,14 @@ public class MechMotorApplication extends Application {
             showSupplierPaymentsDialog(stage, status);
         });
 
+        supplierReturnsButton.setOnAction(e -> {
+            if (!licenseService.status().features().contains("PURCHASING")) {
+                showError("Feature not licensed", new IllegalArgumentException("Your activation key does not include PURCHASING."));
+                return;
+            }
+            showSupplierReturnsDialog(stage, status, loadPage);
+        });
+
         reportsButton.setOnAction(e -> {
             if (!licenseService.status().features().contains("CSV")) {
                 showError("Feature not licensed", new IllegalArgumentException("Your activation key does not include CSV/report export."));
@@ -647,7 +656,7 @@ public class MechMotorApplication extends Application {
         GridPane.setHgrow(savedViewsMenu, Priority.ALWAYS);
         for (int i = 0; i < 6; i++) GridPane.setHgrow(filters.getChildren().get(i), Priority.ALWAYS);
         FlowPane actions = new FlowPane(8, 8, addButton, editButton, deactivateButton, sellButton,
-                voidSaleButton, returnsButton, invoiceButton, salesHistoryButton, receiveStockButton, receiveMultiStockButton, purchaseHistoryButton, purchaseOrdersButton, supplierPaymentsButton, fitmentButton, reportsButton,
+                voidSaleButton, returnsButton, invoiceButton, salesHistoryButton, receiveStockButton, receiveMultiStockButton, purchaseHistoryButton, purchaseOrdersButton, supplierPaymentsButton, supplierReturnsButton, fitmentButton, reportsButton,
                 categoryMenu, supplierMenu, backupButton, restoreButton, csvMenu,
                 previousButton, nextButton, pageLabel);
         actions.setAlignment(Pos.CENTER_LEFT);
@@ -1152,6 +1161,151 @@ public class MechMotorApplication extends Application {
         GridPane.setHgrow(table,Priority.ALWAYS);GridPane.setVgrow(table,Priority.ALWAYS);
         dialog.getDialogPane().setContent(form);dialog.getDialogPane().setPrefSize(900,680);
         dialog.show();
+    }
+
+    private void showSupplierReturnsDialog(Stage owner, Label status, Runnable refreshInventory) {
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.initOwner(owner);
+        dialog.setTitle("Supplier returns / credit notes");
+        dialog.setHeaderText("Return only unreserved stock from a received supplier receipt. Posting a return reduces stock and the payable balance atomically.");
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+
+        TextField purchaseNumber = new TextField();
+        purchaseNumber.setPromptText("Supplier receipt number (PO-...)");
+        Button load = new Button("Load receipt lines");
+        TextField reason = new TextField();
+        reason.setPromptText("Required reason for return");
+        TextField creditReference = new TextField();
+        creditReference.setPromptText("Supplier credit note reference (optional)");
+        Button post = new Button("Post return / credit note");
+        post.setDisable(true);
+        Label supplier = new Label("Receipt: —");
+        Label balanceLabel = new Label("Payable after credits: —");
+        GridPane lineGrid = new GridPane();
+        lineGrid.setHgap(10);
+        lineGrid.setVgap(8);
+        lineGrid.setPadding(new Insets(8));
+        ScrollPane lineScroll = new ScrollPane(lineGrid);
+        lineScroll.setFitToWidth(true);
+        lineScroll.setPrefViewportHeight(220);
+        TableView<SupplierReturnRow> history = new TableView<>();
+        history.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+        history.setPrefHeight(180);
+        addSupplierReturnColumn(history,"Return",SupplierReturnRow::returnNumber);
+        addSupplierReturnColumn(history,"Date",SupplierReturnRow::createdAt);
+        addSupplierReturnColumn(history,"Reason",SupplierReturnRow::reason);
+        addSupplierReturnColumn(history,"Credit note",SupplierReturnRow::creditNoteReference);
+        addSupplierReturnColumn(history,"Units",row -> Integer.toString(row.unitsReturned()));
+        addSupplierReturnColumn(history,"Credit",row -> "₹"+rupees(row.totalPaise()));
+
+        java.util.List<SupplierReturnableLine>[] loadedLines = new java.util.List[]{java.util.List.of()};
+        java.util.Map<Long,TextField> quantities = new java.util.LinkedHashMap<>();
+        Runnable loadLines = () -> {
+            post.setDisable(true);
+            runBackground(() -> new Object[]{
+                    purchasingService.returnablePurchaseLines(purchaseNumber.getText()),
+                    purchasingService.supplierReturns(purchaseNumber.getText()),
+                    purchasingService.balance(purchaseNumber.getText())}, result -> {
+                @SuppressWarnings("unchecked") List<SupplierReturnableLine> lines = (List<SupplierReturnableLine>) result[0];
+                @SuppressWarnings("unchecked") List<SupplierReturnRow> rows = (List<SupplierReturnRow>) result[1];
+                PurchaseBalance balance = (PurchaseBalance) result[2];
+                loadedLines[0] = lines;
+                quantities.clear();
+                lineGrid.getChildren().clear();
+                lineGrid.addRow(0,new Label("Part"),new Label("Received / returned / returnable"),
+                        new Label("Unreserved stock"),new Label("Return now"));
+                int rowIndex = 1;
+                for (SupplierReturnableLine line : lines) {
+                    TextField quantity = new TextField();
+                    quantity.setPromptText("0");
+                    quantity.setPrefColumnCount(7);
+                    quantities.put(line.purchaseItemId(),quantity);
+                    lineGrid.addRow(rowIndex++,new Label(line.sku()+" — "+line.name()),
+                            new Label(line.receivedQuantity()+" / "+line.previouslyReturnedQuantity()+" / "+line.returnableQuantity()),
+                            new Label(Integer.toString(line.availableQuantity())),quantity);
+                }
+                supplier.setText("Supplier: "+balance.supplierName()+" • Receipt status: "+balance.status());
+                balanceLabel.setText("Net receipt total: ₹"+rupees(balance.totalPaise())
+                        +" • Paid: ₹"+rupees(balance.paidPaise())
+                        +" • Payable / credit balance: ₹"+rupees(balance.outstandingPaise()));
+                history.setItems(FXCollections.observableArrayList(rows));
+                post.setDisable(lines.isEmpty() || lines.stream().noneMatch(line -> line.returnableQuantity()>0));
+                status.setText("Supplier return history loaded: "+rows.size()+" record(s)");
+            }, error -> showError("Could not load supplier receipt for return",error));
+        };
+        load.setOnAction(e -> loadLines.run());
+        purchaseNumber.setOnAction(e -> loadLines.run());
+        post.setOnAction(e -> {
+            try {
+                List<SupplierReturnLineDraft> returnLines = new java.util.ArrayList<>();
+                for (SupplierReturnableLine line : loadedLines[0]) {
+                    String raw = quantities.get(line.purchaseItemId()).getText();
+                    if (raw == null || raw.isBlank()) continue;
+                    int quantity = parseRequiredInteger(raw,"Return quantity for "+line.sku());
+                    if (quantity == 0) continue;
+                    returnLines.add(new SupplierReturnLineDraft(line.purchaseItemId(),quantity));
+                }
+                if (returnLines.isEmpty()) throw new IllegalArgumentException("Enter at least one positive return quantity.");
+                SupplierReturnDraft draft = new SupplierReturnDraft(purchaseNumber.getText(),reason.getText(),
+                        creditReference.getText(),returnLines);
+                Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
+                        "This records a supplier return and credit note, reduces unreserved stock and lowers the payable balance. The operation is atomic and cannot be edited after posting.",
+                        ButtonType.CANCEL,ButtonType.OK);
+                confirm.initOwner(owner);
+                confirm.setTitle("Confirm supplier return");
+                confirm.setHeaderText("Post return / credit note?");
+                confirm.showAndWait().filter(ButtonType.OK::equals).ifPresent(ok -> {
+                    post.setDisable(true);
+                    runBackground(() -> purchasingService.recordSupplierReturn(draft), receipt -> {
+                        reason.clear();
+                        creditReference.clear();
+                        status.setText("Supplier return posted: "+receipt.returnNumber());
+                        refreshInventory.run();
+                        loadLines.run();
+                        Alert info = new Alert(Alert.AlertType.INFORMATION,
+                                "Return: "+receipt.returnNumber()+"\nReceipt: "+receipt.purchaseNumber()
+                                        +"\nUnits returned: "+receipt.unitsReturned()
+                                        +"\nSupplier credit: ₹"+rupees(receipt.totalPaise())
+                                        +"\nPayable / credit balance: ₹"+rupees(receipt.outstandingPaise())
+                                        +(receipt.creditNoteReference()==null?"":"\nCredit note: "+receipt.creditNoteReference()),
+                                ButtonType.OK);
+                        info.initOwner(owner);
+                        info.setTitle("Supplier return posted");
+                        info.setHeaderText("Credit note recorded");
+                        info.show();
+                    }, error -> { post.setDisable(false); showError("Could not post supplier return",error); });
+                });
+            } catch (IllegalArgumentException ex) {
+                showError("Check supplier return details",ex);
+            }
+        });
+
+        GridPane form = new GridPane();
+        form.setHgap(8); form.setVgap(8); form.setPadding(new Insets(12));
+        form.addRow(0,new Label("Receipt"),purchaseNumber,load);
+        form.add(supplier,0,1,3,1);
+        form.add(balanceLabel,0,2,3,1);
+        form.addRow(3,new Label("Reason"),reason);
+        form.addRow(4,new Label("Credit note reference"),creditReference);
+        form.add(lineScroll,0,5,3,1);
+        form.add(post,1,6);
+        form.add(new Label("Posted credit notes / returns"),0,7,3,1);
+        form.add(history,0,8,3,1);
+        GridPane.setHgrow(purchaseNumber,Priority.ALWAYS);
+        GridPane.setHgrow(reason,Priority.ALWAYS);
+        GridPane.setHgrow(creditReference,Priority.ALWAYS);
+        GridPane.setHgrow(lineScroll,Priority.ALWAYS);
+        GridPane.setHgrow(history,Priority.ALWAYS);
+        dialog.getDialogPane().setContent(form);
+        dialog.getDialogPane().setPrefSize(1050,760);
+        dialog.show();
+    }
+
+    private static void addSupplierReturnColumn(TableView<SupplierReturnRow> table,String title,
+                                                java.util.function.Function<SupplierReturnRow,String> value) {
+        TableColumn<SupplierReturnRow,String> column = new TableColumn<>(title);
+        column.setCellValueFactory(cell -> new javafx.beans.property.ReadOnlyStringWrapper(value.apply(cell.getValue())));
+        table.getColumns().add(column);
     }
 
     private static void addSupplierPaymentColumn(TableView<SupplierPaymentRow> table,String title,
