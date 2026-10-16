@@ -236,6 +236,17 @@ public final class DatabaseMigrationRunner implements ApplicationRunner {
                 throw new IllegalStateException("Database table 'purchase_items' is missing required column 'previous_purchase_price_paise'.");
             }
         }
+        if (version >= 3) {
+            if (!tableExists(connection, "supplier_payments")) {
+                throw new IllegalStateException("Database is missing required table 'supplier_payments'.");
+            }
+            for (String column : List.of("id", "purchase_id", "method", "amount_paise", "reference",
+                    "status", "void_reason", "created_at", "voided_at")) {
+                if (!columnExists(connection, "supplier_payments", column)) {
+                    throw new IllegalStateException("Database table 'supplier_payments' is missing required column '" + column + "'.");
+                }
+            }
+        }
     }
 
     private static boolean tableExists(Connection connection, String table) throws SQLException {

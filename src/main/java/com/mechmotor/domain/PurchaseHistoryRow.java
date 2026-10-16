@@ -11,4 +11,6 @@ public record PurchaseHistoryRow(
         String status,
         int units,
         String itemSummary,
-        String cancellationReason) { }
+        String cancellationReason,
+        long paidPaise,
+        long outstandingPaise) { }

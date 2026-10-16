@@ -6,6 +6,7 @@ import com.mechmotor.domain.PurchaseReceipt;
 import com.mechmotor.domain.PurchaseOrderDraft;
 import com.mechmotor.domain.PurchaseLineDraft;
 import com.mechmotor.domain.SupplierDraft;
+import com.mechmotor.domain.SupplierPaymentDraft;
 import com.mechmotor.config.DatabaseMigrationRunner;
 import org.springframework.boot.DefaultApplicationArguments;
 import com.mechmotor.repository.PartRepository;
@@ -156,6 +157,50 @@ class PurchasingServiceTest {
         assertThrows(IllegalStateException.class, () -> purchasing.cancelPurchase(receipt.purchaseNumber(), "Stock reserved for order"));
         assertEquals(8, parts.findById(partId).quantity());
         assertEquals("RECEIVED", jdbc.queryForObject("SELECT status FROM purchases WHERE id=?", String.class, receipt.purchaseId()));
+    }
+
+    @Test
+    void supplierPaymentsTrackPartialBalanceAndVoidingRestoresPayable() {
+        PurchaseReceipt receipt = purchasing.receive(new PurchaseDraft(partId, 2, 1250, supplierId, "INV-PAY"));
+        var payment = purchasing.recordSupplierPayment(new SupplierPaymentDraft(
+                receipt.purchaseNumber(), 1000, SupplierPaymentDraft.Method.BANK_TRANSFER, "UTR-100"));
+        assertEquals(1000L, payment.paidTotalPaise());
+        assertEquals(1500L, payment.outstandingPaise());
+        assertEquals(1000L, purchasing.balance(receipt.purchaseNumber()).paidPaise());
+        assertEquals(1500L, purchasing.balance(receipt.purchaseNumber()).outstandingPaise());
+        assertEquals(1, purchasing.supplierPayments(receipt.purchaseNumber()).size());
+
+        var voided = purchasing.voidSupplierPayment(payment.paymentId(), "Incorrect amount entered");
+        assertEquals(0L, voided.paidTotalPaise());
+        assertEquals(2500L, voided.outstandingPaise());
+        assertEquals("VOIDED", purchasing.supplierPayments(receipt.purchaseNumber()).get(0).status());
+    }
+
+    @Test
+    void supplierPaymentsCannotOverpayOrDuplicateActiveReference() {
+        PurchaseReceipt receipt = purchasing.receive(new PurchaseDraft(partId, 2, 1250, supplierId, null));
+        purchasing.recordSupplierPayment(new SupplierPaymentDraft(receipt.purchaseNumber(), 1000,
+                SupplierPaymentDraft.Method.UPI, "UPI-REF-1"));
+        assertThrows(IllegalArgumentException.class, () -> purchasing.recordSupplierPayment(
+                new SupplierPaymentDraft(receipt.purchaseNumber(), 1501, SupplierPaymentDraft.Method.CASH, null)));
+        Long purchaseId = jdbc.queryForObject("SELECT id FROM purchases WHERE purchase_number=?", Long.class, receipt.purchaseNumber());
+        assertThrows(DataAccessException.class, () -> jdbc.update(
+                "INSERT INTO supplier_payments(purchase_id,method,amount_paise,status) VALUES (?,'CASH',1501,'POSTED')", purchaseId));
+        assertThrows(DataAccessException.class, () -> purchasing.recordSupplierPayment(
+                new SupplierPaymentDraft(receipt.purchaseNumber(), 1000, SupplierPaymentDraft.Method.UPI, "UPI-REF-1")));
+        assertEquals(1000L, purchasing.balance(receipt.purchaseNumber()).paidPaise());
+        assertEquals(1500L, purchasing.balance(receipt.purchaseNumber()).outstandingPaise());
+    }
+
+    @Test
+    void receiptCannotBeCancelledWhileSupplierPaymentIsPosted() {
+        PurchaseReceipt receipt = purchasing.receive(new PurchaseDraft(partId, 2, 1250, supplierId, null));
+        purchasing.recordSupplierPayment(new SupplierPaymentDraft(receipt.purchaseNumber(), 500,
+                SupplierPaymentDraft.Method.CASH, null));
+        assertThrows(IllegalStateException.class,
+                () -> purchasing.cancelPurchase(receipt.purchaseNumber(), "Incorrect receipt"));
+        assertEquals("RECEIVED", jdbc.queryForObject("SELECT status FROM purchases WHERE id=?", String.class, receipt.purchaseId()));
+        assertEquals(5, parts.findById(partId).quantity());
     }
 
     @Test
