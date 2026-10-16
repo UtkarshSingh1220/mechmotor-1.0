@@ -56,6 +56,7 @@ public class SalesService {
             String saleNumber = "MM-" + LocalDate.now(clock).toString().replace("-", "")
                     + "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(java.util.Locale.ROOT);
 
+            final long saleSubtotal = subtotal;
             KeyHolder key = new GeneratedKeyHolder();
             jdbc.update((PreparedStatementCreator) connection -> {
                 PreparedStatement ps = connection.prepareStatement("""
@@ -64,7 +65,7 @@ public class SalesService {
                     """, Statement.RETURN_GENERATED_KEYS);
                 ps.setString(1, saleNumber);
                 ps.setString(2, draft.customerName());
-                ps.setLong(3, subtotal);
+                ps.setLong(3, saleSubtotal);
                 ps.setLong(4, draft.discountPaise());
                 ps.setLong(5, total);
                 return ps;

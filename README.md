@@ -476,36 +476,27 @@ The launcher JAR and input layout in this example must be adapted to the actual 
 
 ## Implementation status and roadmap
 
-### Current starter baseline
+### Implemented and merged
+- [x] Java 21, Spring Boot desktop context, JavaFX UI and local SQLite storage.
+- [x] Inventory CRUD, case-insensitive search, filters, safe sorting and bounded pagination.
+- [x] Category hierarchy, supplier management, vehicle fitment, saved views and dashboard metrics.
+- [x] Filtered CSV export and create-only transactional CSV import.
+- [x] Signed Ed25519 activation keys with local verification and feature gates.
+- [x] Single-item sale checkout and single-item supplier stock receiving, each with atomic stock-ledger updates.
+- [x] Verified local database backup/restore and pre-restore safety snapshots.
+- [x] Windows GitHub Actions CI using Java 21 and Maven verify.
 
-- [x] GitHub repository and Java/Maven starter structure.
-- [x] JavaFX application shell.
-- [x] SQLite schema foundation for parts, categories, suppliers, inventory and stock movements.
-- [x] Core global search over part fields, category and supplier with exact-match ranking.
-- [x] Initial unit tests.
-- [x] Windows GitHub Actions workflow.
-- [x] HLD, LLD, implementation roadmap and Codex instructions.
-- [ ] Successful CI/build result verified (check GitHub Actions).
+### Current milestone
+- Multi-item sales cart: in development on feat/multi-item-sales-cart. Checkout must post all line snapshots, stock deductions, stock movements and payment in one transaction.
 
-### Recommended milestones
+### Remaining release blockers
+- Sale voids/refunds and return workflows with explicit reversal records.
+- Multi-item purchase orders, purchase cancellation/returns and supplier payment/accounting workflows.
+- PDF invoices and reports, shop settings and report scheduling/email integration.
+- Windows EXE installer and clean-machine install/upgrade/uninstall validation.
+- Representative inventory performance benchmarks, dependency/security/license scanning, restore drills and end-to-end shop workflow tests.
 
-1. **Inventory foundation:** CRUD/edit/deactivate, category/supplier selection and creation, initial advanced filters, safe sorting, pagination and repository regression tests implemented. Still pending: nested category management, vehicle fitment, saved views, import/export, representative-catalog benchmarks and successful current-branch CI verification.
-2. **Business workflows:** purchase orders, goods receipt, sales cart, checkout, returns, adjustments, payment records, immutable stock ledger and atomic transaction tests.
-3. **Dashboard and reports:** KPI drill-downs, charts, PDF invoices, PDF/CSV reports, shop settings and backup/restore.
-4. **Licensing:** canonical signed payload, Ed25519 verification, separate issuer utility, masked activation UI, service-layer guard, injected clock and exact expiry-boundary tests.
-5. **Email automation:** Gmail API desktop OAuth, protected token storage, report schedule editor, idempotency keys, bounded retry and report-runner mode.
-6. **Windows packaging:** validated runtime/application layout, EXE installer, clean-machine test and data-preserving upgrade/uninstall.
-7. **Release hardening:** dependency/license/vulnerability scans, representative performance testing, recovery drills, UI accessibility checks and user documentation.
-
-## Known limitations
-
-- This repository is not yet a complete shop-management system.
-- Full CRUD, purchasing, sales, payment, return and stock-adjustment workflows are not implemented.
-- Advanced multi-criteria filters, saved views, full pagination and fitment-based search are not yet implemented.
-- Dashboard analytics, PDF invoices/reports, CSV export workflows, backup/restore and scheduled Gmail reports are not implemented.
-- Activation-key parsing, signature verification, service-layer enforcement and expiry handling are not implemented; the expiry requirement is documented only.
-- A Windows EXE installer has not yet been built and validated.
-- The application and tests must be built and run in the target environment before use with real shop data.
+This is not yet certified production-ready. Do not use it as the sole system of record until the release blockers and clean Windows validation are complete.
 
 ## Design documents
 

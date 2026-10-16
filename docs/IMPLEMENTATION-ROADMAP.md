@@ -1,41 +1,30 @@
 # MechMotor 1.0 implementation roadmap
 
-## Baseline committed
-- Java 21 + Spring Boot desktop process (no embedded HTTP server).
-- JavaFX desktop shell and inventory search table.
-- Local SQLite file under the user's application data directory.
-- Parameterized case-insensitive search across core part fields and related category/supplier fields.
-- Starter schema, indexes, Maven build, unit tests and Windows CI workflow.
+## Merged milestones
+- Inventory foundation: CRUD, case-insensitive global search, structured filters, allowlisted sorting and bounded pagination.
+- Backup and restore: verified SQLite snapshots, staged restore, schema validation and a pre-restore safety backup.
+- Category hierarchy and supplier contact/code management.
+- Vehicle fitment management and fitment-aware search.
+- Saved inventory views, filtered CSV export and transactional create-only CSV import.
+- Inventory dashboard metrics.
+- Signed Ed25519 activation/license verification and feature gating.
+- Single-item sales checkout and atomic single-item supplier stock receiving.
+- Windows CI on Java 21 with Maven clean verify.
 
-## Milestone status
+## Current milestone
+- **Multi-item sales cart — in progress on feat/multi-item-sales-cart:** allow up to 100 distinct items in one checkout, with overflow-safe totals and atomic sale snapshots, stock deductions, ledger movements and payment. Must pass CI before merge.
 
-- **Purchase receiving (in progress on `feat/purchase-receiving`):** supplier-linked one-item receipts with atomic stock increase, purchase-cost update and ledger entry; CI pending.
+## Remaining production-readiness work
+1. **Sales lifecycle:** void/refund and customer returns, explicit refund records, stock return/reversal rules, idempotency and transaction audit.
+2. **Purchasing lifecycle:** multi-item purchase orders/receipts, cancellations/returns, supplier payments and accounts payable.
+3. **Invoices and reports:** printable/PDF receipts, invoices and operational reports.
+4. **Windows distribution:** validated JavaFX runtime layout, jpackage EXE installer, clean-machine install/launch/upgrade/uninstall testing, preserving user data.
+5. **Release quality:** representative-catalog performance tests, accessibility and UI workflow tests, dependency/license/vulnerability scans, backup/restore drills and documented recovery procedures.
+6. **Operational readiness:** support diagnostics, structured local logs, safe application shutdown, data retention/export policies and a signed release process.
+7. **Email automation (optional scope):** Gmail desktop OAuth, protected token storage, report scheduling, idempotency keys and bounded retries.
 
-- **Single-item sales checkout (in progress on `feat/sales-checkout`):** atomic sale/payment/stock-ledger transaction with insufficient-stock guard and UI; CI pending.
-
-- **Activation/licensing (in progress on `feat/activation-licensing`):** Ed25519 verification, startup gate, activation UI, external key file and offline issuer utility; CI pending.
-
-- **Inventory dashboard (in progress on `feat/inventory-dashboard`):** aggregate active parts, total units, low-stock/out-of-stock counts and estimated retail value; CI pending.
-
-- **CSV inventory import (in progress on `feat/csv-inventory-import`):** validated create-only import with atomic rollback, price/stock preservation and desktop UI; CI pending.
-
-- **Saved inventory views (in progress on `feat/saved-inventory-views`):** persist/load/delete filter presets with case-insensitive unique names; CI pending.
-
-- **Vehicle fitment — merged:** per-part make/model/year compatibility records, fitment search, management UI and legacy-backup schema upgrade; CI passed.
-
-- **Filtered CSV export — merged:** paged filtered exports, spreadsheet-safe escaping and formula-injection mitigation; CI passed.
-
-- **Category hierarchy management — merged:** recursive category paths, root/subcategory creation, rename and guarded deactivation; CI passed.
-- **Supplier management — merged:** supplier name, phone and unique code editing with stable IDs; CI passed for the code commit.
-
-- **Backup/restore hardening — merged:** verified SQLite snapshots, integrity/schema validation, staged restore, pre-restore safety backup, desktop actions and regression tests; CI passed.
-1. **Inventory foundation — partially implemented:** part create/edit/deactivate, category/supplier selection and creation, global search, initial structured filters, allowlisted sorting, bounded pagination, stock-adjustment audit and repository regression tests are committed on `codex/inventory-foundation`. Still required: multi-item sales carts, returns/voids, supplier payments/accounts payable, multi-item purchase orders, PDF invoices, representative-catalog benchmarks, Windows installer validation and release-level end-to-end testing.
-2. **Business workflows:** purchase receipts, sales/cart, returns, payment records, immutable stock movement audit, atomic transactions and invoice snapshots.
-3. **Dashboard and reports:** KPI drill-downs, charts with accessible table alternatives, PDF/CSV export, backup/restore and shop settings.
-4. **Licensing:** canonical signed payload, Ed25519 verification, protected issuer utility kept outside this repository, masked activation UI, injected clock and expiry-boundary tests. Never commit a private signing key or real activation secret.
-5. **Email automation:** Gmail API desktop OAuth, protected token storage, report scheduler, idempotency keys and bounded retries.
-6. **Windows packaging:** validate a clean Windows build, assemble JavaFX native runtime dependencies, jpackage installer and data-preserving upgrade/uninstall.
-7. **Release hardening:** dependency/license/vulnerability scan, representative catalog performance test, recovery drills and user documentation.
+## Acceptance gate
+Do not call this production-ready until the latest main commit passes CI, end-to-end sales/purchasing/returns scenarios pass on Windows, installer upgrade/uninstall preserves the database, restore drills succeed, and security/dependency checks are reviewed.
 
 ## Known limits
-This remains a starter implementation, not a production-ready shop system. Vehicle fitment, nested category management, saved views, import/export, sales/purchases, dashboard analytics, activation signing and enforcement, Gmail integration, backups, PDF invoices and EXE installer are not implemented. Run and review the latest GitHub Actions verification before relying on it.
+This remains an offline-first single-PC desktop app. It is not a multi-user networked system or a substitute for an accounting/tax compliance review. Local activation verification can be bypassed by a privileged attacker who patches the executable. Search performance and recovery objectives must be measured on representative data and hardware.
