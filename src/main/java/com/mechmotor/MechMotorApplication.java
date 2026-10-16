@@ -122,6 +122,7 @@ public class MechMotorApplication extends Application {
         Button receiveStockButton = new Button("Receive stock");
         Button receiveMultiStockButton = new Button("Receive multi-item");
         Button purchaseHistoryButton = new Button("Purchase history / cancel");
+        Button supplierPaymentsButton = new Button("Supplier payments / payable");
         Button fitmentButton = new Button("Vehicle fitment");
         MenuItem addCategoryItem = new MenuItem("Add root / subcategory…");
         MenuItem renameCategoryItem = new MenuItem("Rename selected category…");
@@ -453,6 +454,14 @@ public class MechMotorApplication extends Application {
             showPurchaseHistoryDialog(stage, status, loadPage);
         });
 
+        supplierPaymentsButton.setOnAction(e -> {
+            if (!licenseService.status().features().contains("PURCHASING")) {
+                showError("Feature not licensed", new IllegalArgumentException("Your activation key does not include PURCHASING."));
+                return;
+            }
+            showSupplierPaymentsDialog(stage, status);
+        });
+
         fitmentButton.setOnAction(e -> {
             Part selected = table.getSelectionModel().getSelectedItem();
             if (selected == null) {
@@ -574,7 +583,7 @@ public class MechMotorApplication extends Application {
         GridPane.setHgrow(savedViewsMenu, Priority.ALWAYS);
         for (int i = 0; i < 6; i++) GridPane.setHgrow(filters.getChildren().get(i), Priority.ALWAYS);
         FlowPane actions = new FlowPane(8, 8, addButton, editButton, deactivateButton, sellButton,
-                voidSaleButton, returnsButton, invoiceButton, salesHistoryButton, receiveStockButton, receiveMultiStockButton, purchaseHistoryButton, fitmentButton,
+                voidSaleButton, returnsButton, invoiceButton, salesHistoryButton, receiveStockButton, receiveMultiStockButton, purchaseHistoryButton, supplierPaymentsButton, fitmentButton,
                 categoryMenu, supplierMenu, backupButton, restoreButton, csvMenu,
                 previousButton, nextButton, pageLabel);
         actions.setAlignment(Pos.CENTER_LEFT);
@@ -838,6 +847,8 @@ public class MechMotorApplication extends Application {
         addPurchaseHistoryColumn(table, "Items", row -> row.itemSummary());
         addPurchaseHistoryColumn(table, "Units", row -> Integer.toString(row.units()));
         addPurchaseHistoryColumn(table, "Total", row -> "₹" + rupees(row.totalPaise()));
+        addPurchaseHistoryColumn(table, "Paid", row -> "₹" + rupees(row.paidPaise()));
+        addPurchaseHistoryColumn(table, "Outstanding", row -> "₹" + rupees(row.outstandingPaise()));
         addPurchaseHistoryColumn(table, "Cancellation reason", row -> row.cancellationReason());
 
         table.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, selected) ->
@@ -979,6 +990,112 @@ public class MechMotorApplication extends Application {
         dialog.showAndWait();
     }
 
+
+    private void showSupplierPaymentsDialog(Stage owner, Label status) {
+        Dialog<ButtonType> dialog=new Dialog<>();
+        dialog.initOwner(owner);
+        dialog.setTitle("Supplier payments / accounts payable");
+        dialog.setHeaderText("Record payment entries for a received receipt. This records bookkeeping only; it does not transfer money.");
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+        TextField purchaseNumber=new TextField();
+        purchaseNumber.setPromptText("Purchase receipt number (PO-...)");
+        Button load=new Button("Load receipt");
+        Label supplierLabel=new Label("Supplier: —");
+        Label totalLabel=new Label("Receipt total: —");
+        Label paidLabel=new Label("Paid: —");
+        Label dueLabel=new Label("Outstanding: —");
+        TextField amount=new TextField();
+        amount.setPromptText("Amount ₹");
+        ComboBox<String> method=new ComboBox<>(FXCollections.observableArrayList("CASH","UPI","CARD","BANK_TRANSFER","CHEQUE","OTHER"));
+        method.setValue("BANK_TRANSFER");
+        TextField reference=new TextField();
+        reference.setPromptText("Payment reference / cheque number");
+        Button record=new Button("Record payment");
+        record.setDisable(true);
+        Button voidPayment=new Button("Void selected record…");
+        voidPayment.setDisable(true);
+        TableView<SupplierPaymentRow> table=new TableView<>();
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+        table.setPrefHeight(280);
+        addSupplierPaymentColumn(table,"Date",row->row.createdAt());
+        addSupplierPaymentColumn(table,"Method",row->row.method());
+        addSupplierPaymentColumn(table,"Amount",row->"₹"+rupees(row.amountPaise()));
+        addSupplierPaymentColumn(table,"Reference",row->row.reference());
+        addSupplierPaymentColumn(table,"Status",row->row.status());
+        addSupplierPaymentColumn(table,"Void reason",row->row.voidReason());
+        table.getSelectionModel().selectedItemProperty().addListener((obs,old,selected)->
+                voidPayment.setDisable(selected==null||!"POSTED".equals(selected.status())));
+        Runnable reload=()->{
+            runBackground(()->new Object[]{purchasingService.balance(purchaseNumber.getText()),
+                    purchasingService.supplierPayments(purchaseNumber.getText())}, result->{
+                PurchaseBalance balance=(PurchaseBalance)result[0];
+                @SuppressWarnings("unchecked") List<SupplierPaymentRow> rows=(List<SupplierPaymentRow>)result[1];
+                supplierLabel.setText("Supplier: "+balance.supplierName()+" • Status: "+balance.status());
+                totalLabel.setText("Receipt total: ₹"+rupees(balance.totalPaise()));
+                paidLabel.setText("Paid: ₹"+rupees(balance.paidPaise()));
+                dueLabel.setText("Outstanding: ₹"+rupees(balance.outstandingPaise()));
+                table.setItems(FXCollections.observableArrayList(rows));
+                record.setDisable(!"RECEIVED".equals(balance.status())||balance.outstandingPaise()<=0);
+                status.setText("Supplier payable loaded: "+balance.purchaseNumber());
+            },error->showError("Could not load supplier payable",error));
+        };
+        load.setOnAction(e->reload.run());
+        purchaseNumber.setOnAction(e->reload.run());
+        record.setOnAction(e->{
+            try{
+                SupplierPaymentDraft draft=new SupplierPaymentDraft(purchaseNumber.getText(),
+                        parsePaise(amount.getText(),"Payment amount"),
+                        SupplierPaymentDraft.Method.valueOf(method.getValue()),reference.getText());
+                record.setDisable(true);
+                runBackground(()->purchasingService.recordSupplierPayment(draft),receipt->{
+                    amount.clear(); reference.clear(); reload.run();
+                    Alert info=new Alert(Alert.AlertType.INFORMATION,
+                            "Receipt: "+receipt.purchaseNumber()+"\nPayment recorded: ₹"+rupees(receipt.amountPaise())
+                                    +"\nPaid total: ₹"+rupees(receipt.paidTotalPaise())
+                                    +"\nOutstanding: ₹"+rupees(receipt.outstandingPaise())
+                                    +"\n\nThis is a payment record only. Verify actual transfer separately.",ButtonType.OK);
+                    info.initOwner(owner); info.setTitle("Supplier payment recorded"); info.setHeaderText("Accounts payable updated"); info.show();
+                },error->{record.setDisable(false);showError("Could not record supplier payment",error);});
+            }catch(IllegalArgumentException ex){showError("Check payment details",ex);}
+        });
+        voidPayment.setOnAction(e->{
+            SupplierPaymentRow selected=table.getSelectionModel().getSelectedItem();
+            if(selected==null||!"POSTED".equals(selected.status()))return;
+            TextInputDialog reason=new TextInputDialog();
+            reason.initOwner(owner); reason.setTitle("Void payment record");
+            reason.setHeaderText("Voiding does not reverse any real bank/UPI/card transfer.");
+            reason.setContentText("Required audit reason:");
+            reason.showAndWait().ifPresent(text->{
+                Alert confirm=new Alert(Alert.AlertType.CONFIRMATION,
+                        "This marks the bookkeeping entry VOIDED and increases outstanding balance. It will not reverse actual money movement. Continue?",
+                        ButtonType.CANCEL,ButtonType.OK);
+                confirm.initOwner(owner); confirm.setTitle("Confirm payment record void");
+                confirm.showAndWait().filter(ButtonType.OK::equals).ifPresent(ok->
+                    runBackground(()->purchasingService.voidSupplierPayment(selected.id(),text),ignored->reload.run(),
+                        error->showError("Could not void payment record",error)));
+            });
+        });
+        GridPane form=new GridPane(); form.setHgap(8); form.setVgap(8); form.setPadding(new Insets(12));
+        form.add(new Label("Receipt"),0,0);form.add(purchaseNumber,1,0);form.add(load,2,0);
+        form.add(supplierLabel,0,1,3,1);form.add(totalLabel,0,2,3,1);form.add(paidLabel,0,3,3,1);form.add(dueLabel,0,4,3,1);
+        form.add(new Label("Payment amount ₹"),0,5);form.add(amount,1,5);
+        form.add(new Label("Method"),0,6);form.add(method,1,6);
+        form.add(new Label("Reference"),0,7);form.add(reference,1,7);
+        form.add(new HBox(8,record,voidPayment),1,8);
+        form.add(table,0,9,3,1);
+        GridPane.setHgrow(purchaseNumber,Priority.ALWAYS);GridPane.setHgrow(amount,Priority.ALWAYS);
+        GridPane.setHgrow(method,Priority.ALWAYS);GridPane.setHgrow(reference,Priority.ALWAYS);
+        GridPane.setHgrow(table,Priority.ALWAYS);GridPane.setVgrow(table,Priority.ALWAYS);
+        dialog.getDialogPane().setContent(form);dialog.getDialogPane().setPrefSize(900,680);
+        dialog.show();
+    }
+
+    private static void addSupplierPaymentColumn(TableView<SupplierPaymentRow> table,String title,
+                                                   java.util.function.Function<SupplierPaymentRow,String> value){
+        TableColumn<SupplierPaymentRow,String> column=new TableColumn<>(title);
+        column.setCellValueFactory(cell->new javafx.beans.property.ReadOnlyStringWrapper(value.apply(cell.getValue())));
+        table.getColumns().add(column);
+    }
 
     private record PurchaseCartLine(Part part, int quantity, long unitCostPaise) {
         long lineTotalPaise() { return Math.multiplyExact((long) quantity, unitCostPaise); }

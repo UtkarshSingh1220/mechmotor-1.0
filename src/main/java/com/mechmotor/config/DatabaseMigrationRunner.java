@@ -168,6 +168,7 @@ public final class DatabaseMigrationRunner implements ApplicationRunner {
         connection.setAutoCommit(false);
         try {
             ScriptUtils.executeSqlScript(connection, migration);
+            if (version == 3) createSupplierPaymentTriggers(connection);
             verifyCurrentSchema(connection, version);
             recordVersion(connection, version);
             connection.commit();
@@ -178,6 +179,57 @@ public final class DatabaseMigrationRunner implements ApplicationRunner {
         } finally {
             connection.setAutoCommit(originalAutoCommit);
         }
+    }
+
+
+    /**
+     * SQLite trigger bodies contain internal semicolons; install them as complete JDBC
+     * statements rather than splitting them with Spring's generic SQL script parser.
+     */
+    private static void createSupplierPaymentTriggers(Connection connection) throws SQLException {
+        execute(connection, """
+            CREATE TRIGGER IF NOT EXISTS trg_supplier_payment_no_overpay
+            BEFORE INSERT ON supplier_payments
+            WHEN NEW.status='POSTED'
+            BEGIN
+              SELECT CASE
+                WHEN COALESCE((SELECT status FROM purchases WHERE id=NEW.purchase_id),'') <> 'RECEIVED'
+                THEN RAISE(ABORT, 'supplier payment requires a received purchase')
+              END;
+              SELECT CASE
+                WHEN NEW.amount_paise > (
+                  COALESCE((SELECT subtotal_paise FROM purchases WHERE id=NEW.purchase_id),0)
+                  - COALESCE((SELECT SUM(amount_paise) FROM supplier_payments
+                              WHERE purchase_id=NEW.purchase_id AND status='POSTED'),0)
+                )
+                THEN RAISE(ABORT, 'supplier payment exceeds outstanding balance')
+              END;
+            END
+            """);
+        execute(connection, """
+            CREATE TRIGGER IF NOT EXISTS trg_supplier_payment_audit_immutable
+            BEFORE UPDATE ON supplier_payments
+            WHEN NOT (
+              OLD.status='POSTED' AND NEW.status='VOIDED'
+              AND NEW.purchase_id=OLD.purchase_id
+              AND NEW.method=OLD.method
+              AND NEW.amount_paise=OLD.amount_paise
+              AND COALESCE(NEW.reference,'')=COALESCE(OLD.reference,'')
+              AND NEW.created_at=OLD.created_at
+              AND NEW.void_reason IS NOT NULL AND length(trim(NEW.void_reason))>0
+              AND NEW.voided_at IS NOT NULL
+            )
+            BEGIN
+              SELECT RAISE(ABORT, 'supplier payment records are immutable; only a void with reason is allowed');
+            END
+            """);
+        execute(connection, """
+            CREATE TRIGGER IF NOT EXISTS trg_supplier_payment_no_delete
+            BEFORE DELETE ON supplier_payments
+            BEGIN
+              SELECT RAISE(ABORT, 'supplier payment audit records cannot be deleted');
+            END
+            """);
     }
 
     private static void recordVersion(Connection connection, int version) throws SQLException {
@@ -234,6 +286,17 @@ public final class DatabaseMigrationRunner implements ApplicationRunner {
             }
             if (!columnExists(connection, "purchase_items", "previous_purchase_price_paise")) {
                 throw new IllegalStateException("Database table 'purchase_items' is missing required column 'previous_purchase_price_paise'.");
+            }
+        }
+        if (version >= 3) {
+            if (!tableExists(connection, "supplier_payments")) {
+                throw new IllegalStateException("Database is missing required table 'supplier_payments'.");
+            }
+            for (String column : List.of("id", "purchase_id", "method", "amount_paise", "reference",
+                    "status", "void_reason", "created_at", "voided_at")) {
+                if (!columnExists(connection, "supplier_payments", column)) {
+                    throw new IllegalStateException("Database table 'supplier_payments' is missing required column '" + column + "'.");
+                }
             }
         }
     }

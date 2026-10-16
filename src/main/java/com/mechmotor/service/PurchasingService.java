@@ -9,6 +9,10 @@ import com.mechmotor.domain.PurchaseCancellationReceipt;
 import com.mechmotor.domain.PurchaseLineDraft;
 import com.mechmotor.domain.PurchaseOrderDraft;
 import com.mechmotor.domain.PurchaseOrderReceipt;
+import com.mechmotor.domain.SupplierPaymentDraft;
+import com.mechmotor.domain.SupplierPaymentReceipt;
+import com.mechmotor.domain.SupplierPaymentRow;
+import com.mechmotor.domain.PurchaseBalance;
 import com.mechmotor.repository.PartRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.PreparedStatementCreator;
@@ -18,6 +22,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.math.BigDecimal;
+import java.math.BigDecimal;
 import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.time.Clock;
@@ -59,7 +65,9 @@ public class PurchasingService {
                    COALESCE((SELECT SUM(pi.quantity) FROM purchase_items pi WHERE pi.purchase_id=p.id),0) AS units,
                    COALESCE((SELECT group_concat(pi.sku_snapshot || ' x' || pi.quantity, ', ')
                              FROM purchase_items pi WHERE pi.purchase_id=p.id),'') AS item_summary,
-                   COALESCE((SELECT c.reason FROM purchase_cancellations c WHERE c.purchase_id=p.id),'') AS cancellation_reason
+                   COALESCE((SELECT c.reason FROM purchase_cancellations c WHERE c.purchase_id=p.id),'') AS cancellation_reason,
+                   COALESCE((SELECT SUM(sp.amount_paise) FROM supplier_payments sp WHERE sp.purchase_id=p.id AND sp.status='POSTED'),0) AS paid_paise,
+                   p.subtotal_paise-COALESCE((SELECT SUM(sp.amount_paise) FROM supplier_payments sp WHERE sp.purchase_id=p.id AND sp.status='POSTED'),0) AS outstanding_paise
             FROM purchases p
             WHERE (?='' OR p.purchase_number LIKE ? ESCAPE '!'
                 OR p.supplier_name_snapshot LIKE ? ESCAPE '!'
@@ -71,7 +79,8 @@ public class PurchasingService {
             """, (rs,row) -> new PurchaseHistoryRow(
                 rs.getLong("id"),rs.getString("purchase_number"),rs.getString("supplier_name_snapshot"),
                 rs.getString("supplier_invoice_reference"),rs.getString("created_at"),rs.getLong("subtotal_paise"),
-                rs.getString("status"),rs.getInt("units"),rs.getString("item_summary"),rs.getString("cancellation_reason")),
+                rs.getString("status"),rs.getInt("units"),rs.getString("item_summary"),rs.getString("cancellation_reason"),
+                rs.getLong("paid_paise"),rs.getLong("outstanding_paise")),
                 query,pattern,pattern,pattern,pattern,pattern,limit);
     }
 
@@ -108,6 +117,12 @@ public class PurchasingService {
                             rs.getInt("quantity"),rs.getLong("unit_cost_paise"),previousPurchaseCost);
                 }, purchase.id());
             if (lines.isEmpty()) throw new IllegalStateException("Purchase receipt has no item lines; no changes were made.");
+            Long postedPayments = jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM supplier_payments WHERE purchase_id=?",
+                    Long.class, purchase.id());
+            if (postedPayments != null && postedPayments > 0) {
+                throw new IllegalStateException("Cannot cancel a receipt with supplier payment history. Reconcile the supplier account separately; no stock changes were committed.");
+            }
 
             for (PurchaseLine line : lines) {
                 int changed = jdbc.update("""
@@ -241,6 +256,98 @@ public class PurchasingService {
             return new PurchaseOrderReceipt(purchaseId, purchaseNumber, supplier.name(),
                     prepared.size(), totalUnits, total);
         });
+    }
+
+    public PurchaseBalance balance(String rawPurchaseNumber) {
+        String number = cleanPurchaseNumber(rawPurchaseNumber);
+        List<PurchaseBalance> balances = jdbc.query("""
+            SELECT p.purchase_number,p.supplier_name_snapshot,p.status,p.subtotal_paise,
+                   COALESCE(SUM(CASE WHEN sp.status='POSTED' THEN sp.amount_paise ELSE 0 END),0) AS paid_paise
+            FROM purchases p LEFT JOIN supplier_payments sp ON sp.purchase_id=p.id
+            WHERE p.purchase_number=? COLLATE NOCASE
+            GROUP BY p.id
+            """, (rs,row) -> {
+                long total=rs.getLong("subtotal_paise"), paid=rs.getLong("paid_paise");
+                return new PurchaseBalance(rs.getString("purchase_number"),rs.getString("supplier_name_snapshot"),
+                        rs.getString("status"),total,paid,Math.subtractExact(total,paid));
+            }, number);
+        if (balances.isEmpty()) throw new IllegalArgumentException("Purchase receipt was not found.");
+        return balances.get(0);
+    }
+
+    public List<SupplierPaymentRow> supplierPayments(String rawPurchaseNumber) {
+        String number = cleanPurchaseNumber(rawPurchaseNumber);
+        return jdbc.query("""
+            SELECT sp.id,p.purchase_number,p.supplier_name_snapshot,sp.method,sp.amount_paise,
+                   COALESCE(sp.reference,'') AS reference,sp.status,sp.void_reason,sp.created_at
+            FROM supplier_payments sp JOIN purchases p ON p.id=sp.purchase_id
+            WHERE p.purchase_number=? COLLATE NOCASE
+            ORDER BY sp.id DESC LIMIT 200
+            """, (rs,row) -> new SupplierPaymentRow(rs.getLong("id"),rs.getString("purchase_number"),
+                rs.getString("supplier_name_snapshot"),rs.getString("method"),rs.getLong("amount_paise"),
+                rs.getString("reference"),rs.getString("status"),rs.getString("void_reason"),rs.getString("created_at")), number);
+    }
+
+    public SupplierPaymentReceipt recordSupplierPayment(SupplierPaymentDraft draft) {
+        return transactions.execute(status -> {
+            PurchaseBalance balance = balance(draft.purchaseNumber());
+            if (!"RECEIVED".equals(balance.status())) {
+                throw new IllegalStateException("Payments can only be recorded against a RECEIVED purchase.");
+            }
+            if (draft.amountPaise() > balance.outstandingPaise()) {
+                throw new IllegalArgumentException("Payment exceeds outstanding balance of ₹"
+                        + BigDecimal.valueOf(balance.outstandingPaise(), 2).toPlainString() + ".");
+            }
+            Long purchaseId = jdbc.queryForObject(
+                    "SELECT id FROM purchases WHERE purchase_number=? COLLATE NOCASE", Long.class, balance.purchaseNumber());
+            KeyHolder key = new GeneratedKeyHolder();
+            jdbc.update((PreparedStatementCreator) connection -> {
+                PreparedStatement ps = connection.prepareStatement("""
+                    INSERT INTO supplier_payments(purchase_id,method,amount_paise,reference,status)
+                    VALUES (?,?,?,?,'POSTED')
+                    """, Statement.RETURN_GENERATED_KEYS);
+                ps.setLong(1,purchaseId);
+                ps.setString(2,draft.method().name());
+                ps.setLong(3,draft.amountPaise());
+                ps.setString(4,draft.reference());
+                return ps;
+            }, key);
+            Number generated=key.getKey();
+            if (generated==null) throw new IllegalStateException("Database did not return the supplier payment ID.");
+            PurchaseBalance updated=balance(balance.purchaseNumber());
+            return new SupplierPaymentReceipt(generated.longValue(),balance.purchaseNumber(),draft.method().name(),
+                    draft.amountPaise(),updated.paidPaise(),updated.outstandingPaise(),draft.reference());
+        });
+    }
+
+    public SupplierPaymentReceipt voidSupplierPayment(long paymentId, String rawReason) {
+        String reason=rawReason==null?"":rawReason.strip().replaceAll("\\s+"," ");
+        if (paymentId<=0) throw new IllegalArgumentException("Select a supplier payment.");
+        if (reason.isEmpty()) throw new IllegalArgumentException("A reason is required to void a payment record.");
+        if (reason.length()>240) throw new IllegalArgumentException("Payment void reason cannot exceed 240 characters.");
+        return transactions.execute(status -> {
+            List<SupplierPaymentRow> rows=jdbc.query("""
+                SELECT sp.id,p.purchase_number,p.supplier_name_snapshot,sp.method,sp.amount_paise,
+                       COALESCE(sp.reference,'') AS reference,sp.status,sp.void_reason,sp.created_at
+                FROM supplier_payments sp JOIN purchases p ON p.id=sp.purchase_id WHERE sp.id=?
+                """,(rs,row)->new SupplierPaymentRow(rs.getLong("id"),rs.getString("purchase_number"),
+                    rs.getString("supplier_name_snapshot"),rs.getString("method"),rs.getLong("amount_paise"),
+                    rs.getString("reference"),rs.getString("status"),rs.getString("void_reason"),rs.getString("created_at")),paymentId);
+            if(rows.isEmpty()) throw new IllegalArgumentException("Supplier payment was not found.");
+            SupplierPaymentRow payment=rows.get(0);
+            if(!"POSTED".equals(payment.status())) throw new IllegalStateException("This payment record is already voided.");
+            int changed=jdbc.update("UPDATE supplier_payments SET status='VOIDED',void_reason=?,voided_at=CURRENT_TIMESTAMP WHERE id=? AND status='POSTED'",reason,paymentId);
+            if(changed!=1) throw new IllegalStateException("Payment status changed; reload and try again.");
+            PurchaseBalance updated=balance(payment.purchaseNumber());
+            return new SupplierPaymentReceipt(payment.id(),payment.purchaseNumber(),payment.method(),
+                    payment.amountPaise(),updated.paidPaise(),updated.outstandingPaise(),payment.reference());
+        });
+    }
+
+    private static String cleanPurchaseNumber(String raw) {
+        String number=raw==null?"":raw.strip();
+        if(number.isEmpty()||number.length()>64) throw new IllegalArgumentException("Enter a valid purchase receipt number.");
+        return number;
     }
 
     private record PreparedPurchaseLine(PartDetails part, PurchaseLineDraft draft, long lineTotalPaise) { }
