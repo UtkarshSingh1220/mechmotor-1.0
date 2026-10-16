@@ -87,9 +87,10 @@ Package only after validating the JavaFX native libraries, launcher configuratio
 
 ## Operational report exports
 
-- `OperationalReportsService` exports sales, supplier receipt, and stock-ledger rows for an inclusive date range.
+- `OperationalReportsService` exports sales, supplier receipt, stock-ledger, and supplier payable reconciliation rows for an inclusive date range.
 - The report range is validated and bounded to 366 days; result rows are ordered by timestamp and stable database ID.
 - Money is formatted from integer paise. CSV values are quoted and spreadsheet-formula mitigation is applied to text values.
 - Output is generated in a temporary file before publication; an existing destination is rejected rather than silently overwritten.
 - The JavaFX report picker parses dates before scheduling the export on the existing background database executor. Export requires the existing `CSV` feature entitlement.
-- Reports are operational exports, not accounting/tax certification. Recorded sale payments are not proof that an external payment settled.
+- The supplier payable report shows each purchase's payable total, posted supplier payments, and arithmetic balance; voided payment entries are excluded and cancelled receipts contribute zero payable value. A negative balance is retained as a reconciliation signal rather than hidden.
+- Reports are operational exports, not accounting/tax certification. Recorded sale or supplier payment entries are not proof that an external payment settled.
