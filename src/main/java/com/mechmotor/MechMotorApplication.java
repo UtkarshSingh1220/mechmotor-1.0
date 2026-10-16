@@ -1169,7 +1169,7 @@ public class MechMotorApplication extends Application {
         Dialog<ButtonType> dialog = new Dialog<>();
         dialog.initOwner(owner);
         dialog.setTitle("Formal purchase orders");
-        dialog.setHeaderText("Create orders before delivery. Stock changes only when an ORDERED purchase order is received.");
+        dialog.setHeaderText("Create orders before delivery. Receive all or part of an order; stock changes only for quantities received.");
         dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
 
         TextField filter = new TextField();
@@ -1197,7 +1197,8 @@ public class MechMotorApplication extends Application {
         addPurchaseOrderColumn(table, "Cancellation reason", row -> row.cancellationReason());
 
         table.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, selected) -> {
-            receive.setDisable(selected == null || !"ORDERED".equals(selected.status()));
+            receive.setDisable(selected == null || !("ORDERED".equals(selected.status())
+                    || "PARTIALLY_RECEIVED".equals(selected.status())));
             cancel.setDisable(selected == null || !"ORDERED".equals(selected.status()));
         });
         Runnable load = () -> {
@@ -1216,33 +1217,9 @@ public class MechMotorApplication extends Application {
         create.setOnAction(e -> showCreatePurchaseOrderDialog(owner, defaultSupplier, load));
         receive.setOnAction(e -> {
             FormalPurchaseOrderRow selected = table.getSelectionModel().getSelectedItem();
-            if (selected == null || !"ORDERED".equals(selected.status())) return;
-            TextInputDialog invoiceDialog = new TextInputDialog();
-            invoiceDialog.initOwner(owner);
-            invoiceDialog.setTitle("Receive purchase order");
-            invoiceDialog.setHeaderText("Receive all ordered quantities for " + selected.orderNumber() + ".");
-            invoiceDialog.setContentText("Supplier invoice / delivery note (optional):");
-            invoiceDialog.showAndWait().ifPresent(invoice -> {
-                Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
-                        "This posts the full order as one receipt, increases stock and records stock ledger movements atomically. Check the delivery against the order before continuing.",
-                        ButtonType.CANCEL, ButtonType.OK);
-                confirm.initOwner(owner);
-                confirm.setTitle("Confirm goods received");
-                confirm.setHeaderText("Post received stock?");
-                confirm.showAndWait().filter(ButtonType.OK::equals).ifPresent(button ->
-                    runBackground(() -> purchasingService.receivePurchaseOrder(selected.orderNumber(), invoice), receipt -> {
-                        status.setText("Purchase order received: " + receipt.orderNumber());
-                        refreshInventory.run();
-                        load.run();
-                        Alert info = new Alert(Alert.AlertType.INFORMATION,
-                                "Order: " + receipt.orderNumber() + "\nReceipt: " + receipt.receiptNumber()
-                                        + "\nLines: " + receipt.lineCount() + "\nUnits received: " + receipt.units()
-                                        + "\nTotal: ₹" + rupees(receipt.totalPaise()), ButtonType.OK);
-                        info.setTitle("Purchase order received");
-                        info.setHeaderText("Stock receipt posted");
-                        info.show();
-                    }, error -> showError("Could not receive purchase order", error)));
-            });
+            if (selected == null || !("ORDERED".equals(selected.status())
+                    || "PARTIALLY_RECEIVED".equals(selected.status()))) return;
+            showReceivePurchaseOrderDialog(owner, selected, status, refreshInventory, load);
         });
         cancel.setOnAction(e -> {
             FormalPurchaseOrderRow selected = table.getSelectionModel().getSelectedItem();
@@ -1276,6 +1253,90 @@ public class MechMotorApplication extends Application {
         dialog.getDialogPane().setPrefSize(1120, 540);
         dialog.show();
         load.run();
+    }
+
+    private void showReceivePurchaseOrderDialog(Stage owner, FormalPurchaseOrderRow order, Label status,
+                                                Runnable refreshInventory, Runnable reloadOrders) {
+        runBackground(() -> purchasingService.purchaseOrderLines(order.orderNumber()), lines -> {
+            List<FormalPurchaseOrderLineRow> outstanding = lines.stream()
+                    .filter(line -> line.remainingQuantity() > 0).toList();
+            if (outstanding.isEmpty()) {
+                showError("Nothing left to receive", new IllegalStateException("This purchase order has no outstanding quantities."));
+                reloadOrders.run();
+                return;
+            }
+            Dialog<ButtonType> dialog = new Dialog<>();
+            dialog.initOwner(owner);
+            dialog.setTitle("Receive purchase order");
+            dialog.setHeaderText("Enter the quantities delivered now. Leave a line blank or enter 0 to skip it.");
+            ButtonType postType = new ButtonType("Post receipt", ButtonBar.ButtonData.OK_DONE);
+            dialog.getDialogPane().getButtonTypes().addAll(postType, ButtonType.CANCEL);
+
+            TextField invoice = new TextField();
+            invoice.setPromptText("Supplier invoice / delivery note (optional)");
+            GridPane grid = new GridPane();
+            grid.setHgap(10);
+            grid.setVgap(8);
+            grid.setPadding(new Insets(12));
+            grid.addRow(0, new Label("Invoice reference"), invoice);
+            grid.addRow(1, new Label("Part"), new Label("Ordered / received / remaining"), new Label("Receive now"));
+            java.util.Map<Long,TextField> quantities = new java.util.LinkedHashMap<>();
+            int row = 2;
+            for (FormalPurchaseOrderLineRow line : outstanding) {
+                TextField quantity = new TextField(Integer.toString(line.remainingQuantity()));
+                quantity.setPromptText("0");
+                quantity.setPrefColumnCount(8);
+                quantities.put(line.partId(), quantity);
+                grid.addRow(row++, new Label(line.sku() + " — " + line.name()),
+                        new Label(line.orderedQuantity() + " / " + line.receivedQuantity() + " / " + line.remainingQuantity()),
+                        quantity);
+            }
+            ScrollPane scroll = new ScrollPane(grid);
+            scroll.setFitToWidth(true);
+            scroll.setPrefViewportHeight(Math.min(420, 80 + outstanding.size() * 38));
+            dialog.getDialogPane().setContent(scroll);
+            dialog.getDialogPane().setPrefWidth(850);
+            dialog.showAndWait().filter(postType::equals).ifPresent(button -> {
+                try {
+                    List<PurchaseOrderReceiveLine> receiveLines = new java.util.ArrayList<>();
+                    for (FormalPurchaseOrderLineRow line : outstanding) {
+                        String raw = quantities.get(line.partId()).getText();
+                        if (raw == null || raw.isBlank()) continue;
+                        int quantity = parseInteger(raw, "Received quantity for " + line.sku());
+                        if (quantity < 0) throw new IllegalArgumentException("Received quantity cannot be negative for " + line.sku() + ".");
+                        if (quantity == 0) continue;
+                        receiveLines.add(new PurchaseOrderReceiveLine(line.partId(), quantity));
+                    }
+                    if (receiveLines.isEmpty()) throw new IllegalArgumentException("Enter at least one positive quantity to receive.");
+                    Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
+                            "This posts only the quantities entered, increases stock and records linked receipt/ledger lines atomically. Any failure rolls back the entire receipt.",
+                            ButtonType.CANCEL, ButtonType.OK);
+                    confirm.initOwner(owner);
+                    confirm.setTitle("Confirm goods received");
+                    confirm.setHeaderText("Post " + receiveLines.size() + " received line(s)?");
+                    confirm.showAndWait().filter(ButtonType.OK::equals).ifPresent(confirmed ->
+                            runBackground(() -> purchasingService.receivePurchaseOrder(
+                                            order.orderNumber(), invoice.getText(), receiveLines),
+                                    receipt -> {
+                                        status.setText("Purchase order receipt posted: " + receipt.receiptNumber());
+                                        refreshInventory.run();
+                                        reloadOrders.run();
+                                        Alert info = new Alert(Alert.AlertType.INFORMATION,
+                                                "Order: " + receipt.orderNumber() + "\nReceipt: " + receipt.receiptNumber()
+                                                        + "\nLines received: " + receipt.lineCount()
+                                                        + "\nUnits received: " + receipt.units()
+                                                        + "\nReceipt total: ₹" + rupees(receipt.totalPaise())
+                                                        + "\nThe order remains open until all ordered quantities are received.",
+                                                ButtonType.OK);
+                                        info.setTitle("Purchase order receipt posted");
+                                        info.setHeaderText("Stock receipt completed");
+                                        info.show();
+                                    }, error -> showError("Could not receive purchase order", error)));
+                } catch (IllegalArgumentException ex) {
+                    showError("Check received quantities", ex);
+                }
+            });
+        }, error -> showError("Could not load purchase order lines", error));
     }
 
     private void showCreatePurchaseOrderDialog(Stage owner, LookupOption defaultSupplier, Runnable onCreated) {
