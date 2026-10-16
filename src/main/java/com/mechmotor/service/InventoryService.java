@@ -6,6 +6,8 @@ import com.mechmotor.domain.LookupOption;
 import com.mechmotor.domain.Part;
 import com.mechmotor.domain.PartDraft;
 import com.mechmotor.domain.PartDetails;
+import com.mechmotor.domain.SupplierDetails;
+import com.mechmotor.domain.SupplierDraft;
 import com.mechmotor.repository.PartRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +46,16 @@ public class InventoryService {
 
     @Transactional
     public long createSupplier(String name) { return repository.createSupplier(name); }
+
+    @Transactional
+    public long createSupplier(SupplierDraft draft) { return repository.createSupplier(draft); }
+
+    public List<SupplierDetails> supplierDetails() { return repository.supplierDetails(); }
+
+    public SupplierDetails getSupplier(long id) { return repository.supplierDetails(id); }
+
+    @Transactional
+    public void updateSupplier(long id, SupplierDraft draft) { repository.updateSupplier(id, draft); }
 
     @Transactional
     public long create(PartDraft draft) {

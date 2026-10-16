@@ -98,22 +98,55 @@ public class PartRepository {
     }
 
     public long createSupplier(String rawName) {
-        String name = cleanRequiredName(rawName, "Supplier");
+        return createSupplier(new SupplierDraft(rawName, null, null));
+    }
 
-        // The desktop UI serializes database work. Reuse an existing supplier
-        // by case-insensitive name so repeated submissions are idempotent and
-        // existing supplier references are preserved.
+    public long createSupplier(SupplierDraft draft) {
+        String name = cleanRequiredName(draft.name(), "Supplier");
+        String phone = cleanOptional(draft.phone(), 40, "Supplier phone");
+        String supplierCode = cleanOptional(draft.supplierCode(), 80, "Supplier code");
         List<Long> existingIds = jdbc.query(
                 "SELECT id FROM suppliers WHERE name = ? COLLATE NOCASE ORDER BY id LIMIT 1",
                 (rs, row) -> rs.getLong("id"), name);
         if (!existingIds.isEmpty()) {
-            return existingIds.get(0);
+            long id = existingIds.get(0);
+            jdbc.update("UPDATE suppliers SET phone=COALESCE(?, phone), supplier_code=COALESCE(?, supplier_code) WHERE id=?", phone, supplierCode, id);
+            return id;
         }
+        jdbc.update("INSERT INTO suppliers(name, phone, supplier_code) VALUES (?, ?, ?)", name, phone, supplierCode);
+        return jdbc.queryForObject("SELECT id FROM suppliers WHERE name = ? COLLATE NOCASE ORDER BY id LIMIT 1", Long.class, name);
+    }
 
-        jdbc.update("INSERT INTO suppliers(name) VALUES (?)", name);
-        return jdbc.queryForObject(
-                "SELECT id FROM suppliers WHERE name = ? COLLATE NOCASE ORDER BY id LIMIT 1",
-                Long.class, name);
+    public List<SupplierDetails> supplierDetails() {
+        return jdbc.query("SELECT id,name,phone,supplier_code FROM suppliers ORDER BY name COLLATE NOCASE",
+                (rs, row) -> new SupplierDetails(rs.getLong("id"), rs.getString("name"), rs.getString("phone"), rs.getString("supplier_code")));
+    }
+
+    public SupplierDetails supplierDetails(long id) {
+        List<SupplierDetails> rows = jdbc.query("SELECT id,name,phone,supplier_code FROM suppliers WHERE id=?",
+                (rs, row) -> new SupplierDetails(rs.getLong("id"), rs.getString("name"), rs.getString("phone"), rs.getString("supplier_code")), id);
+        if (rows.isEmpty()) throw new IllegalArgumentException("Supplier was not found.");
+        return rows.get(0);
+    }
+
+    public void updateSupplier(long id, SupplierDraft draft) {
+        String name = cleanRequiredName(draft.name(), "Supplier");
+        String phone = cleanOptional(draft.phone(), 40, "Supplier phone");
+        String supplierCode = cleanOptional(draft.supplierCode(), 80, "Supplier code");
+        Integer duplicateNames = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM suppliers WHERE name=? COLLATE NOCASE AND id<>?", Integer.class, name, id);
+        if (duplicateNames != null && duplicateNames > 0) {
+            throw new IllegalArgumentException("Another supplier already uses this name.");
+        }
+        int changed = jdbc.update("UPDATE suppliers SET name=?, phone=?, supplier_code=? WHERE id=?", name, phone, supplierCode, id);
+        if (changed == 0) throw new IllegalArgumentException("Supplier was not found.");
+    }
+
+    private static String cleanOptional(String raw, int maxLength, String label) {
+        if (raw == null || raw.isBlank()) return null;
+        String value = raw.strip().replaceAll("\\s+", " ");
+        if (value.length() > maxLength) throw new IllegalArgumentException(label + " cannot exceed " + maxLength + " characters.");
+        return value;
     }
 
     private static String cleanRequiredName(String rawName, String label) {

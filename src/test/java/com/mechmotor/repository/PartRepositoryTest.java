@@ -4,6 +4,7 @@ import com.mechmotor.domain.InventoryFilter;
 import com.mechmotor.domain.InventoryPage;
 import com.mechmotor.domain.Part;
 import com.mechmotor.domain.PartDraft;
+import com.mechmotor.domain.SupplierDraft;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -101,6 +102,42 @@ class PartRepositoryTest {
 
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM parts WHERE sku='ROLLBACK-1'", Integer.class));
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM inventory", Integer.class));
+    }
+
+    @Test
+    void supplierContactDetailsCanBeCreatedAndUpdatedWithoutChangingSupplierId() {
+        long id = repository.createSupplier(new SupplierDraft("Central Auto", "9876543210", "SUP-001"));
+        assertEquals("9876543210", repository.supplierDetails(id).phone());
+        assertEquals("SUP-001", repository.supplierDetails(id).supplierCode());
+
+        repository.updateSupplier(id, new SupplierDraft("Central Auto Parts", "9876500000", "SUP-001"));
+        assertEquals(id, repository.supplierDetails(id).id());
+        assertEquals("Central Auto Parts", repository.supplierDetails(id).name());
+        assertEquals("9876500000", repository.supplierDetails(id).phone());
+    }
+
+    @Test
+    void duplicateSupplierCreationDoesNotEraseExistingContactDetails() {
+        long id = repository.createSupplier(new SupplierDraft("Existing Supplier", "9999999999", "KEEP-1"));
+        assertEquals(id, repository.createSupplier(" existing   supplier "));
+        assertEquals("9999999999", repository.supplierDetails(id).phone());
+        assertEquals("KEEP-1", repository.supplierDetails(id).supplierCode());
+    }
+
+    @Test
+    void renamingSupplierToAnotherExistingNameIsRejected() {
+        long first = repository.createSupplier("Supplier Alpha");
+        repository.createSupplier("Supplier Beta");
+        assertThrows(IllegalArgumentException.class,
+                () -> repository.updateSupplier(first, new SupplierDraft("Supplier Beta", null, null)));
+        assertEquals("Supplier Alpha", repository.supplierDetails(first).name());
+    }
+
+    @Test
+    void duplicateSupplierCodeIsRejected() {
+        repository.createSupplier(new SupplierDraft("Supplier One", "1111111111", "CODE-1"));
+        assertThrows(org.springframework.dao.DataAccessException.class,
+                () -> repository.createSupplier(new SupplierDraft("Supplier Two", "2222222222", "CODE-1")));
     }
 
     @Test

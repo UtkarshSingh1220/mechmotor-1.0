@@ -3,6 +3,8 @@ package com.mechmotor;
 import com.mechmotor.domain.*;
 import com.mechmotor.service.InventoryService;
 import com.mechmotor.service.DatabaseBackupService;
+import com.mechmotor.domain.SupplierDetails;
+import com.mechmotor.domain.SupplierDraft;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
@@ -78,7 +80,9 @@ public class MechMotorApplication extends Application {
         MenuItem renameCategoryItem = new MenuItem("Rename selected category…");
         MenuItem deactivateCategoryItem = new MenuItem("Deactivate selected category…");
         MenuButton categoryMenu = new MenuButton("Categories", null, addCategoryItem, renameCategoryItem, deactivateCategoryItem);
-        Button addSupplierButton = new Button("+ Supplier");
+        MenuItem addSupplierItem = new MenuItem("Add supplier…");
+        MenuItem editSupplierItem = new MenuItem("Edit selected supplier…");
+        MenuButton supplierMenu = new MenuButton("Suppliers", null, addSupplierItem, editSupplierItem);
         Button backupButton = new Button("Backup database");
         Button restoreButton = new Button("Restore backup");
         Button previousButton = new Button("← Previous");
@@ -256,13 +260,16 @@ public class MechMotorApplication extends Application {
                 }, error -> showError("Restore failed", error)));
         });
 
-        addSupplierButton.setOnAction(e -> {
-            TextInputDialog dialog = new TextInputDialog();
-            dialog.setTitle("Add supplier"); dialog.setHeaderText("Create supplier");
-            dialog.setContentText("Supplier name:");
-            dialog.showAndWait().ifPresent(name -> runBackground(() -> inventory.createSupplier(name), id -> {
-                status.setText("Supplier created."); refreshLookups(categoryFilter, supplierFilter, loadPage, status);
-            }, error -> showError("Could not create supplier", error)));
+        addSupplierItem.setOnAction(e -> showSupplierDialog(stage, null, categoryFilter, supplierFilter, loadPage, status));
+        editSupplierItem.setOnAction(e -> {
+            LookupOption selected = supplierFilter.getValue();
+            if (selected == null) {
+                showError("Select a supplier", new IllegalArgumentException("Choose a supplier in the supplier filter first."));
+                return;
+            }
+            runBackground(() -> inventory.getSupplier(selected.id()),
+                    details -> showSupplierDialog(stage, details, categoryFilter, supplierFilter, loadPage, status),
+                    error -> showError("Could not load supplier", error));
         });
 
         GridPane filters = new GridPane();
@@ -273,7 +280,7 @@ public class MechMotorApplication extends Application {
         filters.add(minQty, 0, 2); filters.add(maxQty, 1, 2); filters.add(minPrice, 2, 2);
         filters.add(maxPrice, 3, 2); filters.add(new Label("Sort:"), 4, 2); filters.add(sort, 5, 2);
         for (int i = 0; i < 6; i++) GridPane.setHgrow(filters.getChildren().get(i), Priority.ALWAYS);
-        HBox actions = new HBox(8, addButton, editButton, deactivateButton, categoryMenu, addSupplierButton, backupButton, restoreButton,
+        HBox actions = new HBox(8, addButton, editButton, deactivateButton, categoryMenu, supplierMenu, backupButton, restoreButton,
                 new Separator(), previousButton, nextButton, pageLabel);
         actions.setPadding(new Insets(8, 20, 8, 20));
         HBox.setHgrow(pageLabel, Priority.ALWAYS);
@@ -305,6 +312,51 @@ public class MechMotorApplication extends Application {
             status.setText("Categories and suppliers refreshed.");
             reload.run();
         }, error -> showError("Could not refresh categories and suppliers", error));
+    }
+
+    private void showSupplierDialog(Stage owner, SupplierDetails existing,
+                                    ComboBox<LookupOption> categoryFilter, ComboBox<LookupOption> supplierFilter,
+                                    Runnable reload, Label status) {
+        Dialog<SupplierDraft> dialog = new Dialog<>();
+        dialog.initOwner(owner);
+        dialog.setTitle(existing == null ? "Add supplier" : "Edit supplier");
+        dialog.setHeaderText(existing == null ? "Create a supplier record" : "Update supplier contact details");
+        ButtonType saveType = new ButtonType(existing == null ? "Create supplier" : "Save changes", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(saveType, ButtonType.CANCEL);
+        TextField name = field(existing == null ? "" : existing.name(), "Required supplier name");
+        TextField phone = field(existing == null ? "" : existing.phone(), "Phone / contact number");
+        TextField code = field(existing == null ? "" : existing.supplierCode(), "Optional unique supplier code");
+        GridPane form = new GridPane();
+        form.setHgap(10); form.setVgap(9); form.setPadding(new Insets(12));
+        form.add(new Label("Supplier name *"), 0, 0); form.add(name, 1, 0);
+        form.add(new Label("Phone"), 0, 1); form.add(phone, 1, 1);
+        form.add(new Label("Supplier code"), 0, 2); form.add(code, 1, 2);
+        GridPane.setHgrow(name, Priority.ALWAYS); GridPane.setHgrow(phone, Priority.ALWAYS); GridPane.setHgrow(code, Priority.ALWAYS);
+        dialog.getDialogPane().setContent(form);
+        dialog.getDialogPane().setPrefWidth(500);
+        java.util.function.Supplier<SupplierDraft> draftSupplier =
+                () -> new SupplierDraft(name.getText(), phone.getText(), code.getText());
+        Button save = (Button) dialog.getDialogPane().lookupButton(saveType);
+        save.addEventFilter(ActionEvent.ACTION, event -> {
+            try { draftSupplier.get().validate(); }
+            catch (IllegalArgumentException ex) {
+                event.consume();
+                showError("Please correct supplier details", ex);
+            }
+        });
+        dialog.setResultConverter(button -> button == saveType ? draftSupplier.get() : null);
+        dialog.showAndWait().ifPresent(draft -> {
+            if (existing == null) {
+                runBackground(() -> inventory.createSupplier(draft), id -> {
+                    status.setText("Supplier saved."); refreshLookups(categoryFilter, supplierFilter, reload, status);
+                }, error -> showError("Could not save supplier", error));
+            } else {
+                runBackground(() -> { inventory.updateSupplier(existing.id(), draft); return Boolean.TRUE; }, ignored -> {
+                    supplierFilter.setValue(null);
+                    status.setText("Supplier updated."); refreshLookups(categoryFilter, supplierFilter, reload, status);
+                }, error -> showError("Could not update supplier", error));
+            }
+        });
     }
 
     private void showPartDialog(Stage owner, PartDetails existing, Runnable onSaved, Label status) {
