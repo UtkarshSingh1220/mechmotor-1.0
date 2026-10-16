@@ -114,7 +114,19 @@ public class DatabaseBackupService {
         }
     }
 
+    private static void applyAdditiveSchema(Path candidate) throws Exception {
+        try (Connection connection = DriverManager.getConnection("jdbc:sqlite:" + candidate.toAbsolutePath().normalize())) {
+            ScriptUtils.executeSqlScript(connection, new ClassPathResource("schema.sql"));
+        }
+    }
+
     private static void verifyDatabase(Path candidate) throws Exception {
+        verifyDatabase(candidate, true);
+    }
+
+    private static void verifyDatabase(Path candidate, boolean requireCurrentSchema) throws Exception {
+        Map<String, Set<String>> requiredColumns = new HashMap<>(REQUIRED_COLUMNS);
+        if (!requireCurrentSchema) requiredColumns.remove("part_fitments");
         try (Connection connection = DriverManager.getConnection("jdbc:sqlite:" + candidate.toAbsolutePath().normalize());
              Statement statement = connection.createStatement()) {
             try (ResultSet result = statement.executeQuery("PRAGMA integrity_check")) {
@@ -127,10 +139,10 @@ public class DatabaseBackupService {
                     "SELECT name FROM sqlite_master WHERE type='table'")) {
                 while (result.next()) tables.add(result.getString(1));
             }
-            if (!tables.containsAll(REQUIRED_COLUMNS.keySet())) {
+            if (!tables.containsAll(requiredColumns.keySet())) {
                 throw new IOException("Database is missing required MechMotor tables.");
             }
-            for (Map.Entry<String, Set<String>> required : REQUIRED_COLUMNS.entrySet()) {
+            for (Map.Entry<String, Set<String>> required : requiredColumns.entrySet()) {
                 Set<String> columns = new HashSet<>();
                 try (ResultSet result = statement.executeQuery("PRAGMA table_info('" + required.getKey() + "')")) {
                     while (result.next()) columns.add(result.getString("name"));

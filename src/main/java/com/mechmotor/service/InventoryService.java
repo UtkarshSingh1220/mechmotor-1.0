@@ -8,6 +8,8 @@ import com.mechmotor.domain.PartDraft;
 import com.mechmotor.domain.PartDetails;
 import com.mechmotor.domain.SupplierDetails;
 import com.mechmotor.domain.SupplierDraft;
+import com.mechmotor.domain.VehicleFitment;
+import com.mechmotor.domain.VehicleFitmentDraft;
 import com.mechmotor.repository.PartRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +33,14 @@ public class InventoryService {
     public List<LookupOption> categories() { return repository.categories(); }
 
     public List<LookupOption> suppliers() { return repository.suppliers(); }
+
+    public List<VehicleFitment> fitments(long partId) { return repository.fitments(partId); }
+
+    @Transactional
+    public long addFitment(long partId, VehicleFitmentDraft draft) { return repository.addFitment(partId, draft); }
+
+    @Transactional
+    public void removeFitment(long partId, long fitmentId) { repository.removeFitment(partId, fitmentId); }
 
     @Transactional
     public long createCategory(String name) { return repository.createCategory(name); }

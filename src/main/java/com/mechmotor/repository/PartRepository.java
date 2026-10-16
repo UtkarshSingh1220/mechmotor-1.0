@@ -59,6 +59,57 @@ public class PartRepository {
                 (rs, row) -> new LookupOption(rs.getLong("id"), rs.getString("name")));
     }
 
+    public List<VehicleFitment> fitments(long partId) {
+        return jdbc.query("""
+            SELECT id,part_id,make,model,year_from,year_to,engine,trim,notes
+            FROM part_fitments WHERE part_id=?
+            ORDER BY make COLLATE NOCASE, model COLLATE NOCASE, year_from, year_to
+            """, (rs, row) -> new VehicleFitment(rs.getLong("id"), rs.getLong("part_id"),
+                rs.getString("make"), rs.getString("model"), rs.getInt("year_from"),
+                rs.getInt("year_to"), rs.getString("engine"), rs.getString("trim"), rs.getString("notes")), partId);
+    }
+
+    public long addFitment(long partId, VehicleFitmentDraft draft) {
+        Integer activePart = jdbc.queryForObject("SELECT COUNT(*) FROM parts WHERE id=? AND active=1", Integer.class, partId);
+        if (activePart == null || activePart != 1) throw new IllegalArgumentException("Choose an active inventory item.");
+        Integer duplicates = jdbc.queryForObject("""
+            SELECT COUNT(*) FROM part_fitments
+            WHERE part_id=? AND make=? COLLATE NOCASE AND model=? COLLATE NOCASE
+              AND year_from=? AND year_to=?
+              AND COALESCE(engine,'')=? COLLATE NOCASE AND COALESCE(trim,'')=? COLLATE NOCASE
+            """, Integer.class, partId, draft.make(), draft.model(), draft.yearFrom(), draft.yearTo(),
+                nullToEmpty(draft.engine()), nullToEmpty(draft.trim()));
+        if (duplicates != null && duplicates > 0) {
+            throw new IllegalArgumentException("This vehicle fitment already exists for the selected part.");
+        }
+        KeyHolder key = new GeneratedKeyHolder();
+        jdbc.update((PreparedStatementCreator) connection -> {
+            PreparedStatement ps = connection.prepareStatement("""
+                INSERT INTO part_fitments(part_id,make,model,year_from,year_to,engine,trim,notes)
+                VALUES (?,?,?,?,?,?,?,?)
+                """, Statement.RETURN_GENERATED_KEYS);
+            ps.setLong(1, partId);
+            ps.setString(2, draft.make());
+            ps.setString(3, draft.model());
+            ps.setInt(4, draft.yearFrom());
+            ps.setInt(5, draft.yearTo());
+            ps.setString(6, draft.engine());
+            ps.setString(7, draft.trim());
+            ps.setString(8, draft.notes());
+            return ps;
+        }, key);
+        Number generated = key.getKey();
+        if (generated == null) throw new IllegalStateException("Database did not return the fitment ID.");
+        return generated.longValue();
+    }
+
+    public void removeFitment(long partId, long fitmentId) {
+        int changed = jdbc.update("DELETE FROM part_fitments WHERE id=? AND part_id=?", fitmentId, partId);
+        if (changed == 0) throw new IllegalArgumentException("Vehicle fitment was not found for this part.");
+    }
+
+    private static String nullToEmpty(String value) { return value == null ? "" : value; }
+
     public long createCategory(String rawName) {
         return createCategory(rawName, null);
     }
@@ -266,10 +317,14 @@ public class PartRepository {
                   OR lower(COALESCE(p.part_number,'')) LIKE ? ESCAPE '!' OR lower(p.name) LIKE ? ESCAPE '!'
                   OR lower(COALESCE(p.brand,'')) LIKE ? ESCAPE '!' OR lower(COALESCE(p.company,'')) LIKE ? ESCAPE '!'
                   OR lower(COALESCE(p.material,'')) LIKE ? ESCAPE '!' OR lower(COALESCE(p.color,'')) LIKE ? ESCAPE '!'
-                  OR lower(COALESCE(c.name,'')) LIKE ? ESCAPE '!' OR lower(COALESCE(s.name,'')) LIKE ? ESCAPE '!')
+                  OR lower(COALESCE(c.name,'')) LIKE ? ESCAPE '!' OR lower(COALESCE(s.name,'')) LIKE ? ESCAPE '!'
+                  OR EXISTS (SELECT 1 FROM part_fitments vf WHERE vf.part_id=p.id AND (
+                      lower(vf.make) LIKE ? ESCAPE '!' OR lower(vf.model) LIKE ? ESCAPE '!'
+                      OR lower(COALESCE(vf.engine,'')) LIKE ? ESCAPE '!' OR lower(COALESCE(vf.trim,'')) LIKE ? ESCAPE '!'
+                      OR lower(COALESCE(vf.notes,'')) LIKE ? ESCAPE '!'))
                 """);
             args.add(exact); args.add(exact); args.add(exact);
-            for (int i = 0; i < 10; i++) args.add(like);
+            for (int i = 0; i < 15; i++) args.add(like);
         }
         appendLike(where, args, "p.brand", f.brand());
         appendLike(where, args, "p.material", f.material());
