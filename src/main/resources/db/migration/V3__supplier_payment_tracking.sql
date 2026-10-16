@@ -36,3 +36,26 @@ BEGIN
     THEN RAISE(ABORT, 'supplier payment exceeds outstanding balance')
   END;
 END;
+
+-- Payment entries are immutable evidence: only a one-way void with a reason is allowed.
+CREATE TRIGGER IF NOT EXISTS trg_supplier_payment_audit_immutable
+BEFORE UPDATE ON supplier_payments
+WHEN NOT (
+  OLD.status='POSTED' AND NEW.status='VOIDED'
+  AND NEW.purchase_id=OLD.purchase_id
+  AND NEW.method=OLD.method
+  AND NEW.amount_paise=OLD.amount_paise
+  AND COALESCE(NEW.reference,'')=COALESCE(OLD.reference,'')
+  AND NEW.created_at=OLD.created_at
+  AND NEW.void_reason IS NOT NULL AND length(trim(NEW.void_reason))>0
+  AND NEW.voided_at IS NOT NULL
+)
+BEGIN
+  SELECT RAISE(ABORT, 'supplier payment records are immutable; only a void with reason is allowed');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_supplier_payment_no_delete
+BEFORE DELETE ON supplier_payments
+BEGIN
+  SELECT RAISE(ABORT, 'supplier payment audit records cannot be deleted');
+END;

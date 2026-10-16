@@ -166,6 +166,10 @@ class PurchasingServiceTest {
                 receipt.purchaseNumber(), 1000, SupplierPaymentDraft.Method.BANK_TRANSFER, "UTR-100"));
         assertEquals(1000L, payment.paidTotalPaise());
         assertEquals(1500L, payment.outstandingPaise());
+        assertThrows(DataAccessException.class, () -> jdbc.update(
+                "UPDATE supplier_payments SET amount_paise=1 WHERE id=?", payment.paymentId()));
+        assertThrows(DataAccessException.class, () -> jdbc.update(
+                "DELETE FROM supplier_payments WHERE id=?", payment.paymentId()));
         assertEquals(1000L, purchasing.balance(receipt.purchaseNumber()).paidPaise());
         assertEquals(1500L, purchasing.balance(receipt.purchaseNumber()).outstandingPaise());
         assertEquals(1, purchasing.supplierPayments(receipt.purchaseNumber()).size());
