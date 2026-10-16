@@ -56,6 +56,13 @@ Never run JDBC, report generation or Gmail operations on the JavaFX Application 
 - Repeated void requests are rejected; a stock-ledger failure rolls back the sale status, inventory and void record together.
 - The app records the full refund amount and original payment method but does not initiate a real bank, UPI or card refund. Staff must process that separately and retain the refund reference.
 
+## Sales invoice PDFs
+
+- `InvoiceService.exportSaleInvoice` queries the original sale and item snapshots, payments, partial-return totals and full-void audit.
+- The generated PDF uses the immutable sale snapshot rather than current part names/prices. It includes status, subtotal, discount, payment/refund records and a manual-settlement disclaimer.
+- Output is written to a temporary file and moved to the requested destination only after generation succeeds. Existing invoice files are not intentionally overwritten.
+- PDFBox uses its standard fonts; text is normalized to printable ASCII and currency is formatted as INR to avoid missing glyphs.
+
 ## Sales returns and refunds
 
 - `SalesService.returnableSale` lists each item line on a posted sale and calculates each line's net total after a deterministic proportional allocation of the sale-level discount.

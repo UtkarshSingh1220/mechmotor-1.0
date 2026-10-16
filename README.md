@@ -25,11 +25,15 @@ Use the **CSV** menu to export the currently applied inventory filters or import
 
 ## Sales checkout
 
-Select an inventory row and choose **Sell selected**. Checkout supports quantity, unit price, discount, optional customer/payment reference, and CASH/UPI/CARD/BANK_TRANSFER. The sale header, item snapshot, payment, stock decrement and stock-ledger movement commit atomically. Insufficient stock or a failed write prevents the sale from being posted. Checkout supports up to 100 distinct cart lines and full payment only. Sale voids restore stock and record a refund audit; actual payment refunds must be processed separately. Partial returns/refunds are supported; PDF invoices are still being developed.
+Select an inventory row and choose **Sell selected**. Checkout supports quantity, unit price, discount, optional customer/payment reference, and CASH/UPI/CARD/BANK_TRANSFER. The sale header, item snapshot, payment, stock decrement and stock-ledger movement commit atomically. Insufficient stock or a failed write prevents the sale from being posted. Checkout supports up to 100 distinct cart lines and full payment only. Sale voids restore stock and record a refund audit; actual payment refunds must be processed separately. Partial returns/refunds are supported; Sales invoice PDFs are supported; operational summary reports remain future work.
 
 ## Sale voids and refund recording
 
 Use **Void sale / refund…** to enter the original sale number, a required reason and an optional refund reference. The app restores sold stock, writes reversal movements and records the refund audit atomically. It prevents a sale from being voided twice. **It does not transfer money** through a bank, UPI app or card terminal; process the actual refund separately and record its reference.
+
+## Sales invoice PDFs
+
+Use **Sales invoice PDF…** to enter the original sale number and save a printable PDF. It is generated from the saved sale/item snapshots, payment records, and return/void audit entries, so later inventory edits do not change the original receipt. Existing files are never silently overwritten. Amounts are printed in INR; actual refund settlement must be verified separately.
 
 ## Sales returns and refunds
 

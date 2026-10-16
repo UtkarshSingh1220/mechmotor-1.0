@@ -8,6 +8,7 @@ import com.mechmotor.service.LicenseService;
 import com.mechmotor.service.LicenseStatus;
 import com.mechmotor.service.SalesService;
 import com.mechmotor.service.PurchasingService;
+import com.mechmotor.service.InvoiceService;
 import com.mechmotor.domain.SupplierDetails;
 import com.mechmotor.domain.SupplierDraft;
 import javafx.application.Application;
@@ -49,6 +50,7 @@ public class MechMotorApplication extends Application {
     private LicenseService licenseService;
     private SalesService salesService;
     private PurchasingService purchasingService;
+    private InvoiceService invoiceService;
     private final List<LookupOption> noOptions = List.of();
     private List<LookupOption> categories = noOptions;
     private List<LookupOption> suppliers = noOptions;
@@ -63,6 +65,7 @@ public class MechMotorApplication extends Application {
         licenseService = context.getBean(LicenseService.class);
         salesService = context.getBean(SalesService.class);
         purchasingService = context.getBean(PurchasingService.class);
+        invoiceService = context.getBean(InvoiceService.class);
         backupService = context.getBean(DatabaseBackupService.class);
         csvService = context.getBean(InventoryCsvService.class);
         Label brand = new Label("MECHMOTOR 1.0");
@@ -114,6 +117,7 @@ public class MechMotorApplication extends Application {
         Button sellButton = new Button("Sell selected");
         Button voidSaleButton = new Button("Void sale / refund…");
         Button returnsButton = new Button("Returns / refunds");
+        Button invoiceButton = new Button("Sales invoice PDF…");
         Button receiveStockButton = new Button("Receive stock");
         Button fitmentButton = new Button("Vehicle fitment");
         MenuItem addCategoryItem = new MenuItem("Add root / subcategory…");
@@ -376,6 +380,39 @@ public class MechMotorApplication extends Application {
             showReturnsDialog(stage, status, loadPage);
         });
 
+
+        invoiceButton.setOnAction(e -> {
+            if (!licenseService.status().features().contains("SALES")) {
+                showError("Feature not licensed", new IllegalArgumentException("Your activation key does not include SALES."));
+                return;
+            }
+            TextInputDialog saleDialog = new TextInputDialog();
+            saleDialog.setTitle("Sales invoice PDF");
+            saleDialog.setHeaderText("Generate a printable invoice from the saved sale snapshots.");
+            saleDialog.setContentText("Original sale number:");
+            saleDialog.showAndWait().ifPresent(number -> {
+                FileChooser chooser = new FileChooser();
+                chooser.setTitle("Save sales invoice PDF");
+                chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PDF files", "*.pdf"));
+                chooser.setInitialFileName("mechmotor-invoice.pdf");
+                java.io.File target = chooser.showSaveDialog(stage);
+                if (target == null) return;
+                Path selectedPath = target.toPath();
+                if (!target.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".pdf")) {
+                    selectedPath = target.toPath().resolveSibling(target.getName() + ".pdf");
+                }
+                final Path destination = selectedPath;
+                runBackground(() -> invoiceService.exportSaleInvoice(number, destination), saved -> {
+                    status.setText("Invoice PDF created: " + saved.getFileName());
+                    Alert info = new Alert(Alert.AlertType.INFORMATION,
+                            "Invoice PDF saved to:\n" + saved, ButtonType.OK);
+                    info.setTitle("Invoice exported");
+                    info.setHeaderText("Sales invoice ready");
+                    info.show();
+                }, error -> showError("Could not create sales invoice", error));
+            });
+        });
+
         receiveStockButton.setOnAction(e -> {
             if (!licenseService.status().features().contains("PURCHASING")) {
                 showError("Feature not licensed", new IllegalArgumentException("Your activation key does not include PURCHASING."));
@@ -509,7 +546,7 @@ public class MechMotorApplication extends Application {
         GridPane.setHgrow(savedViewSelector, Priority.ALWAYS);
         GridPane.setHgrow(savedViewsMenu, Priority.ALWAYS);
         for (int i = 0; i < 6; i++) GridPane.setHgrow(filters.getChildren().get(i), Priority.ALWAYS);
-        HBox actions = new HBox(8, addButton, editButton, deactivateButton, sellButton, voidSaleButton, returnsButton, receiveStockButton, fitmentButton, categoryMenu, supplierMenu, backupButton, restoreButton, csvMenu,
+        HBox actions = new HBox(8, addButton, editButton, deactivateButton, sellButton, voidSaleButton, returnsButton, invoiceButton, receiveStockButton, fitmentButton, categoryMenu, supplierMenu, backupButton, restoreButton, csvMenu,
                 new Separator(), previousButton, nextButton, pageLabel);
         actions.setPadding(new Insets(8, 20, 8, 20));
         HBox.setHgrow(pageLabel, Priority.ALWAYS);

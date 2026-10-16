@@ -3,12 +3,13 @@
   <parent><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-parent</artifactId><version>3.5.5</version><relativePath/></parent>
   <groupId>com.mechmotor</groupId><artifactId>mechmotor</artifactId><version>1.0.0</version>
   <name>MechMotor 1.0</name><description>Offline-first vehicle spare parts shop desktop application</description>
-  <properties><java.version>21</java.version><javafx.version>21.0.8</javafx.version><project.build.sourceEncoding>UTF-8</project.build.sourceEncoding></properties>
+  <properties><java.version>21</java.version><javafx.version>21.0.8</javafx.version><pdfbox.version>3.0.8</pdfbox.version><project.build.sourceEncoding>UTF-8</project.build.sourceEncoding></properties>
   <dependencies>
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter</artifactId></dependency>
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-jdbc</artifactId></dependency>
     <dependency><groupId>org.openjfx</groupId><artifactId>javafx-controls</artifactId><version>${javafx.version}</version></dependency>
     <dependency><groupId>org.xerial</groupId><artifactId>sqlite-jdbc</artifactId><version>3.50.3.0</version></dependency>
+    <dependency><groupId>org.apache.pdfbox</groupId><artifactId>pdfbox</artifactId><version>${pdfbox.version}</version></dependency>
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
   </dependencies>
   <build><plugins>
