@@ -77,10 +77,20 @@ public class InventoryCsvService {
         return exported;
     }
 
+    private static boolean looksLikeFormula(String value) {
+        int index = 0;
+        while (index < value.length() && Character.isWhitespace(value.charAt(index))) index++;
+        if (index >= value.length()) return false;
+        char first = value.charAt(index);
+        return first == '=' || first == '+' || first == '-' || first == '@';
+    }
+
     private static void writeRow(BufferedWriter writer, String[] values) throws IOException {
         for (int i = 0; i < values.length; i++) {
             if (i > 0) writer.write(',');
             String value = values[i] == null ? "" : values[i];
+            // Prevent spreadsheet formula execution from user-controlled text cells.
+            if (looksLikeFormula(value)) value = "'" + value;
             boolean quote = value.indexOf(',') >= 0 || value.indexOf('"') >= 0
                     || value.indexOf('\r') >= 0 || value.indexOf('\n') >= 0;
             if (quote) writer.write('"');

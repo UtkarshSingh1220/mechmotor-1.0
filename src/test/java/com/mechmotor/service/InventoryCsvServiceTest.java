@@ -38,7 +38,7 @@ class InventoryCsvServiceTest {
 
     @Test
     void exportsAllFilteredRowsAndEscapesCsvFields() throws Exception {
-        repository.create(new PartDraft("BRAKE-1", "123,456", "PN-1", "Brake, \"Premium\"",
+        repository.create(new PartDraft("=2+2", "123,456", "PN-1", "Brake, \"Premium\"",
                 "Brand", "Company", "Ceramic", "Black", null, null, "10.00", "25.50", 4, 1));
         repository.create(new PartDraft("FILTER-1", null, null, "Air filter",
                 "Brand", "Company", "Paper", "White", null, null, "2.00", "5.00", 2, 1));
