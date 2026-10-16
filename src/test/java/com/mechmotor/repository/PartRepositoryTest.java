@@ -7,6 +7,7 @@ import com.mechmotor.domain.PartDraft;
 import com.mechmotor.domain.SupplierDraft;
 import com.mechmotor.domain.VehicleFitmentDraft;
 import com.mechmotor.domain.SavedInventoryView;
+import com.mechmotor.domain.InventoryDashboardMetrics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -104,6 +105,22 @@ class PartRepositoryTest {
 
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM parts WHERE sku='ROLLBACK-1'", Integer.class));
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM inventory", Integer.class));
+    }
+
+    @Test
+    void dashboardMetricsAggregateActiveInventoryAndStockStatuses() {
+        repository.create(new PartDraft("LOW-1", null, null, "Low stock item",
+                null, null, null, null, null, null, "10.00", "25.00", 2, 2));
+        repository.create(new PartDraft("OUT-1", null, null, "Out of stock item",
+                null, null, null, null, null, null, "5.00", "10.00", 0, 0));
+
+        InventoryDashboardMetrics metrics = repository.dashboardMetrics();
+
+        assertEquals(2L, metrics.activeParts());
+        assertEquals(2L, metrics.totalUnits());
+        assertEquals(1L, metrics.lowStockParts());
+        assertEquals(1L, metrics.outOfStockParts());
+        assertEquals(5000L, metrics.retailStockValuePaise());
     }
 
     @Test

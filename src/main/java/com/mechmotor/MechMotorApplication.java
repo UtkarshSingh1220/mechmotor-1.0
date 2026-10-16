@@ -58,6 +58,18 @@ public class MechMotorApplication extends Application {
         Label subtitle = new Label("Vehicle parts • Inventory workspace");
         Label status = new Label("Connecting to local inventory…");
         status.getStyleClass().add("status");
+        Label activePartsValue = new Label("—"); activePartsValue.getStyleClass().add("metric-value");
+        Label totalUnitsValue = new Label("—"); totalUnitsValue.getStyleClass().add("metric-value");
+        Label lowStockValue = new Label("—"); lowStockValue.getStyleClass().add("metric-value");
+        Label outOfStockValue = new Label("—"); outOfStockValue.getStyleClass().add("metric-value");
+        Label retailValue = new Label("—"); retailValue.getStyleClass().add("metric-value");
+        HBox dashboard = new HBox(12,
+                metricCard("Active parts", activePartsValue),
+                metricCard("Units on hand", totalUnitsValue),
+                metricCard("Low-stock parts", lowStockValue),
+                metricCard("Out of stock", outOfStockValue),
+                metricCard("Retail value (est.)", retailValue));
+        dashboard.setPadding(new Insets(0, 20, 8, 20));
 
         TextField query = new TextField();
         query.setPromptText("Search SKU, barcode, brand, material, color, category, supplier or vehicle make/model/engine");
@@ -145,6 +157,7 @@ public class MechMotorApplication extends Application {
                     nextButton.setDisable(lastPage[0].page() + 1 >= lastPage[0].totalPages());
                     status.setText("Local inventory • " + lastPage[0].items().size() + " shown • Offline-ready");
                     searchButton.setDisable(false);
+                    refreshDashboard(activePartsValue, totalUnitsValue, lowStockValue, outOfStockValue, retailValue);
                 });
                 task.setOnFailed(e -> {
                     searchButton.setDisable(false);
@@ -423,7 +436,7 @@ public class MechMotorApplication extends Application {
         HBox.setHgrow(pageLabel, Priority.ALWAYS);
         VBox header = new VBox(5, brand, subtitle);
         header.setPadding(new Insets(20)); header.getStyleClass().add("header");
-        VBox root = new VBox(0, header, filters, actions, table, status);
+        VBox root = new VBox(0, header, dashboard, filters, actions, table, status);
         VBox.setVgrow(table, Priority.ALWAYS);
         status.setPadding(new Insets(12, 20, 12, 20));
         Scene scene = new Scene(root, 1380, 820);
@@ -439,6 +452,27 @@ public class MechMotorApplication extends Application {
             refreshSavedViews(savedViewSelector, status, null);
             loadPage.run();
         }, error -> { status.setText("Could not load categories and suppliers."); showError("Database initialization failed", error); });
+    }
+
+    private VBox metricCard(String title, Label value) {
+        Label label = new Label(title);
+        label.getStyleClass().add("metric-label");
+        VBox card = new VBox(5, label, value);
+        card.getStyleClass().add("metric-card");
+        card.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(card, Priority.ALWAYS);
+        return card;
+    }
+
+    private void refreshDashboard(Label activeParts, Label totalUnits, Label lowStock,
+                                  Label outOfStock, Label retailValue) {
+        runBackground(() -> inventory.dashboardMetrics(), metrics -> {
+            activeParts.setText(String.format("%,d", metrics.activeParts()));
+            totalUnits.setText(String.format("%,d", metrics.totalUnits()));
+            lowStock.setText(String.format("%,d", metrics.lowStockParts()));
+            outOfStock.setText(String.format("%,d", metrics.outOfStockParts()));
+            retailValue.setText("₹" + rupees(metrics.retailStockValuePaise()));
+        }, error -> showError("Could not refresh dashboard metrics", error));
     }
 
     private void refreshSavedViews(ComboBox<LookupOption> selector, Label status, Long selectId) {
