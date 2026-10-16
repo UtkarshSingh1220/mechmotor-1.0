@@ -7,6 +7,8 @@ import com.mechmotor.domain.PurchaseReceipt;
 import com.mechmotor.domain.PurchaseOrderDraft;
 import com.mechmotor.domain.PurchaseLineDraft;
 import com.mechmotor.domain.PurchaseOrderReceiveLine;
+import com.mechmotor.domain.SupplierReturnDraft;
+import com.mechmotor.domain.SupplierReturnLineDraft;
 import com.mechmotor.domain.SupplierDraft;
 import com.mechmotor.domain.SupplierPaymentDraft;
 import com.mechmotor.config.DatabaseMigrationRunner;
@@ -159,6 +161,81 @@ class PurchasingServiceTest {
         assertThrows(IllegalStateException.class, () -> purchasing.cancelPurchase(receipt.purchaseNumber(), "Stock reserved for order"));
         assertEquals(8, parts.findById(partId).quantity());
         assertEquals("RECEIVED", jdbc.queryForObject("SELECT status FROM purchases WHERE id=?", String.class, receipt.purchaseId()));
+    }
+
+    @Test
+    void supplierReturnReducesStockAndPayableAndTracksCreditNote() {
+        var receipt = purchasing.receive(new PurchaseDraft(partId, 5, 1250, supplierId, "INV-RETURN"));
+        var payment = purchasing.recordSupplierPayment(new SupplierPaymentDraft(
+                receipt.purchaseNumber(), 1000, SupplierPaymentDraft.Method.BANK_TRANSFER, "UTR-RET-1"));
+        assertEquals(5250L, payment.outstandingPaise());
+
+        Long purchaseItemId = jdbc.queryForObject("SELECT id FROM purchase_items WHERE purchase_id=?",
+                Long.class, receipt.purchaseId());
+        var returned = purchasing.recordSupplierReturn(new SupplierReturnDraft(receipt.purchaseNumber(),
+                "Damaged filter", "CN-2026-18",
+                java.util.List.of(new SupplierReturnLineDraft(purchaseItemId, 2))));
+
+        assertTrue(returned.returnNumber().startsWith("RET-"));
+        assertEquals(2, returned.unitsReturned());
+        assertEquals(2500L, returned.totalPaise());
+        assertEquals(2750L, returned.outstandingPaise());
+        assertEquals(6, parts.findById(partId).quantity());
+        assertEquals(-2, jdbc.queryForObject("SELECT quantity FROM stock_movements WHERE reference=? AND movement_type='SUPPLIER_RETURN'",
+                Integer.class, returned.returnNumber()));
+        assertEquals(1, purchasing.supplierReturns(receipt.purchaseNumber()).size());
+        assertEquals(2750L, purchasing.balance(receipt.purchaseNumber()).outstandingPaise());
+        assertEquals(1, purchasing.history(receipt.purchaseNumber(), 10).size());
+        assertEquals(2750L, purchasing.history(receipt.purchaseNumber(), 10).get(0).outstandingPaise());
+    }
+
+    @Test
+    void supplierReturnRejectsOverReturnAndReservedStockWithoutPartialWrites() {
+        var receipt = purchasing.receive(new PurchaseDraft(partId, 2, 1250, supplierId, "INV-RETURN-GUARD"));
+        Long purchaseItemId = jdbc.queryForObject("SELECT id FROM purchase_items WHERE purchase_id=?",
+                Long.class, receipt.purchaseId());
+        assertThrows(IllegalArgumentException.class, () -> purchasing.recordSupplierReturn(
+                new SupplierReturnDraft(receipt.purchaseNumber(), "Wrong item", null,
+                        java.util.List.of(new SupplierReturnLineDraft(purchaseItemId, 3)))));
+        jdbc.update("UPDATE inventory SET reserved_quantity=5 WHERE part_id=?", partId);
+        assertThrows(IllegalStateException.class, () -> purchasing.recordSupplierReturn(
+                new SupplierReturnDraft(receipt.purchaseNumber(), "Reserved", null,
+                        java.util.List.of(new SupplierReturnLineDraft(purchaseItemId, 1)))));
+        assertEquals(5, parts.findById(partId).quantity());
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM supplier_returns", Integer.class));
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM stock_movements WHERE movement_type='SUPPLIER_RETURN'",
+                Integer.class));
+    }
+
+    @Test
+    void supplierReturnCreditCanExceedOutstandingAndBlocksFurtherPaymentAndReceiptCancellation() {
+        var receipt = purchasing.receive(new PurchaseDraft(partId, 3, 1250, supplierId, "INV-CREDIT-ONLY"));
+        Long purchaseItemId = jdbc.queryForObject("SELECT id FROM purchase_items WHERE purchase_id=?",
+                Long.class, receipt.purchaseId());
+        var returned = purchasing.recordSupplierReturn(new SupplierReturnDraft(receipt.purchaseNumber(),
+                "All units damaged", "CN-FULL",
+                java.util.List.of(new SupplierReturnLineDraft(purchaseItemId, 3))));
+        assertEquals(0, returned.outstandingPaise());
+        assertEquals(3, parts.findById(partId).quantity());
+        assertThrows(IllegalStateException.class, () -> purchasing.recordSupplierPayment(new SupplierPaymentDraft(
+                receipt.purchaseNumber(), 100, SupplierPaymentDraft.Method.CASH, null)));
+        assertThrows(IllegalStateException.class,
+                () -> purchasing.cancelPurchase(receipt.purchaseNumber(), "Already returned through credit note"));
+    }
+
+    @Test
+    void supplierReturnFailureRollsBackCreditNoteStockAndLedger() {
+        var receipt = purchasing.receive(new PurchaseDraft(partId, 2, 1250, supplierId, "INV-RETURN-ROLLBACK"));
+        Long purchaseItemId = jdbc.queryForObject("SELECT id FROM purchase_items WHERE purchase_id=?",
+                Long.class, receipt.purchaseId());
+        jdbc.execute("CREATE TRIGGER fail_supplier_return_ledger BEFORE INSERT ON stock_movements "
+                + "WHEN NEW.movement_type='SUPPLIER_RETURN' BEGIN SELECT RAISE(ABORT, 'simulated supplier return failure'); END");
+        assertThrows(DataAccessException.class, () -> purchasing.recordSupplierReturn(
+                new SupplierReturnDraft(receipt.purchaseNumber(), "Rollback", "CN-ROLLBACK",
+                        java.util.List.of(new SupplierReturnLineDraft(purchaseItemId, 1)))));
+        assertEquals(5, parts.findById(partId).quantity());
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM supplier_returns", Integer.class));
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM supplier_return_items", Integer.class));
     }
 
     @Test

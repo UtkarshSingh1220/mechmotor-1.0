@@ -18,6 +18,11 @@ import com.mechmotor.domain.FormalPurchaseOrderReceipt;
 import com.mechmotor.domain.FormalPurchaseOrderRow;
 import com.mechmotor.domain.FormalPurchaseOrderLineRow;
 import com.mechmotor.domain.PurchaseOrderReceiveLine;
+import com.mechmotor.domain.SupplierReturnDraft;
+import com.mechmotor.domain.SupplierReturnLineDraft;
+import com.mechmotor.domain.SupplierReturnableLine;
+import com.mechmotor.domain.SupplierReturnReceipt;
+import com.mechmotor.domain.SupplierReturnRow;
 import com.mechmotor.repository.PartRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.PreparedStatementCreator;
@@ -27,7 +32,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.math.BigDecimal;
 import java.math.BigDecimal;
 import java.sql.PreparedStatement;
 import java.sql.Statement;
@@ -72,7 +76,7 @@ public class PurchasingService {
                              FROM purchase_items pi WHERE pi.purchase_id=p.id),'') AS item_summary,
                    COALESCE((SELECT c.reason FROM purchase_cancellations c WHERE c.purchase_id=p.id),'') AS cancellation_reason,
                    COALESCE((SELECT SUM(sp.amount_paise) FROM supplier_payments sp WHERE sp.purchase_id=p.id AND sp.status='POSTED'),0) AS paid_paise,
-                   p.subtotal_paise-COALESCE((SELECT SUM(sp.amount_paise) FROM supplier_payments sp WHERE sp.purchase_id=p.id AND sp.status='POSTED'),0) AS outstanding_paise
+                   p.subtotal_paise-COALESCE((SELECT SUM(sr.total_paise) FROM supplier_returns sr WHERE sr.purchase_id=p.id AND sr.status='POSTED'),0)-COALESCE((SELECT SUM(sp.amount_paise) FROM supplier_payments sp WHERE sp.purchase_id=p.id AND sp.status='POSTED'),0) AS outstanding_paise
             FROM purchases p
             WHERE (?='' OR p.purchase_number LIKE ? ESCAPE '!'
                 OR p.supplier_name_snapshot LIKE ? ESCAPE '!'
@@ -91,7 +95,7 @@ public class PurchasingService {
 
     /**
      * Cancels an un-settled stock receipt only when current on-hand quantity can
-     * cover the full reversal. This app does not track inventory lots or supplier refunds.
+     * cover the full reversal. Inventory is not lot-tracked; use supplier returns for partial credits.
      */
     public PurchaseCancellationReceipt cancelPurchase(String rawPurchaseNumber, String rawReason) {
         String purchaseNumber = rawPurchaseNumber == null ? "" : rawPurchaseNumber.strip();
@@ -125,6 +129,11 @@ public class PurchasingService {
             Long postedPayments = jdbc.queryForObject(
                     "SELECT COUNT(*) FROM supplier_payments WHERE purchase_id=?",
                     Long.class, purchase.id());
+            Long postedReturns = jdbc.queryForObject("SELECT COUNT(*) FROM supplier_returns WHERE purchase_id=?",
+                    Long.class, purchase.id());
+            if (postedReturns != null && postedReturns > 0) {
+                throw new IllegalStateException("Cannot cancel a receipt with supplier return history. Use the supplier credit note workflow; no stock changes were committed.");
+            }
             if (postedPayments != null && postedPayments > 0) {
                 throw new IllegalStateException("Cannot cancel a receipt with supplier payment history. Reconcile the supplier account separately; no stock changes were committed.");
             }
@@ -559,16 +568,160 @@ public class PurchasingService {
 
     private record FormalOrderHeader(long id, String orderNumber, long supplierId, String status) { }
 
+
+    /** Lists the remaining returnable quantity for each line on a posted supplier receipt. */
+    public List<SupplierReturnableLine> returnablePurchaseLines(String rawPurchaseNumber) {
+        String number = cleanPurchaseNumber(rawPurchaseNumber);
+        List<String> statuses = jdbc.query("SELECT status FROM purchases WHERE purchase_number=? COLLATE NOCASE",
+                (rs,row) -> rs.getString(1), number);
+        if (statuses.isEmpty()) throw new IllegalArgumentException("Supplier receipt was not found.");
+        if (!"RECEIVED".equals(statuses.get(0))) {
+            throw new IllegalStateException("Only a RECEIVED supplier receipt can have a return.");
+        }
+        return jdbc.query("""
+            SELECT pi.id AS purchase_item_id,pi.part_id,pi.sku_snapshot,pi.name_snapshot,pi.quantity,
+                   pi.unit_cost_paise,
+                   COALESCE((SELECT SUM(ri.quantity) FROM supplier_return_items ri
+                             JOIN supplier_returns r ON r.id=ri.supplier_return_id
+                             WHERE ri.purchase_item_id=pi.id AND r.status='POSTED'),0) AS returned_quantity,
+                   MAX(0,COALESCE(inv.quantity_on_hand,0)-COALESCE(inv.reserved_quantity,0)) AS available_quantity
+            FROM purchase_items pi
+            JOIN purchases p ON p.id=pi.purchase_id
+            LEFT JOIN inventory inv ON inv.part_id=pi.part_id
+            WHERE p.purchase_number=? COLLATE NOCASE
+            ORDER BY pi.id
+            """, (rs,row) -> {
+                int received = rs.getInt("quantity");
+                int returned = rs.getInt("returned_quantity");
+                return new SupplierReturnableLine(rs.getLong("purchase_item_id"),rs.getLong("part_id"),
+                    rs.getString("sku_snapshot"),rs.getString("name_snapshot"),received,returned,
+                    Math.max(0,received-returned),rs.getInt("available_quantity"),rs.getLong("unit_cost_paise"));
+            }, number);
+    }
+
+    /** Posts an immutable supplier return/credit note and reduces stock and payable atomically. */
+    public SupplierReturnReceipt recordSupplierReturn(SupplierReturnDraft draft) {
+        if (draft == null) throw new IllegalArgumentException("Supplier return details are required.");
+        String number = cleanPurchaseNumber(draft.purchaseNumber());
+        return transactions.execute(status -> {
+            List<PurchaseHeader> headers = jdbc.query("""
+                SELECT id,purchase_number,status FROM purchases
+                WHERE purchase_number=? COLLATE NOCASE
+                """, (rs,row) -> new PurchaseHeader(rs.getLong("id"),rs.getString("purchase_number"),rs.getString("status")),
+                number);
+            if (headers.isEmpty()) throw new IllegalArgumentException("Supplier receipt was not found.");
+            PurchaseHeader purchase = headers.get(0);
+            if (!"RECEIVED".equals(purchase.status())) {
+                throw new IllegalStateException("Only a RECEIVED supplier receipt can have a return.");
+            }
+            Long supplierId = jdbc.queryForObject("SELECT supplier_id FROM purchases WHERE id=?",Long.class,purchase.id());
+            if (supplierId == null) throw new IllegalStateException("Supplier receipt has no supplier.");
+            java.util.Map<Long,SupplierReturnLineDraft> requested = new java.util.LinkedHashMap<>();
+            for (SupplierReturnLineDraft line : draft.lines()) {
+                if (requested.putIfAbsent(line.purchaseItemId(),line) != null) {
+                    throw new IllegalArgumentException("A received line can appear only once per return.");
+                }
+            }
+            List<SupplierReturnableLine> returnable = returnablePurchaseLines(purchase.purchaseNumber());
+            java.util.Map<Long,SupplierReturnableLine> byId = new java.util.HashMap<>();
+            for (SupplierReturnableLine line : returnable) byId.put(line.purchaseItemId(),line);
+            for (Long itemId : requested.keySet()) {
+                if (!byId.containsKey(itemId)) {
+                    throw new IllegalArgumentException("A selected line does not belong to this supplier receipt.");
+                }
+            }
+            long total = 0;
+            int units = 0;
+            for (SupplierReturnLineDraft request : requested.values()) {
+                SupplierReturnableLine line = byId.get(request.purchaseItemId());
+                if (request.quantity() > line.returnableQuantity()) {
+                    throw new IllegalArgumentException("Return quantity for " + line.sku()
+                            + " exceeds the remaining returnable quantity of " + line.returnableQuantity() + ".");
+                }
+                if (request.quantity() > line.availableQuantity()) {
+                    throw new IllegalStateException("Cannot return " + line.sku() + ": only "
+                            + line.availableQuantity() + " unreserved unit(s) are available in stock.");
+                }
+                total = Math.addExact(total,Math.multiplyExact((long)request.quantity(),line.unitCostPaise()));
+                units = Math.addExact(units,request.quantity());
+            }
+            String returnNumber = "RET-" + UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(java.util.Locale.ROOT);
+            KeyHolder key = new GeneratedKeyHolder();
+            long returnTotal = total;
+            jdbc.update((PreparedStatementCreator) connection -> {
+                PreparedStatement ps = connection.prepareStatement("""
+                    INSERT INTO supplier_returns(return_number,purchase_id,supplier_id,reason,credit_note_reference,total_paise,status)
+                    VALUES (?,?,?,?,?,?,'POSTED')
+                    """,Statement.RETURN_GENERATED_KEYS);
+                ps.setString(1,returnNumber);
+                ps.setLong(2,purchase.id());
+                ps.setLong(3,supplierId);
+                ps.setString(4,draft.reason());
+                ps.setString(5,draft.creditNoteReference());
+                ps.setLong(6,returnTotal);
+                return ps;
+            },key);
+            Number generated = key.getKey();
+            if (generated == null) throw new IllegalStateException("Database did not return the supplier return ID.");
+            long returnId = generated.longValue();
+            for (SupplierReturnLineDraft request : requested.values()) {
+                SupplierReturnableLine line = byId.get(request.purchaseItemId());
+                int changed = jdbc.update("""
+                    UPDATE inventory SET quantity_on_hand=quantity_on_hand-?
+                    WHERE part_id=? AND quantity_on_hand-? >= reserved_quantity
+                    """,request.quantity(),line.partId(),request.quantity());
+                if (changed != 1) throw new IllegalStateException("Available stock changed for " + line.sku() + "; no return was committed.");
+                long lineTotal = Math.multiplyExact((long)request.quantity(),line.unitCostPaise());
+                jdbc.update("""
+                    INSERT INTO supplier_return_items(supplier_return_id,purchase_item_id,part_id,
+                        sku_snapshot,name_snapshot,quantity,unit_cost_paise,line_total_paise)
+                    VALUES (?,?,?,?,?,?,?,?)
+                    """,returnId,line.purchaseItemId(),line.partId(),line.sku(),line.name(),
+                    request.quantity(),line.unitCostPaise(),lineTotal);
+                jdbc.update("""
+                    INSERT INTO stock_movements(part_id,movement_type,quantity,reference,reason)
+                    VALUES (?,'SUPPLIER_RETURN',?,?,?)
+                    """,line.partId(),-request.quantity(),returnNumber,
+                    "Supplier return against " + purchase.purchaseNumber() + ": " + draft.reason());
+            }
+            PurchaseBalance updated = balance(purchase.purchaseNumber());
+            List<String> supplierNames = jdbc.query("SELECT supplier_name_snapshot FROM purchases WHERE id=?",
+                    (rs,row) -> rs.getString(1),purchase.id());
+            return new SupplierReturnReceipt(returnNumber,purchase.purchaseNumber(),
+                    supplierNames.isEmpty()?"":supplierNames.get(0),draft.reason(),draft.creditNoteReference(),
+                    requested.size(),units,total,updated.outstandingPaise());
+        });
+    }
+
+    public List<SupplierReturnRow> supplierReturns(String rawPurchaseNumber) {
+        String number = cleanPurchaseNumber(rawPurchaseNumber);
+        return jdbc.query("""
+            SELECT r.return_number,p.purchase_number,p.supplier_name_snapshot,r.reason,
+                   COALESCE(r.credit_note_reference,'') AS credit_note_reference,r.created_at,
+                   (SELECT COUNT(*) FROM supplier_return_items i WHERE i.supplier_return_id=r.id) AS line_count,
+                   (SELECT SUM(i.quantity) FROM supplier_return_items i WHERE i.supplier_return_id=r.id) AS units,
+                   r.total_paise
+            FROM supplier_returns r JOIN purchases p ON p.id=r.purchase_id
+            WHERE p.purchase_number=? COLLATE NOCASE
+            ORDER BY r.id DESC LIMIT 200
+            """,(rs,row) -> new SupplierReturnRow(rs.getString("return_number"),rs.getString("purchase_number"),
+                rs.getString("supplier_name_snapshot"),rs.getString("reason"),rs.getString("credit_note_reference"),
+                rs.getString("created_at"),rs.getInt("line_count"),rs.getInt("units"),rs.getLong("total_paise")),number);
+    }
+
     public PurchaseBalance balance(String rawPurchaseNumber) {
         String number = cleanPurchaseNumber(rawPurchaseNumber);
         List<PurchaseBalance> balances = jdbc.query("""
             SELECT p.purchase_number,p.supplier_name_snapshot,p.status,p.subtotal_paise,
-                   COALESCE(SUM(CASE WHEN sp.status='POSTED' THEN sp.amount_paise ELSE 0 END),0) AS paid_paise
+                   COALESCE(SUM(CASE WHEN sp.status='POSTED' THEN sp.amount_paise ELSE 0 END),0) AS paid_paise,
+                   COALESCE((SELECT SUM(sr.total_paise) FROM supplier_returns sr
+                             WHERE sr.purchase_id=p.id AND sr.status='POSTED'),0) AS returned_paise
             FROM purchases p LEFT JOIN supplier_payments sp ON sp.purchase_id=p.id
             WHERE p.purchase_number=? COLLATE NOCASE
             GROUP BY p.id
             """, (rs,row) -> {
-                long total=rs.getLong("subtotal_paise"), paid=rs.getLong("paid_paise");
+                long total=Math.subtractExact(rs.getLong("subtotal_paise"),rs.getLong("returned_paise"));
+                long paid=rs.getLong("paid_paise");
                 return new PurchaseBalance(rs.getString("purchase_number"),rs.getString("supplier_name_snapshot"),
                         rs.getString("status"),total,paid,Math.subtractExact(total,paid));
             }, number);
@@ -594,6 +747,9 @@ public class PurchasingService {
             PurchaseBalance balance = balance(draft.purchaseNumber());
             if (!"RECEIVED".equals(balance.status())) {
                 throw new IllegalStateException("Payments can only be recorded against a RECEIVED purchase.");
+            }
+            if (balance.outstandingPaise() <= 0) {
+                throw new IllegalStateException("No payable balance remains for this receipt. Review supplier credits before recording another payment.");
             }
             if (draft.amountPaise() > balance.outstandingPaise()) {
                 throw new IllegalArgumentException("Payment exceeds outstanding balance of ₹"
