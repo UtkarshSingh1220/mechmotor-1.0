@@ -6,8 +6,6 @@ import com.mechmotor.domain.PurchaseReceipt;
 import com.mechmotor.domain.SupplierDraft;
 import com.mechmotor.config.DatabaseMigrationRunner;
 import org.springframework.boot.DefaultApplicationArguments;
-import com.mechmotor.config.DatabaseMigrationRunner;
-import org.springframework.boot.DefaultApplicationArguments;
 import com.mechmotor.repository.PartRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
