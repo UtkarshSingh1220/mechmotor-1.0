@@ -18,7 +18,13 @@
 - Supplier payment tracking and payable balances (merged): partial payments, outstanding balance, payment audit/void, overpayment protection and receipt-cancellation safeguards.
 
 - **Multi-item sales cart — merged:** up to 100 distinct items, overflow-safe totals, atomic sale snapshots, stock deductions, ledger movements and payment.
-- **Formal purchase orders — implementation branch:** create and search orders before delivery, expected date/notes, reasoned cancellation, and atomic full receipt that creates a linked stock receipt. CI and merge pending; partial receiving and supplier returns/credit notes remain future work.
+- **Formal purchase orders — merged and CI-verified:** create and search orders before delivery, expected date/notes, reasoned cancellation, and atomic full receipt that creates a linked stock receipt. PR #31 merged to `main` at `c2819f52defd9ec730d5c1c1e95d143f099430dd`; Windows Java 21 / Maven `clean verify` passed in [GitHub Actions run #136](https://github.com/UtkarshSingh1220/mechmotor-1.0/actions/runs/38862611660). Partial receiving and supplier returns/credit notes remain future work.
+
+## Post-merge verification record
+- PR #31 (`feat: add formal purchase order lifecycle`) is merged to `main`.
+- Merge commit: `c2819f52defd9ec730d5c1c1e95d143f099430dd`.
+- Post-merge Windows CI: **passed**; run #136 completed successfully using Java 21 and `mvn --batch-mode --no-transfer-progress clean verify`.
+- This verifies the source/test/package pipeline only. It does not prove clean-machine installer behavior, backup/restore recovery, performance, security, or business-owner acceptance.
 
 ## Remaining production-readiness work
 1. **Sales lifecycle:** merged full-sale voids, per-item partial returns/refunds, discount-aware cumulative rounding and atomic stock reversal/return audit. Remaining: end-to-end cashier workflow validation.
