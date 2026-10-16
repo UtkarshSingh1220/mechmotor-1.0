@@ -299,6 +299,24 @@ public final class DatabaseMigrationRunner implements ApplicationRunner {
                 }
             }
         }
+        if (version >= 4) {
+            if (!tableExists(connection, "purchase_orders") || !tableExists(connection, "purchase_order_items")) {
+                throw new IllegalStateException("Database is missing formal purchase order tables.");
+            }
+            for (String column : List.of("id", "order_number", "supplier_id", "supplier_name_snapshot",
+                    "status", "expected_date", "notes", "subtotal_paise", "receipt_purchase_id",
+                    "cancellation_reason", "cancelled_at", "created_at")) {
+                if (!columnExists(connection, "purchase_orders", column)) {
+                    throw new IllegalStateException("Database table 'purchase_orders' is missing required column '" + column + "'.");
+                }
+            }
+            for (String column : List.of("id", "purchase_order_id", "part_id", "sku_snapshot",
+                    "name_snapshot", "quantity", "unit_cost_paise", "line_total_paise")) {
+                if (!columnExists(connection, "purchase_order_items", column)) {
+                    throw new IllegalStateException("Database table 'purchase_order_items' is missing required column '" + column + "'.");
+                }
+            }
+        }
     }
 
     private static boolean tableExists(Connection connection, String table) throws SQLException {
