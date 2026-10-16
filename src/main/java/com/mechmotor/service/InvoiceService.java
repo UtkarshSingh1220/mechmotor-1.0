@@ -74,8 +74,8 @@ public class InvoiceService {
             if (voidDetails != null) {
                 lines.add(new InvoiceLine("Void reason: " + voidDetails.reason(), false, 9));
                 lines.add(new InvoiceLine("Refund recorded: " + money(voidDetails.amountRefundedPaise())
-                        + " via " + safeNullable(voidDetails.refundMethod())
-                        + " | reference: " + safeNullable(voidDetails.refundReference()), false, 9));
+                        + " | original payment method: " + safeNullable(voidDetails.refundMethod())
+                        + " | refund reference: " + safeNullable(voidDetails.refundReference()), false, 9));
             }
         }
         lines.add(new InvoiceLine("", false, 8));

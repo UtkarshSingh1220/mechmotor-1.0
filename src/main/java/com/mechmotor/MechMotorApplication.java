@@ -546,10 +546,13 @@ public class MechMotorApplication extends Application {
         GridPane.setHgrow(savedViewSelector, Priority.ALWAYS);
         GridPane.setHgrow(savedViewsMenu, Priority.ALWAYS);
         for (int i = 0; i < 6; i++) GridPane.setHgrow(filters.getChildren().get(i), Priority.ALWAYS);
-        HBox actions = new HBox(8, addButton, editButton, deactivateButton, sellButton, voidSaleButton, returnsButton, invoiceButton, receiveStockButton, fitmentButton, categoryMenu, supplierMenu, backupButton, restoreButton, csvMenu,
-                new Separator(), previousButton, nextButton, pageLabel);
+        FlowPane actions = new FlowPane(8, 8, addButton, editButton, deactivateButton, sellButton,
+                voidSaleButton, returnsButton, invoiceButton, receiveStockButton, fitmentButton,
+                categoryMenu, supplierMenu, backupButton, restoreButton, csvMenu,
+                previousButton, nextButton, pageLabel);
+        actions.setAlignment(Pos.CENTER_LEFT);
+        actions.setPrefWrapLength(1320);
         actions.setPadding(new Insets(8, 20, 8, 20));
-        HBox.setHgrow(pageLabel, Priority.ALWAYS);
         header.setPadding(new Insets(20)); header.getStyleClass().add("header");
         VBox root = new VBox(0, header, dashboard, filters, actions, table, status);
         VBox.setVgrow(table, Priority.ALWAYS);
