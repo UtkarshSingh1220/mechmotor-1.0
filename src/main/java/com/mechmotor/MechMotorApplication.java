@@ -1235,9 +1235,9 @@ public class MechMotorApplication extends Application {
                         refreshInventory.run();
                         load.run();
                         Alert info = new Alert(Alert.AlertType.INFORMATION,
-                                "Order: " + receipt.orderNumber() + "\\nReceipt: " + receipt.receiptNumber()
-                                        + "\\nLines: " + receipt.lineCount() + "\\nUnits received: " + receipt.units()
-                                        + "\\nTotal: ₹" + rupees(receipt.totalPaise()), ButtonType.OK);
+                                "Order: " + receipt.orderNumber() + "\nReceipt: " + receipt.receiptNumber()
+                                        + "\nLines: " + receipt.lineCount() + "\nUnits received: " + receipt.units()
+                                        + "\nTotal: ₹" + rupees(receipt.totalPaise()), ButtonType.OK);
                         info.setTitle("Purchase order received");
                         info.setHeaderText("Stock receipt posted");
                         info.show();
@@ -1403,10 +1403,10 @@ public class MechMotorApplication extends Application {
                     dialog.close();
                     onCreated.run();
                     Alert info = new Alert(Alert.AlertType.INFORMATION,
-                            "Order: " + created.orderNumber() + "\\nSupplier: " + created.supplierName()
-                                    + "\\nLines: " + created.lineCount() + "\\nUnits: " + created.units()
-                                    + "\\nOrder total: ₹" + rupees(created.totalPaise())
-                                    + "\\nStock has not changed. Receive this order when goods arrive.", ButtonType.OK);
+                            "Order: " + created.orderNumber() + "\nSupplier: " + created.supplierName()
+                                    + "\nLines: " + created.lineCount() + "\nUnits: " + created.units()
+                                    + "\nOrder total: ₹" + rupees(created.totalPaise())
+                                    + "\nStock has not changed. Receive this order when goods arrive.", ButtonType.OK);
                     info.setTitle("Purchase order created");
                     info.setHeaderText("Order recorded");
                     info.show();
