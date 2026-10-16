@@ -525,13 +525,19 @@ public class PurchasingService {
     private FormalPurchaseOrderRow purchaseOrder(String rawOrderNumber) {
         String number = cleanOrderNumber(rawOrderNumber);
         List<FormalPurchaseOrderRow> rows = jdbc.query("""
-            SELECT o.id,o.order_number,o.supplier_name_snapshot,o.status,o.created_at,
+            SELECT o.id,o.order_number,o.supplier_name_snapshot,
+                   CASE WHEN o.status='ORDERED' AND EXISTS (
+                     SELECT 1 FROM purchase_order_items partial_line
+                     WHERE partial_line.purchase_order_id=o.id AND partial_line.received_quantity>0
+                   ) THEN 'PARTIALLY_RECEIVED' ELSE o.status END AS status,o.created_at,
                    COALESCE(o.expected_date,'') AS expected_date,COALESCE(o.notes,'') AS notes,
-                   COALESCE((SELECT group_concat(i.sku_snapshot || ' x' || i.quantity, ', ')
+                   COALESCE((SELECT group_concat(i.sku_snapshot || ' x' || i.quantity || ' (received ' || i.received_quantity || ')', ', ')
                              FROM purchase_order_items i WHERE i.purchase_order_id=o.id),'') AS item_summary,
                    (SELECT COUNT(*) FROM purchase_order_items i WHERE i.purchase_order_id=o.id) AS line_count,
                    COALESCE((SELECT SUM(i.quantity) FROM purchase_order_items i WHERE i.purchase_order_id=o.id),0) AS units,
-                   o.subtotal_paise,COALESCE(p.purchase_number,'') AS receipt_number,
+                   o.subtotal_paise,COALESCE((SELECT group_concat(receipt.purchase_number, ', ')
+                       FROM purchase_order_receipts r JOIN purchases receipt ON receipt.id=r.purchase_id
+                       WHERE r.purchase_order_id=o.id),'') AS receipt_number,
                    COALESCE(o.cancellation_reason,'') AS cancellation_reason
             FROM purchase_orders o
             WHERE o.order_number=? COLLATE NOCASE
