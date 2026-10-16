@@ -41,7 +41,9 @@ Evidence: dataset-generation instructions, benchmark results, JavaFX workflow te
 - [ ] Multi-line supplier receipt posts receipt, item snapshots, cost snapshots, stock changes, and movements atomically.
 - [ ] Receipt cancellation is blocked when stock cannot be reversed safely or supplier payment history exists.
 - [ ] Partial/full supplier payments reject overpayment and duplicate active references; voiding a payment record never claims to reverse the external transfer.
-- [ ] Supplier returns/credit notes and formal purchase-order lifecycle are either implemented and tested or clearly marked unsupported in the UI and documentation.
+- [ ] Formal purchase orders create without changing stock, reject duplicate parts, preserve snapshots, and allow reasoned cancellation only while ORDERED.
+- [ ] Receiving an order creates one linked receipt and updates stock/ledger atomically; duplicate receive and cancelled-order receive are rejected.
+- [ ] Partial purchase-order receipts, supplier returns and credit notes are implemented and tested or clearly marked unsupported in the UI and documentation.
 - [ ] End-to-end tests verify inventory, balances, receipt/sale history, and ledger totals after success, cancellation, return, and injected failure.
 Evidence: scenario matrix, expected-versus-actual totals, database assertions for each transaction boundary.
 
