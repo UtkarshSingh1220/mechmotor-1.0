@@ -6,6 +6,9 @@ import com.mechmotor.domain.CartSaleDraft;
 import com.mechmotor.domain.SaleLineDraft;
 import com.mechmotor.domain.SaleReceipt;
 import com.mechmotor.domain.SaleVoidReceipt;
+import com.mechmotor.domain.SaleReturnDraft;
+import com.mechmotor.domain.SaleReturnable;
+import com.mechmotor.domain.SaleReturnReceipt;
 import com.mechmotor.repository.PartRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -170,6 +173,71 @@ class SalesServiceTest {
         assertEquals(1, parts.findById(partId).quantity());
         assertEquals("POSTED", jdbc.queryForObject("SELECT status FROM sales WHERE id=?", String.class, sale.saleId()));
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM sale_voids", Integer.class));
+    }
+
+
+    @Test
+    void partialReturnsRefundProportionallyAndCannotReturnMoreThanSold() {
+        SaleReceipt sale = sales.checkout(new SaleDraft(partId, 3, 2500, 500,
+                "Walk-in", "CASH", null));
+        SaleReturnable line = sales.returnableSale(sale.saleNumber()).get(0);
+        SaleReturnReceipt first = sales.returnSale(new SaleReturnDraft(sale.saleNumber(), line.saleItemId(),
+                1, "UPI", "REF-1", "Wrong item"));
+        assertEquals(2333L, first.refundPaise());
+        assertEquals(1, parts.findById(partId).quantity());
+
+        SaleReturnable afterFirst = sales.returnableSale(sale.saleNumber()).get(0);
+        SaleReturnReceipt second = sales.returnSale(new SaleReturnDraft(sale.saleNumber(), afterFirst.saleItemId(),
+                2, "CASH", null, "Customer return"));
+        assertEquals(4667L, second.refundPaise());
+        assertEquals(3, parts.findById(partId).quantity());
+        assertEquals(7000L, jdbc.queryForObject("SELECT SUM(refund_paise) FROM sale_returns WHERE sale_id=?",
+                Long.class, sale.saleId()));
+        assertThrows(IllegalArgumentException.class, () -> sales.returnSale(new SaleReturnDraft(
+                sale.saleNumber(), afterFirst.saleItemId(), 1, "CASH", null, null)));
+    }
+
+    @Test
+    void multiItemReturnsAllocateSaleDiscountAndRefundExactNetLineTotals() {
+        var sale = sales.checkout(new com.mechmotor.domain.CartSaleDraft(List.of(
+                new com.mechmotor.domain.SaleLineDraft(partId, 2, 2500),
+                new com.mechmotor.domain.SaleLineDraft(secondPartId, 3, 1200)),
+                400, "Walk-in", "CASH", null));
+        List<SaleReturnable> lines = sales.returnableSale(sale.saleNumber());
+        SaleReturnable brake = lines.stream().filter(line -> line.partId() == partId).findFirst().orElseThrow();
+        SaleReturnable filter = lines.stream().filter(line -> line.partId() == secondPartId).findFirst().orElseThrow();
+        assertEquals(4768L, brake.lineNetTotalPaise());
+        assertEquals(3432L, filter.lineNetTotalPaise());
+
+        assertEquals(2384L, sales.returnSale(new SaleReturnDraft(sale.saleNumber(), brake.saleItemId(),
+                1, "CASH", null, null)).refundPaise());
+        SaleReturnable brakeAfterOne = sales.returnableSale(sale.saleNumber()).stream()
+                .filter(line -> line.partId() == partId).findFirst().orElseThrow();
+        assertEquals(2384L, sales.returnSale(new SaleReturnDraft(sale.saleNumber(), brakeAfterOne.saleItemId(),
+                1, "CASH", null, null)).refundPaise());
+        SaleReturnable filterCurrent = sales.returnableSale(sale.saleNumber()).stream()
+                .filter(line -> line.partId() == secondPartId).findFirst().orElseThrow();
+        assertEquals(3432L, sales.returnSale(new SaleReturnDraft(sale.saleNumber(), filterCurrent.saleItemId(),
+                3, "UPI", "REF-ALL", null)).refundPaise());
+        assertEquals(8200L, jdbc.queryForObject("SELECT SUM(refund_paise) FROM sale_returns WHERE sale_id=?",
+                Long.class, sale.saleId()));
+        assertEquals(3, parts.findById(partId).quantity());
+        assertEquals(4, parts.findById(secondPartId).quantity());
+    }
+
+    @Test
+    void returnLedgerFailureRollsBackReturnAndStock() {
+        SaleReceipt sale = sales.checkout(new SaleDraft(partId, 2, 2500, 0, null, "CASH", null));
+        SaleReturnable line = sales.returnableSale(sale.saleNumber()).get(0);
+        jdbc.execute("""
+            CREATE TRIGGER fail_return_ledger BEFORE INSERT ON stock_movements
+            WHEN NEW.movement_type='RETURN'
+            BEGIN SELECT RAISE(ABORT, 'simulated return ledger failure'); END
+            """);
+        assertThrows(org.springframework.dao.DataAccessException.class, () -> sales.returnSale(
+                new SaleReturnDraft(sale.saleNumber(), line.saleItemId(), 1, "CASH", null, "rollback")));
+        assertEquals(1, parts.findById(partId).quantity());
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM sale_returns", Integer.class));
     }
 
     @Test

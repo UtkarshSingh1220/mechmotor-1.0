@@ -8,6 +8,9 @@ import com.mechmotor.domain.SaleLineDraft;
 import com.mechmotor.domain.SaleLineReceipt;
 import com.mechmotor.domain.SaleReceipt;
 import com.mechmotor.domain.SaleVoidReceipt;
+import com.mechmotor.domain.SaleReturnDraft;
+import com.mechmotor.domain.SaleReturnable;
+import com.mechmotor.domain.SaleReturnReceipt;
 import com.mechmotor.repository.PartRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.PreparedStatementCreator;
@@ -23,6 +26,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.math.BigInteger;
 import java.util.UUID;
 
 /** Posts sales atomically, including multi-item carts, stock deduction, ledger movements and payment. */
@@ -85,6 +89,11 @@ public class SalesService {
                 refundMethod = methods.get(0);
             }
 
+            Integer priorReturns = jdbc.queryForObject("SELECT COUNT(*) FROM sale_returns WHERE sale_id=?", Integer.class, sale.id());
+            if (priorReturns != null && priorReturns > 0) {
+                throw new IllegalStateException("This sale already has returned items. Use the returns workflow for remaining items.");
+            }
+
             int marked = jdbc.update("UPDATE sales SET status='VOIDED' WHERE id=? AND status='POSTED'", sale.id());
             if (marked != 1) throw new IllegalStateException("Sale status changed. Reload and try again.");
 
@@ -116,6 +125,125 @@ public class SalesService {
     private record SaleLine(long partId, int quantity) { }
 
     /** Backward-compatible single-item checkout entry point. */
+
+    public List<SaleReturnable> returnableSale(String rawSaleNumber) {
+        return loadReturnableSale(normalizeSaleNumber(rawSaleNumber));
+    }
+
+    public SaleReturnReceipt returnSale(SaleReturnDraft draft) {
+        return transactions.execute(status -> {
+            List<SaleReturnable> lines = loadReturnableSale(normalizeSaleNumber(draft.saleNumber()));
+            SaleReturnable line = lines.stream()
+                    .filter(candidate -> candidate.saleItemId() == draft.saleItemId())
+                    .findFirst().orElseThrow(() -> new IllegalArgumentException("Choose a line from this sale."));
+            if (draft.quantity() > line.remainingQuantity()) {
+                throw new IllegalArgumentException("Only " + line.remainingQuantity() + " unit(s) remain eligible for this item.");
+            }
+            int cumulativeQuantity = Math.addExact(line.returnedQuantity(), draft.quantity());
+            long targetRefund = BigInteger.valueOf(line.lineNetTotalPaise())
+                    .multiply(BigInteger.valueOf(cumulativeQuantity))
+                    .divide(BigInteger.valueOf(line.soldQuantity())).longValueExact();
+            long refundAmount = Math.subtractExact(targetRefund, line.refundedPaise());
+            if (refundAmount < 0 || refundAmount > line.remainingRefundPaise()) {
+                throw new IllegalStateException("Calculated refund exceeds the remaining refundable amount.");
+            }
+
+            String returnNumber = "RET-" + LocalDate.now(clock).toString().replace("-", "")
+                    + "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(java.util.Locale.ROOT);
+            jdbc.update("""
+                INSERT INTO sale_returns(return_number,sale_id,sale_item_id,quantity,refund_paise,refund_method,refund_reference,reason)
+                VALUES (?,?,?,?,?,?,?,?)
+                """, returnNumber, line.saleId(), line.saleItemId(), draft.quantity(), refundAmount,
+                    draft.refundMethod(), draft.refundReference(), draft.reason());
+
+            int changed = jdbc.update("""
+                INSERT INTO inventory(part_id,quantity_on_hand,reorder_level) VALUES (?,?,0)
+                ON CONFLICT(part_id) DO UPDATE
+                  SET quantity_on_hand=inventory.quantity_on_hand+excluded.quantity_on_hand
+                  WHERE inventory.quantity_on_hand <= ?
+                """, line.partId(), draft.quantity(), Integer.MAX_VALUE - draft.quantity());
+            if (changed != 1) throw new IllegalStateException("Inventory quantity limit exceeded; no return was posted.");
+            jdbc.update("""
+                INSERT INTO stock_movements(part_id,movement_type,quantity,reference,reason)
+                VALUES (?,'RETURN',?,?,?)
+                """, line.partId(), draft.quantity(), returnNumber, "Customer return for " + line.saleNumber());
+
+            return new SaleReturnReceipt(returnNumber, line.saleNumber(), line.sku(), line.partName(),
+                    draft.quantity(), refundAmount, draft.refundMethod());
+        });
+    }
+
+    private List<SaleReturnable> loadReturnableSale(String saleNumber) {
+        List<RawReturnLine> rawLines = jdbc.query("""
+            SELECT s.id AS sale_id,s.sale_number,s.customer_name,s.subtotal_paise,s.discount_paise,
+                   si.id AS sale_item_id,si.part_id,si.sku_snapshot,si.name_snapshot,
+                   si.quantity AS sold_quantity,si.line_total_paise,
+                   COALESCE(r.returned_quantity,0) AS returned_quantity,
+                   COALESCE(r.refunded_paise,0) AS refunded_paise
+            FROM sales s JOIN sale_items si ON si.sale_id=s.id
+            LEFT JOIN (
+                SELECT sale_item_id,SUM(quantity) AS returned_quantity,SUM(refund_paise) AS refunded_paise
+                FROM sale_returns GROUP BY sale_item_id
+            ) r ON r.sale_item_id=si.id
+            WHERE s.sale_number=? COLLATE NOCASE AND s.status='POSTED'
+            ORDER BY si.id
+            """, (rs, row) -> new RawReturnLine(
+                rs.getLong("sale_id"), rs.getString("sale_number"), rs.getString("customer_name"),
+                rs.getLong("subtotal_paise"), rs.getLong("discount_paise"), rs.getLong("sale_item_id"),
+                rs.getLong("part_id"), rs.getString("sku_snapshot"), rs.getString("name_snapshot"),
+                rs.getInt("sold_quantity"), rs.getLong("line_total_paise"),
+                rs.getInt("returned_quantity"), rs.getLong("refunded_paise")), saleNumber);
+        if (rawLines.isEmpty()) throw new IllegalArgumentException("No posted sale found with that sale number.");
+
+        long[] discountAllocations = new long[rawLines.size()];
+        long allocatedDiscount = 0;
+        for (int i = 0; i < rawLines.size(); i++) {
+            RawReturnLine raw = rawLines.get(i);
+            long allocation = raw.subtotalPaise() == 0 ? 0
+                    : BigInteger.valueOf(raw.discountPaise())
+                        .multiply(BigInteger.valueOf(raw.lineTotalPaise()))
+                        .divide(BigInteger.valueOf(raw.subtotalPaise())).longValueExact();
+            discountAllocations[i] = allocation;
+            allocatedDiscount = Math.addExact(allocatedDiscount, allocation);
+        }
+        long remainder = rawLines.get(0).discountPaise() - allocatedDiscount;
+        for (int i = rawLines.size() - 1; i >= 0 && remainder > 0; i--) {
+            if (rawLines.get(i).lineTotalPaise() > 0) {
+                discountAllocations[i] = Math.addExact(discountAllocations[i], remainder);
+                remainder = 0;
+            }
+        }
+        if (remainder != 0) throw new IllegalStateException("Could not allocate sale discount to returnable lines.");
+
+        List<SaleReturnable> result = new ArrayList<>(rawLines.size());
+        for (int i = 0; i < rawLines.size(); i++) {
+            RawReturnLine raw = rawLines.get(i);
+            long lineNet = raw.lineTotalPaise() - discountAllocations[i];
+            if (lineNet < 0) throw new IllegalStateException("Sale discount allocation is invalid for " + raw.sku() + ".");
+            if (raw.returnedQuantity() > raw.soldQuantity()) {
+                throw new IllegalStateException("Return history exceeds the original sold quantity for " + raw.sku() + ".");
+            }
+            int remaining = raw.soldQuantity() - raw.returnedQuantity();
+            result.add(new SaleReturnable(raw.saleId(), raw.saleNumber(), raw.customerName(),
+                    raw.saleItemId(), raw.partId(), raw.sku(), raw.partName(), raw.soldQuantity(),
+                    raw.returnedQuantity(), remaining, lineNet, raw.refundedPaise(),
+                    Math.max(0, lineNet - raw.refundedPaise())));
+        }
+        return List.copyOf(result);
+    }
+
+    private static String normalizeSaleNumber(String raw) {
+        if (raw == null || raw.isBlank()) throw new IllegalArgumentException("Enter a sale number.");
+        String value = raw.strip().toUpperCase(java.util.Locale.ROOT);
+        if (value.length() > 64) throw new IllegalArgumentException("Sale number is too long.");
+        return value;
+    }
+
+    private record RawReturnLine(long saleId, String saleNumber, String customerName,
+                                 long subtotalPaise, long discountPaise, long saleItemId, long partId,
+                                 String sku, String partName, int soldQuantity, long lineTotalPaise,
+                                 int returnedQuantity, long refundedPaise) { }
+
     public SaleReceipt checkout(SaleDraft draft) {
         CartSaleReceipt receipt = checkout(new CartSaleDraft(
                 List.of(new SaleLineDraft(draft.partId(), draft.quantity(), draft.unitPricePaise())),

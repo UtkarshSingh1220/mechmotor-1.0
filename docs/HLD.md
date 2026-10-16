@@ -32,3 +32,6 @@ Measure local search latency on representative hardware and data; initial target
 
 ## Sale voids and returns
 Sale voids are audited transactions: sale status, stock restoration, reversal ledger entries and refund metadata commit together. Actual money movement remains external and must be reconciled by the shop. Partial returns are separately recorded against original sales and should not be confused with a full sale void.
+
+
+Partial returns are tracked per sale item. Sale-level discounts are allocated proportionally across lines with deterministic paise rounding; full returns across all lines refund exactly the original net sale total. Return inventory, refund audit and stock-ledger entries commit atomically. Full-sale voids are blocked once any partial return exists.

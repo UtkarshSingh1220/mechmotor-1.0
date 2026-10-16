@@ -25,11 +25,15 @@ Use the **CSV** menu to export the currently applied inventory filters or import
 
 ## Sales checkout
 
-Select an inventory row and choose **Sell selected**. Checkout supports quantity, unit price, discount, optional customer/payment reference, and CASH/UPI/CARD/BANK_TRANSFER. The sale header, item snapshot, payment, stock decrement and stock-ledger movement commit atomically. Insufficient stock or a failed write prevents the sale from being posted. Checkout supports up to 100 distinct cart lines and full payment only. Sale voids restore stock and record a refund audit; actual payment refunds must be processed separately. Partial returns/refunds and PDF invoices are still being developed.
+Select an inventory row and choose **Sell selected**. Checkout supports quantity, unit price, discount, optional customer/payment reference, and CASH/UPI/CARD/BANK_TRANSFER. The sale header, item snapshot, payment, stock decrement and stock-ledger movement commit atomically. Insufficient stock or a failed write prevents the sale from being posted. Checkout supports up to 100 distinct cart lines and full payment only. Sale voids restore stock and record a refund audit; actual payment refunds must be processed separately. Partial returns/refunds are supported; PDF invoices are still being developed.
 
 ## Sale voids and refund recording
 
 Use **Void sale / refund…** to enter the original sale number, a required reason and an optional refund reference. The app restores sold stock, writes reversal movements and records the refund audit atomically. It prevents a sale from being voided twice. **It does not transfer money** through a bank, UPI app or card terminal; process the actual refund separately and record its reference.
+
+## Sales returns and refunds
+
+Use **Returns / refunds** and enter the original sale number. Select the item line, enter the quantity, refund method, and optional transaction reference/reason. MechMotor records the return, restores stock, and appends a `RETURN` ledger movement in one transaction. It allocates sale-level discounts proportionally across cart lines and uses cumulative integer rounding so returning every unit refunds exactly the original net sale total. Refunds are recorded for manual settlement; no money is sent automatically to a bank, UPI app or card terminal.
 
 ## Purchase receiving
 

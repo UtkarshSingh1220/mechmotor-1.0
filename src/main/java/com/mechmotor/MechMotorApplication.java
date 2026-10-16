@@ -113,6 +113,7 @@ public class MechMotorApplication extends Application {
         Button deactivateButton = new Button("Deactivate");
         Button sellButton = new Button("Sell selected");
         Button voidSaleButton = new Button("Void sale / refund…");
+        Button returnsButton = new Button("Returns / refunds");
         Button receiveStockButton = new Button("Receive stock");
         Button fitmentButton = new Button("Vehicle fitment");
         MenuItem addCategoryItem = new MenuItem("Add root / subcategory…");
@@ -366,6 +367,15 @@ public class MechMotorApplication extends Application {
             showVoidSaleDialog(stage, status, loadPage);
         });
 
+
+        returnsButton.setOnAction(e -> {
+            if (!licenseService.status().features().contains("SALES")) {
+                showError("Feature not licensed", new IllegalArgumentException("Your activation key does not include SALES."));
+                return;
+            }
+            showReturnsDialog(stage, status, loadPage);
+        });
+
         receiveStockButton.setOnAction(e -> {
             if (!licenseService.status().features().contains("PURCHASING")) {
                 showError("Feature not licensed", new IllegalArgumentException("Your activation key does not include PURCHASING."));
@@ -499,7 +509,7 @@ public class MechMotorApplication extends Application {
         GridPane.setHgrow(savedViewSelector, Priority.ALWAYS);
         GridPane.setHgrow(savedViewsMenu, Priority.ALWAYS);
         for (int i = 0; i < 6; i++) GridPane.setHgrow(filters.getChildren().get(i), Priority.ALWAYS);
-        HBox actions = new HBox(8, addButton, editButton, deactivateButton, sellButton, voidSaleButton, receiveStockButton, fitmentButton, categoryMenu, supplierMenu, backupButton, restoreButton, csvMenu,
+        HBox actions = new HBox(8, addButton, editButton, deactivateButton, sellButton, voidSaleButton, returnsButton, receiveStockButton, fitmentButton, categoryMenu, supplierMenu, backupButton, restoreButton, csvMenu,
                 new Separator(), previousButton, nextButton, pageLabel);
         actions.setPadding(new Insets(8, 20, 8, 20));
         HBox.setHgrow(pageLabel, Priority.ALWAYS);
@@ -527,6 +537,151 @@ public class MechMotorApplication extends Application {
             refreshSavedViews(savedViewSelector, status, null);
             loadPage.run();
         }, error -> { status.setText("Could not load categories and suppliers."); showError("Database initialization failed", error); });
+    }
+
+
+    private void showReturnsDialog(Stage owner, Label status, Runnable refreshInventory) {
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.initOwner(owner);
+        dialog.setTitle("Sales returns and refunds");
+        dialog.setHeaderText("Find a posted sale, select an item line, then return eligible quantity.");
+        ButtonType processType = new ButtonType("Process return / refund", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(processType, ButtonType.CANCEL);
+
+        TextField saleNumber = new TextField();
+        saleNumber.setPromptText("MM-YYYYMMDD-XXXXXXXX");
+        Button findSale = new Button("Find sale");
+        ComboBox<SaleReturnable> linePicker = new ComboBox<>();
+        linePicker.setPromptText("Select item from sale");
+        linePicker.setMaxWidth(Double.MAX_VALUE);
+        linePicker.setCellFactory(view -> new ListCell<>() {
+            @Override protected void updateItem(SaleReturnable item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? null : item.sku() + " — " + item.partName()
+                        + " • remaining " + item.remainingQuantity());
+            }
+        });
+        linePicker.setButtonCell(new ListCell<>() {
+            @Override protected void updateItem(SaleReturnable item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? null : item.sku() + " — " + item.partName()
+                        + " • remaining " + item.remainingQuantity());
+            }
+        });
+        Label saleSummary = new Label("Enter the sale number shown on the original receipt.");
+        saleSummary.setWrapText(true);
+        TextField quantity = new TextField("1");
+        ComboBox<String> refundMethod = new ComboBox<>(FXCollections.observableArrayList("CASH", "UPI", "CARD", "BANK_TRANSFER"));
+        refundMethod.setValue("CASH");
+        refundMethod.setMaxWidth(Double.MAX_VALUE);
+        TextField refundReference = new TextField();
+        refundReference.setPromptText("Optional refund transaction reference");
+        TextField reason = new TextField();
+        reason.setPromptText("Optional reason");
+        GridPane form = new GridPane();
+        form.setHgap(10); form.setVgap(9); form.setPadding(new Insets(12));
+        form.add(new Label("Sale number *"), 0, 0); form.add(saleNumber, 1, 0); form.add(findSale, 2, 0);
+        form.add(new Label("Sale item *"), 0, 1); form.add(linePicker, 1, 1, 2, 1);
+        form.add(new Label("Sale details"), 0, 2); form.add(saleSummary, 1, 2, 2, 1);
+        form.add(new Label("Quantity *"), 0, 3); form.add(quantity, 1, 3, 2, 1);
+        form.add(new Label("Refund method *"), 0, 4); form.add(refundMethod, 1, 4, 2, 1);
+        form.add(new Label("Refund reference"), 0, 5); form.add(refundReference, 1, 5, 2, 1);
+        form.add(new Label("Reason"), 0, 6); form.add(reason, 1, 6, 2, 1);
+        GridPane.setHgrow(saleNumber, Priority.ALWAYS);
+        GridPane.setHgrow(linePicker, Priority.ALWAYS);
+        GridPane.setHgrow(saleSummary, Priority.ALWAYS);
+        GridPane.setHgrow(refundMethod, Priority.ALWAYS);
+        dialog.getDialogPane().setContent(form);
+        dialog.getDialogPane().setPrefWidth(700);
+        Button process = (Button) dialog.getDialogPane().lookupButton(processType);
+        process.setDisable(true);
+
+        linePicker.valueProperty().addListener((obs, oldValue, selected) -> {
+            process.setDisable(selected == null || selected.remainingQuantity() <= 0);
+            if (selected == null) {
+                saleSummary.setText("Choose an item line from the sale.");
+            } else {
+                saleSummary.setText("Customer: " + (selected.customerName() == null ? "Walk-in" : selected.customerName())
+                        + " | Sold: " + selected.soldQuantity()
+                        + " | Returned: " + selected.returnedQuantity()
+                        + " | Remaining: " + selected.remainingQuantity()
+                        + " | Refundable for this line: ₹" + rupees(selected.remainingRefundPaise()));
+            }
+        });
+        saleNumber.textProperty().addListener((obs, oldValue, newValue) -> {
+            linePicker.getItems().clear();
+            linePicker.setValue(null);
+            process.setDisable(true);
+            saleSummary.setText("Sale number changed. Find the sale again.");
+        });
+        findSale.setOnAction(e -> {
+            String number = saleNumber.getText() == null ? "" : saleNumber.getText().strip();
+            if (number.isBlank()) {
+                showError("Sale number required", new IllegalArgumentException("Enter the sale number from the original receipt."));
+                return;
+            }
+            findSale.setDisable(true);
+            runBackground(() -> salesService.returnableSale(number), found -> {
+                findSale.setDisable(false);
+                linePicker.getItems().setAll(found);
+                SaleReturnable eligible = found.stream().filter(line -> line.remainingQuantity() > 0).findFirst()
+                        .orElse(found.get(0));
+                linePicker.setValue(eligible);
+            }, error -> {
+                findSale.setDisable(false);
+                showError("Could not find sale", error);
+            });
+        });
+        process.addEventFilter(ActionEvent.ACTION, event -> {
+            event.consume();
+            SaleReturnable selected = linePicker.getValue();
+            if (selected == null || !selected.saleNumber().equalsIgnoreCase(saleNumber.getText().strip())) {
+                showError("Find the sale first", new IllegalArgumentException("Load sale details and select a sale item first."));
+                return;
+            }
+            try {
+                SaleReturnDraft draft = new SaleReturnDraft(selected.saleNumber(), selected.saleItemId(),
+                        parseRequiredInteger(quantity.getText(), "Return quantity"),
+                        refundMethod.getValue(), refundReference.getText(), reason.getText());
+                if (draft.quantity() > selected.remainingQuantity()) {
+                    throw new IllegalArgumentException("Only " + selected.remainingQuantity() + " unit(s) remain eligible for this item.");
+                }
+                Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
+                        "Return " + draft.quantity() + " x " + selected.sku() + " (" + selected.partName()
+                                + ")? Refund amount is calculated from the original sale discount and previous returns. "
+                                + "This records a refund but does not transfer money through a payment provider.",
+                        ButtonType.CANCEL, ButtonType.OK);
+                confirm.initOwner(dialog.getDialogPane().getScene().getWindow());
+                confirm.setTitle("Confirm return / refund");
+                confirm.setHeaderText("Post inventory return and refund");
+                if (confirm.showAndWait().filter(ButtonType.OK::equals).isEmpty()) return;
+                process.setDisable(true);
+                findSale.setDisable(true);
+                runBackground(() -> salesService.returnSale(draft), receipt -> {
+                    dialog.close();
+                    status.setText("Return posted: " + receipt.returnNumber() + " • refund ₹" + rupees(receipt.refundPaise()));
+                    refreshInventory.run();
+                    Alert info = new Alert(Alert.AlertType.INFORMATION,
+                            "Return receipt: " + receipt.returnNumber()
+                                    + "\nSale: " + receipt.saleNumber()
+                                    + "\nPart: " + receipt.sku() + " — " + receipt.partName()
+                                    + "\nQuantity: " + receipt.quantity()
+                                    + "\nRefund recorded: ₹" + rupees(receipt.refundPaise())
+                                    + "\nMethod: " + receipt.refundMethod()
+                                    + "\n\nProcess the actual refund separately and retain its reference.", ButtonType.OK);
+                    info.setTitle("Return completed");
+                    info.setHeaderText("Return and refund recorded");
+                    info.show();
+                }, error -> {
+                    process.setDisable(false);
+                    findSale.setDisable(false);
+                    showError("Could not process return", error);
+                });
+            } catch (IllegalArgumentException ex) {
+                showError("Check return details", ex);
+            }
+        });
+        dialog.showAndWait();
     }
 
     private void showPurchaseDialog(Stage owner, Part part, LookupOption defaultSupplier,
