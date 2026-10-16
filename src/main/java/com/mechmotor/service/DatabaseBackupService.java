@@ -124,19 +124,7 @@ public class DatabaseBackupService {
         }
     }
 
-    private static void applyAdditiveSchema(Path candidate) throws Exception {
-        try (Connection connection = DriverManager.getConnection("jdbc:sqlite:" + candidate.toAbsolutePath().normalize())) {
-            ScriptUtils.executeSqlScript(connection, new ClassPathResource("schema.sql"));
-        }
-    }
-
     private static void verifyDatabase(Path candidate) throws Exception {
-        verifyDatabase(candidate, true);
-    }
-
-    private static void verifyDatabase(Path candidate, boolean requireCurrentSchema) throws Exception {
-        Map<String, Set<String>> requiredColumns = new HashMap<>(REQUIRED_COLUMNS);
-        if (!requireCurrentSchema) requiredColumns.remove("part_fitments");
         verifyDatabase(candidate, true);
     }
 
@@ -151,8 +139,7 @@ public class DatabaseBackupService {
                 }
             }
             Set<String> tables = new HashSet<>();
-            try (ResultSet result = statement.executeQuery(
-                    "SELECT name FROM sqlite_master WHERE type='table'")) {
+            try (ResultSet result = statement.executeQuery("SELECT name FROM sqlite_master WHERE type='table'")) {
                 while (result.next()) tables.add(result.getString(1));
             }
             if (!tables.containsAll(requiredColumns.keySet())) {
