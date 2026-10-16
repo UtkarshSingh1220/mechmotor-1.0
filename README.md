@@ -25,7 +25,7 @@ Use the **CSV** menu to export the currently applied inventory filters or import
 
 ## Sales checkout
 
-Select an inventory row and choose **Sell selected**. Checkout supports quantity, unit price, discount, optional customer/payment reference, and CASH/UPI/CARD/BANK_TRANSFER. The sale header, item snapshot, payment, stock decrement and stock-ledger movement commit atomically. Insufficient stock or a failed write prevents the sale from being posted. The current version supports one item per sale and full payment only; voids/refunds and PDF invoices are not yet implemented.
+Select an inventory row and choose **Sell selected**. Checkout supports quantity, unit price, discount, optional customer/payment reference, and CASH/UPI/CARD/BANK_TRANSFER. The sale header, item snapshot, payment, stock decrement and stock-ledger movement commit atomically. Insufficient stock or a failed write prevents the sale from being posted. Checkout supports up to 100 distinct cart lines and full payment only. Sale voids restore stock and record a refund audit; actual payment refunds must be processed separately. Partial returns/refunds and PDF invoices are still being developed.
 
 ## Sale voids and refund recording
 

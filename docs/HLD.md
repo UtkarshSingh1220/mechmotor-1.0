@@ -28,3 +28,7 @@ The inventory workspace trims and normalizes whitespace and performs case-insens
 
 ## Non-functional targets
 Measure local search latency on representative hardware and data; initial target for common queries is 100–200 ms. Bound background work, paginate results, keep blocking work off the JavaFX thread, and test packaged startup on a clean Windows machine.
+
+
+## Sale voids and returns
+Sale voids are audited transactions: sale status, stock restoration, reversal ledger entries and refund metadata commit together. Actual money movement remains external and must be reconciled by the shop. Partial returns are separately recorded against original sales and should not be confused with a full sale void.
