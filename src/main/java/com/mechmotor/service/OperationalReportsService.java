@@ -110,10 +110,12 @@ public class OperationalReportsService {
 
     private long writeSupplierPayables(BufferedWriter writer, LocalDate from, LocalDate through) throws IOException {
         row(writer, "Purchase number", "Purchase date", "Supplier", "Purchase status",
-                "Purchase total INR", "Posted payments INR", "Outstanding balance INR");
+                "Purchase total INR", "Supplier credits INR", "Posted payments INR", "Outstanding balance INR");
         List<String[]> rows = jdbc.query("""
             SELECT p.purchase_number,p.created_at,p.supplier_name_snapshot,p.status,
-                   CASE WHEN p.status='RECEIVED' THEN p.subtotal_paise ELSE 0 END AS payable_paise,
+                   CASE WHEN p.status='RECEIVED' THEN p.subtotal_paise-COALESCE((SELECT SUM(sr.total_paise) FROM supplier_returns sr
+                     WHERE sr.purchase_id=p.id AND sr.status='POSTED'),0) ELSE 0 END AS payable_paise,
+                   COALESCE((SELECT SUM(sr.total_paise) FROM supplier_returns sr WHERE sr.purchase_id=p.id AND sr.status='POSTED'),0) AS returned_paise,
                    COALESCE((SELECT SUM(sp.amount_paise) FROM supplier_payments sp
                              WHERE sp.purchase_id=p.id AND sp.status='POSTED'),0) AS paid_paise
             FROM purchases p
@@ -122,10 +124,11 @@ public class OperationalReportsService {
             """, (rs, n) -> {
                 long payable = rs.getLong("payable_paise");
                 long paid = rs.getLong("paid_paise");
+                long returned = rs.getLong("returned_paise");
                 return new String[]{
                     rs.getString("purchase_number"), rs.getString("created_at"),
                     rs.getString("supplier_name_snapshot"), rs.getString("status"),
-                    rupees(payable), rupees(paid), rupees(Math.subtractExact(payable, paid))
+                    rupees(payable + returned), rupees(returned), rupees(paid), rupees(Math.subtractExact(payable, paid))
                 };
             }, from.toString(), through.toString());
         for (String[] values : rows) row(writer, values);
