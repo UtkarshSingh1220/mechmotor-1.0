@@ -15,14 +15,14 @@
 
 ## Current milestone
 - Purchase history, guarded receipt cancellation and atomic multi-item receiving (merged).
-- **Supplier payment tracking (in progress on `feat/supplier-payment-tracking`):** V3 schema migration, partial payments, outstanding balance, payment audit/void and protection against overpayment or cancelling receipts with payment history.
+- Supplier payment tracking and payable balances (merged): partial payments, outstanding balance, payment audit/void, overpayment protection and receipt-cancellation safeguards.
 
 - **Multi-item sales cart — merged:** up to 100 distinct items, overflow-safe totals, atomic sale snapshots, stock deductions, ledger movements and payment.
 
 ## Remaining production-readiness work
 1. **Sales lifecycle:** merged full-sale voids, per-item partial returns/refunds, discount-aware cumulative rounding and atomic stock reversal/return audit. Remaining: end-to-end cashier workflow validation.
 2. **Purchasing lifecycle:** multi-item receipts and supplier payment tracking are implemented. Remaining: formal purchase orders, supplier returns, supplier credit notes and end-to-end payable reconciliation.
-3. **Invoices and reports:** merged printable PDF sales invoices generated from immutable snapshots. Remaining: operational reports, shop profile/tax settings and invoice template review.
+3. **Invoices and reports:** merged printable PDF sales invoices generated from immutable snapshots. Operational CSV exports for sales, supplier receipts and stock movements are implemented. Remaining: reconciliation-focused report review, shop profile/tax settings and invoice template review.
 4. **Windows distribution:** validated JavaFX runtime layout, jpackage EXE installer, clean-machine install/launch/upgrade/uninstall testing, preserving user data.
 5. **Release quality:** representative-catalog performance tests, accessibility and UI workflow tests, dependency/license/vulnerability scans, backup/restore drills and documented recovery procedures.
 6. **Operational readiness:** support diagnostics, structured local logs, safe application shutdown, data retention/export policies and a signed release process.
