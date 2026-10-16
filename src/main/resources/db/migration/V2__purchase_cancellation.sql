@@ -1,6 +1,6 @@
 ALTER TABLE purchase_items
-    ADD COLUMN previous_purchase_price_paise INTEGER NOT NULL DEFAULT 0
-    CHECK(previous_purchase_price_paise >= 0);
+    ADD COLUMN previous_purchase_price_paise INTEGER
+    CHECK(previous_purchase_price_paise IS NULL OR previous_purchase_price_paise >= 0);
 
 CREATE TABLE IF NOT EXISTS purchase_cancellations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

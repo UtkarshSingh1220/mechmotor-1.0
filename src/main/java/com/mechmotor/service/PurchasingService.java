@@ -98,9 +98,12 @@ public class PurchasingService {
             List<PurchaseLine> lines = jdbc.query("""
                 SELECT part_id,sku_snapshot,quantity,unit_cost_paise,previous_purchase_price_paise
                 FROM purchase_items WHERE purchase_id=? ORDER BY id
-                """, (rs,row) -> new PurchaseLine(rs.getLong("part_id"),rs.getString("sku_snapshot"),
-                    rs.getInt("quantity"),rs.getLong("unit_cost_paise"),rs.getLong("previous_purchase_price_paise")),
-                    purchase.id());
+                """, (rs,row) -> {
+                    long previousCost = rs.getLong("previous_purchase_price_paise");
+                    Long previousPurchaseCost = rs.wasNull() ? null : previousCost;
+                    return new PurchaseLine(rs.getLong("part_id"),rs.getString("sku_snapshot"),
+                            rs.getInt("quantity"),rs.getLong("unit_cost_paise"),previousPurchaseCost);
+                }, purchase.id());
             if (lines.isEmpty()) throw new IllegalStateException("Purchase receipt has no item lines; no changes were made.");
 
             for (PurchaseLine line : lines) {
@@ -126,18 +129,20 @@ public class PurchasingService {
                     VALUES (?,'REVERSAL',?,?,?)
                     """,line.partId(),-line.quantity(),purchase.purchaseNumber(),"Purchase cancellation: "+reason);
 
-                // Restore the prior cost only when this receipt still owns the latest
-                // active received cost; never overwrite a later receipt or manual edit.
-                jdbc.update("""
-                    UPDATE parts SET purchase_price_paise=?,updated_at=CURRENT_TIMESTAMP
-                    WHERE id=? AND purchase_price_paise=?
-                      AND NOT EXISTS (
-                        SELECT 1 FROM purchase_items later_item
-                        JOIN purchases later_purchase ON later_purchase.id=later_item.purchase_id
-                        WHERE later_item.part_id=? AND later_purchase.status='RECEIVED'
-                          AND later_purchase.id>?
-                      )
-                    """,line.previousPurchasePricePaise(),line.partId(),line.unitCostPaise(),line.partId(),purchase.id());
+                // Old receipts have no reliable prior-cost snapshot. Never guess a cost
+                // for those rows; only restore cost when this receipt recorded it.
+                if (line.previousPurchasePricePaise() != null) {
+                    jdbc.update("""
+                        UPDATE parts SET purchase_price_paise=?,updated_at=CURRENT_TIMESTAMP
+                        WHERE id=? AND purchase_price_paise=?
+                          AND NOT EXISTS (
+                            SELECT 1 FROM purchase_items later_item
+                            JOIN purchases later_purchase ON later_purchase.id=later_item.purchase_id
+                            WHERE later_item.part_id=? AND later_purchase.status='RECEIVED'
+                              AND later_purchase.id>?
+                          )
+                        """,line.previousPurchasePricePaise(),line.partId(),line.unitCostPaise(),line.partId(),purchase.id());
+                }
             }
             long total = jdbc.queryForObject("SELECT subtotal_paise FROM purchases WHERE id=?",Long.class,purchase.id());
             return new PurchaseCancellationReceipt(purchase.purchaseNumber(),reason,lines.size(),totalUnits,total);
@@ -145,7 +150,7 @@ public class PurchasingService {
     }
 
     private record PurchaseHeader(long id,String purchaseNumber,String status) { }
-    private record PurchaseLine(long partId,String sku,int quantity,long unitCostPaise,long previousPurchasePricePaise) { }
+    private record PurchaseLine(long partId,String sku,int quantity,long unitCostPaise,Long previousPurchasePricePaise) { }
 
     private static String escapeLike(String value) {
         return value.replace("!","!!").replace("%","!%").replace("_","!_");

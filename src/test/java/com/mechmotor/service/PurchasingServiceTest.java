@@ -6,6 +6,8 @@ import com.mechmotor.domain.PurchaseReceipt;
 import com.mechmotor.domain.SupplierDraft;
 import com.mechmotor.config.DatabaseMigrationRunner;
 import org.springframework.boot.DefaultApplicationArguments;
+import com.mechmotor.config.DatabaseMigrationRunner;
+import org.springframework.boot.DefaultApplicationArguments;
 import com.mechmotor.repository.PartRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,6 +44,73 @@ class PurchasingServiceTest {
         supplierId = parts.createSupplier(new SupplierDraft("Central Auto", "9876543210", "SUP-1"));
         partId = parts.create(new PartDraft("PUR-001", null, null, "Air filter",
                 "Brand", "Company", "Paper", "White", null, supplierId, "10.00", "25.00", 3, 2));
+    }
+
+    @Test
+    void cancellingReceiptReversesStockAndRestoresPriorCostOnce() {
+        PurchaseReceipt receipt = purchasing.receive(new PurchaseDraft(partId, 5, 1250, supplierId, "INV-CANCEL"));
+        assertEquals(8, parts.findById(partId).quantity());
+        assertEquals(1250L, parts.findDetailsById(partId).purchasePricePaise());
+
+        var cancelled = purchasing.cancelPurchase(receipt.purchaseNumber(), "Supplier sent incorrect stock");
+
+        assertEquals(5, cancelled.unitsReversed());
+        assertEquals(6250L, cancelled.totalPaise());
+        assertEquals(3, parts.findById(partId).quantity());
+        assertEquals(1000L, parts.findDetailsById(partId).purchasePricePaise());
+        assertEquals("CANCELLED", jdbc.queryForObject("SELECT status FROM purchases WHERE id=?", String.class, receipt.purchaseId()));
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM purchase_cancellations WHERE purchase_id=?", Integer.class, receipt.purchaseId()));
+        assertEquals(-5, jdbc.queryForObject("SELECT quantity FROM stock_movements WHERE reference=? AND movement_type='REVERSAL'",
+                Integer.class, receipt.purchaseNumber()));
+        var history = purchasing.history(receipt.purchaseNumber().toLowerCase(java.util.Locale.ROOT), 500);
+        assertEquals(1, history.size());
+        assertEquals("CANCELLED", history.get(0).status());
+        assertEquals("Supplier sent incorrect stock", history.get(0).cancellationReason());
+
+        assertThrows(IllegalStateException.class,
+                () -> purchasing.cancelPurchase(receipt.purchaseNumber(), "Duplicate cancellation"));
+        assertEquals(3, parts.findById(partId).quantity());
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM purchase_cancellations WHERE purchase_id=?", Integer.class, receipt.purchaseId()));
+    }
+
+    @Test
+    void cancellationIsRejectedWhenAvailableStockCannotCoverReceipt() {
+        PurchaseReceipt receipt = purchasing.receive(new PurchaseDraft(partId, 5, 1250, supplierId, null));
+        jdbc.update("UPDATE inventory SET quantity_on_hand=4 WHERE part_id=?", partId);
+
+        assertThrows(IllegalStateException.class,
+                () -> purchasing.cancelPurchase(receipt.purchaseNumber(), "Stock already consumed"));
+
+        assertEquals(4, parts.findById(partId).quantity());
+        assertEquals("RECEIVED", jdbc.queryForObject("SELECT status FROM purchases WHERE id=?", String.class, receipt.purchaseId()));
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM purchase_cancellations", Integer.class));
+    }
+
+    @Test
+    void cancellationLedgerFailureRollsBackStatusStockCostAndAudit() {
+        PurchaseReceipt receipt = purchasing.receive(new PurchaseDraft(partId, 5, 1250, supplierId, null));
+        jdbc.execute("""
+            CREATE TRIGGER fail_purchase_reversal BEFORE INSERT ON stock_movements
+            WHEN NEW.movement_type='REVERSAL'
+            BEGIN SELECT RAISE(ABORT, 'simulated purchase reversal failure'); END
+            """);
+
+        assertThrows(DataAccessException.class,
+                () -> purchasing.cancelPurchase(receipt.purchaseNumber(), "Rollback test"));
+
+        assertEquals(8, parts.findById(partId).quantity());
+        assertEquals(1250L, parts.findDetailsById(partId).purchasePricePaise());
+        assertEquals("RECEIVED", jdbc.queryForObject("SELECT status FROM purchases WHERE id=?", String.class, receipt.purchaseId()));
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM purchase_cancellations", Integer.class));
+    }
+
+    @Test
+    void purchaseHistorySearchEscapesWildcardsAndCapsResults() {
+        PurchaseReceipt receipt = purchasing.receive(new PurchaseDraft(partId, 1, 1250, supplierId, "INV%2026"));
+        assertEquals(receipt.purchaseNumber(), purchasing.history("INV%", 5000).get(0).purchaseNumber());
+        assertTrue(purchasing.history("_2026", 500).isEmpty());
+        assertEquals(1, purchasing.history(null, 0).size());
+        assertThrows(IllegalArgumentException.class, () -> purchasing.history("x".repeat(121), 10));
     }
 
     @Test
