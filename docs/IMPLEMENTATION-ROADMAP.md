@@ -9,11 +9,13 @@
 
 ## Milestone status
 
+- **Filtered CSV export (in progress on `feat/inventory-csv-export`):** stream all rows matching the active filters to a spreadsheet-friendly CSV; CI pending.
+
 - **Category hierarchy management — merged:** recursive category paths, root/subcategory creation, rename and guarded deactivation; CI passed.
-- **Supplier management (in progress on `feat/supplier-management`):** edit supplier name, phone and unique code while preserving stable supplier IDs; CI pending.
+- **Supplier management — merged:** supplier name, phone and unique code editing with stable IDs; CI passed for the code commit.
 
 - **Backup/restore hardening — merged:** verified SQLite snapshots, integrity/schema validation, staged restore, pre-restore safety backup, desktop actions and regression tests; CI passed.
-1. **Inventory foundation — partially implemented:** part create/edit/deactivate, category/supplier selection and creation, global search, initial structured filters, allowlisted sorting, bounded pagination, stock-adjustment audit and repository regression tests are committed on `codex/inventory-foundation`. Still required: vehicle fitment, saved views, import/export, representative-catalog benchmarks, and release-level end-to-end validation.
+1. **Inventory foundation — partially implemented:** part create/edit/deactivate, category/supplier selection and creation, global search, initial structured filters, allowlisted sorting, bounded pagination, stock-adjustment audit and repository regression tests are committed on `codex/inventory-foundation`. Still required: vehicle fitment, saved views, CSV import, representative-catalog benchmarks, and release-level end-to-end validation.
 2. **Business workflows:** purchase receipts, sales/cart, returns, payment records, immutable stock movement audit, atomic transactions and invoice snapshots.
 3. **Dashboard and reports:** KPI drill-downs, charts with accessible table alternatives, PDF/CSV export, backup/restore and shop settings.
 4. **Licensing:** canonical signed payload, Ed25519 verification, protected issuer utility kept outside this repository, masked activation UI, injected clock and expiry-boundary tests. Never commit a private signing key or real activation secret.
