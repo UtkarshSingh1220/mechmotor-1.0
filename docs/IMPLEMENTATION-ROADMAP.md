@@ -12,6 +12,7 @@
 - Windows CI on Java 21 with Maven clean verify.
 
 ## Current milestone
+- **Sales history/reporting (in progress on `feat/sales-history-reporting`):** read-only bounded sales history with sale status, payment methods, unit counts and recorded refunds, searchable by sale number/customer.
 - **Service-layer feature enforcement — in progress on `feat/service-layer-license-enforcement`:** add `@RequiresFeature` and an AOP guard so feature entitlements are checked at service boundaries, not only in UI controls.
 
 - **Multi-item sales cart — merged:** up to 100 distinct items, overflow-safe totals, atomic sale snapshots, stock deductions, ledger movements and payment.

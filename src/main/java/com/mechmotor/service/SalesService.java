@@ -11,6 +11,7 @@ import com.mechmotor.domain.SaleVoidReceipt;
 import com.mechmotor.domain.SaleReturnDraft;
 import com.mechmotor.domain.SaleReturnable;
 import com.mechmotor.domain.SaleReturnReceipt;
+import com.mechmotor.domain.SaleHistoryRow;
 import com.mechmotor.repository.PartRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.PreparedStatementCreator;
@@ -47,6 +48,35 @@ public class SalesService {
         this.parts = parts;
         this.transactions = new TransactionTemplate(transactionManager);
         this.clock = clock;
+    }
+
+    /** Read-only recent-sales history with bounded results and literal substring search. */
+    public List<SaleHistoryRow> history(String rawQuery, int requestedLimit) {
+        String query = rawQuery == null ? "" : rawQuery.strip().replaceAll("\\s+", " ");
+        if (query.length() > 120) throw new IllegalArgumentException("Sales history search cannot exceed 120 characters.");
+        int limit = Math.max(1, Math.min(requestedLimit, 500));
+        String pattern = "%" + escapeLike(query) + "%";
+        return jdbc.query("""
+            SELECT s.id, s.sale_number, COALESCE(s.customer_name,'') AS customer_name,
+                   s.created_at, s.subtotal_paise, s.discount_paise, s.total_paise, s.status,
+                   COALESCE((SELECT group_concat(method, ', ') FROM payments p WHERE p.sale_id=s.id),'') AS payment_methods,
+                   COALESCE((SELECT SUM(si.quantity) FROM sale_items si WHERE si.sale_id=s.id),0) AS units,
+                   COALESCE((SELECT SUM(v.amount_refunded_paise) FROM sale_voids v WHERE v.sale_id=s.id),0)
+                     + COALESCE((SELECT SUM(r.refund_paise) FROM sale_returns r WHERE r.sale_id=s.id),0) AS refunded_paise
+            FROM sales s
+            WHERE (? = '' OR s.sale_number LIKE ? ESCAPE '!' OR COALESCE(s.customer_name,'') LIKE ? ESCAPE '!')
+            ORDER BY s.created_at DESC, s.id DESC
+            LIMIT ?
+            """, (rs, row) -> new SaleHistoryRow(
+                rs.getLong("id"), rs.getString("sale_number"), rs.getString("customer_name"),
+                rs.getString("created_at"), rs.getLong("subtotal_paise"), rs.getLong("discount_paise"),
+                rs.getLong("total_paise"), rs.getString("status"), rs.getString("payment_methods"),
+                rs.getInt("units"), rs.getLong("refunded_paise")),
+                query, pattern, pattern, limit);
+    }
+
+    private static String escapeLike(String value) {
+        return value.replace("!", "!!").replace("%", "!%").replace("_", "!_");
     }
 
     public SaleVoidReceipt voidSale(String rawSaleNumber, String rawReason, String rawRefundReference) {
