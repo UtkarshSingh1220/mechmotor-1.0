@@ -3,6 +3,7 @@ package com.mechmotor;
 import com.mechmotor.domain.*;
 import com.mechmotor.service.InventoryService;
 import com.mechmotor.service.DatabaseBackupService;
+import com.mechmotor.service.InventoryCsvService;
 import com.mechmotor.domain.SupplierDetails;
 import com.mechmotor.domain.SupplierDraft;
 import javafx.application.Application;
@@ -38,6 +39,7 @@ public class MechMotorApplication extends Application {
     });
     private InventoryService inventory;
     private DatabaseBackupService backupService;
+    private InventoryCsvService csvService;
     private final List<LookupOption> noOptions = List.of();
     private List<LookupOption> categories = noOptions;
     private List<LookupOption> suppliers = noOptions;
@@ -50,6 +52,7 @@ public class MechMotorApplication extends Application {
     @Override public void start(Stage stage) {
         inventory = context.getBean(InventoryService.class);
         backupService = context.getBean(DatabaseBackupService.class);
+        csvService = context.getBean(InventoryCsvService.class);
         Label brand = new Label("MECHMOTOR 1.0");
         brand.getStyleClass().add("brand");
         Label subtitle = new Label("Vehicle parts • Inventory workspace");
@@ -85,6 +88,7 @@ public class MechMotorApplication extends Application {
         MenuButton supplierMenu = new MenuButton("Suppliers", null, addSupplierItem, editSupplierItem);
         Button backupButton = new Button("Backup database");
         Button restoreButton = new Button("Restore backup");
+        Button exportButton = new Button("Export CSV");
         Button previousButton = new Button("← Previous");
         Button nextButton = new Button("Next →");
         Label pageLabel = new Label("Page 1");
@@ -102,6 +106,7 @@ public class MechMotorApplication extends Application {
         addColumn(table, "Selling price", "sellingPrice");
 
         int[] page = {0};
+        InventoryFilter[] activeFilter = {InventoryFilter.defaults(null)};
         InventoryPage[] lastPage = {new InventoryPage(List.of(), 0, 0, 50)};
         Runnable loadPage = () -> {
             try {
@@ -114,6 +119,7 @@ public class MechMotorApplication extends Application {
                         parsePaise(minPrice.getText(), "Minimum price"),
                         parsePaise(maxPrice.getText(), "Maximum price"), page[0], 50,
                         sort.getValue(), true);
+                activeFilter[0] = filter;
                 searchButton.setDisable(true);
                 status.setText("Searching local inventory…");
                 Task<InventoryPage> task = new Task<>() {
