@@ -6,6 +6,7 @@ import com.mechmotor.domain.FormalPurchaseOrderDraft;
 import com.mechmotor.domain.PurchaseReceipt;
 import com.mechmotor.domain.PurchaseOrderDraft;
 import com.mechmotor.domain.PurchaseLineDraft;
+import com.mechmotor.domain.PurchaseOrderReceiveLine;
 import com.mechmotor.domain.SupplierDraft;
 import com.mechmotor.domain.SupplierPaymentDraft;
 import com.mechmotor.config.DatabaseMigrationRunner;
@@ -286,6 +287,65 @@ class PurchasingServiceTest {
         assertEquals(received.receiptNumber(), purchasing.purchaseOrders(order.orderNumber(), 10).get(0).receiptNumber());
         assertThrows(IllegalStateException.class,
                 () -> purchasing.receivePurchaseOrder(order.orderNumber(), "INV-DUPLICATE"));
+    }
+
+    @Test
+    void formalPurchaseOrderSupportsMultiplePartialReceiptsAndBlocksOverReceipt() {
+        var order = purchasing.createPurchaseOrder(new FormalPurchaseOrderDraft(supplierId, null, null,
+                java.util.List.of(new PurchaseLineDraft(partId, 5, 1250))));
+
+        var first = purchasing.receivePurchaseOrder(order.orderNumber(), "INV-PARTIAL-1",
+                java.util.List.of(new PurchaseOrderReceiveLine(partId, 2)));
+        assertEquals(2, first.units());
+        assertEquals(5, parts.findById(partId).quantity());
+        var partial = purchasing.purchaseOrders(order.orderNumber(), 10).get(0);
+        assertEquals("PARTIALLY_RECEIVED", partial.status());
+        assertTrue(partial.receiptNumber().contains(first.receiptNumber()));
+        var line = purchasing.purchaseOrderLines(order.orderNumber()).get(0);
+        assertEquals(5, line.orderedQuantity());
+        assertEquals(2, line.receivedQuantity());
+        assertEquals(3, line.remainingQuantity());
+
+        assertThrows(IllegalArgumentException.class, () -> purchasing.receivePurchaseOrder(order.orderNumber(),
+                "INV-OVER", java.util.List.of(new PurchaseOrderReceiveLine(partId, 4))));
+        assertThrows(IllegalStateException.class,
+                () -> purchasing.cancelPurchaseOrder(order.orderNumber(), "Cannot cancel after partial receipt"));
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM purchases", Integer.class));
+
+        var second = purchasing.receivePurchaseOrder(order.orderNumber(), "INV-PARTIAL-2",
+                java.util.List.of(new PurchaseOrderReceiveLine(partId, 3)));
+        assertEquals(3, second.units());
+        assertEquals(8, parts.findById(partId).quantity());
+        var complete = purchasing.purchaseOrders(order.orderNumber(), 10).get(0);
+        assertEquals("RECEIVED", complete.status());
+        assertTrue(complete.receiptNumber().contains(first.receiptNumber()));
+        assertTrue(complete.receiptNumber().contains(second.receiptNumber()));
+        assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM purchase_order_receipts WHERE purchase_order_id=?",
+                Integer.class, order.id()));
+        assertEquals(5, jdbc.queryForObject("SELECT received_quantity FROM purchase_order_items WHERE purchase_order_id=?",
+                Integer.class, order.id()));
+    }
+
+    @Test
+    void partialPurchaseOrderReceiptFailureRollsBackAllRowsAndStock() {
+        long secondPart = parts.create(new PartDraft("PUR-PO-PARTIAL-ROLLBACK", null, null, "Cabin filter",
+                "Brand", "Company", "Paper", "Grey", null, supplierId, "5.00", "12.00", 4, 1));
+        var order = purchasing.createPurchaseOrder(new FormalPurchaseOrderDraft(supplierId, null, null,
+                java.util.List.of(new PurchaseLineDraft(partId, 2, 1000),
+                        new PurchaseLineDraft(secondPart, 3, 500))));
+        jdbc.execute("CREATE TRIGGER fail_partial_order_receipt BEFORE INSERT ON stock_movements WHEN NEW.movement_type='PURCHASE' AND NEW.part_id="
+                + secondPart + " BEGIN SELECT RAISE(ABORT, 'simulated partial receipt failure'); END");
+
+        assertThrows(DataAccessException.class, () -> purchasing.receivePurchaseOrder(order.orderNumber(), "INV-PARTIAL-ROLLBACK",
+                java.util.List.of(new PurchaseOrderReceiveLine(partId, 1), new PurchaseOrderReceiveLine(secondPart, 1))));
+
+        assertEquals(3, parts.findById(partId).quantity());
+        assertEquals(4, parts.findById(secondPart).quantity());
+        assertEquals("ORDERED", purchasing.purchaseOrders(order.orderNumber(), 10).get(0).status());
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM purchases", Integer.class));
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM purchase_order_receipts", Integer.class));
+        assertEquals(0, jdbc.queryForObject("SELECT SUM(received_quantity) FROM purchase_order_items WHERE purchase_order_id=?",
+                Integer.class, order.id()));
     }
 
     @Test
