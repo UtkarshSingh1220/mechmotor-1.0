@@ -72,13 +72,14 @@ class DatabaseBackupServiceTest {
         try (Connection connection = java.sql.DriverManager.getConnection("jdbc:sqlite:" + backup);
              Statement statement = connection.createStatement()) {
             statement.execute("DROP TABLE part_fitments");
+            statement.execute("DROP TABLE saved_views");
         }
 
         service.restoreFrom(backup);
         try (Connection connection = dataSource.getConnection(); Statement statement = connection.createStatement();
-             var result = statement.executeQuery("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='part_fitments'")) {
+             var result = statement.executeQuery("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('part_fitments','saved_views')")) {
             assertTrue(result.next());
-            assertEquals(1, result.getInt(1));
+            assertEquals(2, result.getInt(1));
         }
     }
 

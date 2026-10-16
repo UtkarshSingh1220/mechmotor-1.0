@@ -90,6 +90,13 @@ public class MechMotorApplication extends Application {
         Button backupButton = new Button("Backup database");
         Button restoreButton = new Button("Restore backup");
         Button exportButton = new Button("Export CSV");
+        ComboBox<LookupOption> savedViewSelector = new ComboBox<>();
+        savedViewSelector.setPromptText("Choose saved view");
+        savedViewSelector.setPrefWidth(230);
+        MenuItem saveViewItem = new MenuItem("Save current filters…");
+        MenuItem loadViewItem = new MenuItem("Load selected view");
+        MenuItem deleteViewItem = new MenuItem("Delete selected view");
+        MenuButton savedViewsMenu = new MenuButton("Saved views", null, saveViewItem, loadViewItem, deleteViewItem);
         Button previousButton = new Button("← Previous");
         Button nextButton = new Button("Next →");
         Label pageLabel = new Label("Page 1");
@@ -108,6 +115,7 @@ public class MechMotorApplication extends Application {
 
         int[] page = {0};
         InventoryFilter[] activeFilter = {InventoryFilter.defaults(null)};
+        boolean[] suppressFilterEvents = {false};
         InventoryPage[] lastPage = {new InventoryPage(List.of(), 0, 0, 50)};
         Runnable loadPage = () -> {
             try {
@@ -160,7 +168,75 @@ public class MechMotorApplication extends Application {
         nextButton.setDisable(true);
         previousButton.setOnAction(e -> { if (page[0] > 0) { page[0]--; loadPage.run(); } });
         nextButton.setOnAction(e -> { if (page[0] + 1 < lastPage[0].totalPages()) { page[0]++; loadPage.run(); } });
-        sort.setOnAction(e -> { page[0] = 0; loadPage.run(); });
+        sort.setOnAction(e -> { if (!suppressFilterEvents[0]) { page[0] = 0; loadPage.run(); } });
+        saveViewItem.setOnAction(e -> {
+            TextInputDialog dialog = new TextInputDialog();
+            dialog.setTitle("Save inventory view");
+            dialog.setHeaderText("Save the currently applied search, filters and sorting");
+            dialog.setContentText("View name:");
+            dialog.showAndWait().ifPresent(name -> runBackground(
+                    () -> inventory.saveView(name, activeFilter[0]),
+                    id -> refreshSavedViews(savedViewSelector, status, id),
+                    error -> showError("Could not save inventory view", error)));
+        });
+        loadViewItem.setOnAction(e -> {
+            LookupOption selected = savedViewSelector.getValue();
+            if (selected == null) {
+                showError("Select a saved view", new IllegalArgumentException("Choose a saved view first."));
+                return;
+            }
+            runBackground(() -> inventory.getSavedView(selected.id()), saved -> {
+                InventoryFilter filter = saved.filter();
+                LookupOption category = filter.categoryId() == null ? null
+                        : categories.stream().filter(o -> o.id() == filter.categoryId()).findFirst().orElse(null);
+                LookupOption supplier = filter.supplierId() == null ? null
+                        : suppliers.stream().filter(o -> o.id() == filter.supplierId()).findFirst().orElse(null);
+                if (filter.categoryId() != null && category == null) {
+                    showError("Saved view needs attention", new IllegalArgumentException(
+                            "Its category is no longer active. Delete or replace this saved view."));
+                    return;
+                }
+                if (filter.supplierId() != null && supplier == null) {
+                    showError("Saved view needs attention", new IllegalArgumentException(
+                            "Its supplier no longer exists. Delete or replace this saved view."));
+                    return;
+                }
+                suppressFilterEvents[0] = true;
+                query.setText(filter.query());
+                brandFilter.setText(filter.brand());
+                materialFilter.setText(filter.material());
+                colorFilter.setText(filter.color());
+                categoryFilter.setValue(category);
+                supplierFilter.setValue(supplier);
+                stockFilter.setValue(filter.stockStatus());
+                minQty.setText(filter.minQuantity() == null ? "" : filter.minQuantity().toString());
+                maxQty.setText(filter.maxQuantity() == null ? "" : filter.maxQuantity().toString());
+                minPrice.setText(filter.minSellingPricePaise() == null ? "" : rupees(filter.minSellingPricePaise()));
+                maxPrice.setText(filter.maxSellingPricePaise() == null ? "" : rupees(filter.maxSellingPricePaise()));
+                sort.setValue(filter.sortBy());
+                suppressFilterEvents[0] = false;
+                page[0] = 0;
+                status.setText("Loaded saved view: " + saved.name());
+                loadPage.run();
+            }, error -> showError("Could not load saved view", error));
+        });
+        deleteViewItem.setOnAction(e -> {
+            LookupOption selected = savedViewSelector.getValue();
+            if (selected == null) {
+                showError("Select a saved view", new IllegalArgumentException("Choose a saved view first."));
+                return;
+            }
+            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
+                    "Delete saved view '" + selected.name() + "'? Inventory data will not be changed.",
+                    ButtonType.CANCEL, ButtonType.OK);
+            confirm.setTitle("Delete saved view");
+            confirm.showAndWait().filter(ButtonType.OK::equals).ifPresent(button ->
+                    runBackground(() -> { inventory.deleteSavedView(selected.id()); return Boolean.TRUE; }, ignored -> {
+                        savedViewSelector.setValue(null);
+                        refreshSavedViews(savedViewSelector, status, null);
+                    }, error -> showError("Could not delete saved view", error)));
+        });
+
         exportButton.setOnAction(e -> {
             FileChooser chooser = new FileChooser();
             chooser.setTitle("Export filtered inventory to CSV");
@@ -311,6 +387,11 @@ public class MechMotorApplication extends Application {
         filters.add(categoryFilter, 3, 1); filters.add(supplierFilter, 4, 1); filters.add(stockFilter, 5, 1);
         filters.add(minQty, 0, 2); filters.add(maxQty, 1, 2); filters.add(minPrice, 2, 2);
         filters.add(maxPrice, 3, 2); filters.add(new Label("Sort:"), 4, 2); filters.add(sort, 5, 2);
+        filters.add(new Label("Saved view:"), 0, 3);
+        filters.add(savedViewSelector, 1, 3, 2, 1);
+        filters.add(savedViewsMenu, 3, 3, 3, 1);
+        GridPane.setHgrow(savedViewSelector, Priority.ALWAYS);
+        GridPane.setHgrow(savedViewsMenu, Priority.ALWAYS);
         for (int i = 0; i < 6; i++) GridPane.setHgrow(filters.getChildren().get(i), Priority.ALWAYS);
         HBox actions = new HBox(8, addButton, editButton, deactivateButton, fitmentButton, categoryMenu, supplierMenu, backupButton, restoreButton, exportButton,
                 new Separator(), previousButton, nextButton, pageLabel);
@@ -331,8 +412,19 @@ public class MechMotorApplication extends Application {
             categories = lookups.categories(); suppliers = lookups.suppliers();
             categoryFilter.setItems(FXCollections.observableArrayList(categories));
             supplierFilter.setItems(FXCollections.observableArrayList(suppliers));
+            refreshSavedViews(savedViewSelector, status, null);
             loadPage.run();
         }, error -> { status.setText("Could not load categories and suppliers."); showError("Database initialization failed", error); });
+    }
+
+    private void refreshSavedViews(ComboBox<LookupOption> selector, Label status, Long selectId) {
+        runBackground(() -> inventory.savedViews(), views -> {
+            selector.setItems(FXCollections.observableArrayList(views));
+            if (selectId != null) {
+                selector.setValue(views.stream().filter(view -> view.id() == selectId).findFirst().orElse(null));
+            }
+            status.setText(views.size() + " saved inventory view(s) available.");
+        }, error -> showError("Could not refresh saved views", error));
     }
 
     private void refreshLookups(ComboBox<LookupOption> categoryFilter,

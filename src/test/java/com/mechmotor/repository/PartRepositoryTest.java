@@ -6,6 +6,7 @@ import com.mechmotor.domain.Part;
 import com.mechmotor.domain.PartDraft;
 import com.mechmotor.domain.SupplierDraft;
 import com.mechmotor.domain.VehicleFitmentDraft;
+import com.mechmotor.domain.SavedInventoryView;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -103,6 +104,31 @@ class PartRepositoryTest {
 
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM parts WHERE sku='ROLLBACK-1'", Integer.class));
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM inventory", Integer.class));
+    }
+
+    @Test
+    void savedInventoryViewsPersistFiltersAndRejectDuplicateNames() {
+        InventoryFilter expected = new InventoryFilter("brake", "Brand", "Ceramic", "Black",
+                brakesCategory, supplier, InventoryFilter.StockStatus.LOW_STOCK,
+                1, 10, 10000L, 30000L, 4, 10, "sellingPrice", false);
+        long id = repository.saveView("Low stock brakes", expected);
+
+        SavedInventoryView saved = repository.savedView(id);
+        assertEquals("Low stock brakes", saved.name());
+        assertEquals("brake", saved.filter().query());
+        assertEquals("Brand", saved.filter().brand());
+        assertEquals(brakesCategory, saved.filter().categoryId());
+        assertEquals(supplier, saved.filter().supplierId());
+        assertEquals(InventoryFilter.StockStatus.LOW_STOCK, saved.filter().stockStatus());
+        assertEquals(10000L, saved.filter().minSellingPricePaise());
+        assertEquals("sellingPrice", saved.filter().sortBy());
+        assertFalse(saved.filter().ascending());
+        assertEquals(0, saved.filter().page());
+        assertEquals(50, saved.filter().pageSize());
+        assertThrows(IllegalArgumentException.class, () -> repository.saveView("low STOCK brakes", expected));
+
+        repository.deleteSavedView(id);
+        assertTrue(repository.savedViews().isEmpty());
     }
 
     @Test

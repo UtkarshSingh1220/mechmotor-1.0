@@ -10,6 +10,7 @@ import com.mechmotor.domain.SupplierDetails;
 import com.mechmotor.domain.SupplierDraft;
 import com.mechmotor.domain.VehicleFitment;
 import com.mechmotor.domain.VehicleFitmentDraft;
+import com.mechmotor.domain.SavedInventoryView;
 import com.mechmotor.repository.PartRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +34,16 @@ public class InventoryService {
     public List<LookupOption> categories() { return repository.categories(); }
 
     public List<LookupOption> suppliers() { return repository.suppliers(); }
+
+    public List<LookupOption> savedViews() { return repository.savedViews(); }
+
+    public SavedInventoryView getSavedView(long id) { return repository.savedView(id); }
+
+    @Transactional
+    public long saveView(String name, InventoryFilter filter) { return repository.saveView(name, filter); }
+
+    @Transactional
+    public void deleteSavedView(long id) { repository.deleteSavedView(id); }
 
     public List<VehicleFitment> fitments(long partId) { return repository.fitments(partId); }
 

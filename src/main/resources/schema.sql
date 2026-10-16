@@ -80,3 +80,24 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_fitments_unique_compatibility
     part_id, make COLLATE NOCASE, model COLLATE NOCASE, year_from, year_to,
     COALESCE(engine, '') COLLATE NOCASE, COALESCE(trim, '') COLLATE NOCASE
   );
+
+CREATE TABLE IF NOT EXISTS saved_views (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+  query TEXT,
+  brand TEXT,
+  material TEXT,
+  color TEXT,
+  category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
+  supplier_id INTEGER REFERENCES suppliers(id) ON DELETE SET NULL,
+  stock_status TEXT NOT NULL DEFAULT 'ANY' CHECK(stock_status IN ('ANY','IN_STOCK','LOW_STOCK','OUT_OF_STOCK')),
+  min_quantity INTEGER,
+  max_quantity INTEGER,
+  min_selling_price_paise INTEGER,
+  max_selling_price_paise INTEGER,
+  sort_by TEXT NOT NULL DEFAULT 'name',
+  ascending INTEGER NOT NULL DEFAULT 1 CHECK(ascending IN (0,1)),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_saved_views_name ON saved_views(name COLLATE NOCASE);
