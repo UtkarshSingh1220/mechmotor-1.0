@@ -3,6 +3,8 @@ package com.mechmotor.service;
 import com.mechmotor.domain.PartDraft;
 import com.mechmotor.domain.PurchaseDraft;
 import com.mechmotor.domain.PurchaseReceipt;
+import com.mechmotor.domain.PurchaseOrderDraft;
+import com.mechmotor.domain.PurchaseLineDraft;
 import com.mechmotor.domain.SupplierDraft;
 import com.mechmotor.config.DatabaseMigrationRunner;
 import org.springframework.boot.DefaultApplicationArguments;
@@ -109,6 +111,51 @@ class PurchasingServiceTest {
         assertTrue(purchasing.history("_2026", 500).isEmpty());
         assertEquals(1, purchasing.history(null, 0).size());
         assertThrows(IllegalArgumentException.class, () -> purchasing.history("x".repeat(121), 10));
+    }
+
+    @Test
+    void multiItemReceiptPostsAllLinesAndStockAtomically() {
+        long secondPart = parts.create(new PartDraft("PUR-002", null, null, "Oil filter",
+                "Brand", "Company", "Paper", "Black", null, supplierId, "5.00", "12.00", 4, 1));
+        var receipt = purchasing.receive(new PurchaseOrderDraft(supplierId, "INV-MULTI",
+                java.util.List.of(new PurchaseLineDraft(partId, 5, 1250), new PurchaseLineDraft(secondPart, 2, 600))));
+        assertEquals(2, receipt.lineCount());
+        assertEquals(7, receipt.units());
+        assertEquals(7450L, receipt.totalPaise());
+        assertEquals(8, parts.findById(partId).quantity());
+        assertEquals(6, parts.findById(secondPart).quantity());
+        assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM purchase_items WHERE purchase_id=?", Integer.class, receipt.purchaseId()));
+        assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM stock_movements WHERE reference=? AND movement_type='PURCHASE'", Integer.class, receipt.purchaseNumber()));
+    }
+
+    @Test
+    void multiItemReceiptRollsBackEveryLineWhenOneLedgerWriteFails() {
+        long secondPart = parts.create(new PartDraft("PUR-003", null, null, "Cabin filter",
+                "Brand", "Company", "Paper", "Grey", null, supplierId, "5.00", "12.00", 4, 1));
+        jdbc.execute("CREATE TRIGGER fail_second_purchase BEFORE INSERT ON stock_movements WHEN NEW.movement_type='PURCHASE' AND NEW.part_id="
+                + secondPart + " BEGIN SELECT RAISE(ABORT, 'simulated second-line failure'); END");
+        assertThrows(DataAccessException.class, () -> purchasing.receive(new PurchaseOrderDraft(supplierId, null,
+                java.util.List.of(new PurchaseLineDraft(partId, 2, 1000), new PurchaseLineDraft(secondPart, 3, 500)))));
+        assertEquals(3, parts.findById(partId).quantity());
+        assertEquals(4, parts.findById(secondPart).quantity());
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM purchases", Integer.class));
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM purchase_items", Integer.class));
+    }
+
+    @Test
+    void multiItemDraftRejectsDuplicatePartIdsAndEmptyReceipts() {
+        assertThrows(IllegalArgumentException.class, () -> new PurchaseOrderDraft(supplierId, null,
+                java.util.List.of(new PurchaseLineDraft(partId, 1, 100), new PurchaseLineDraft(partId, 2, 200))));
+        assertThrows(IllegalArgumentException.class, () -> new PurchaseOrderDraft(supplierId, null, java.util.List.of()));
+    }
+
+    @Test
+    void cancellationCannotReduceOnHandBelowReservedQuantity() {
+        PurchaseReceipt receipt = purchasing.receive(new PurchaseDraft(partId, 5, 1250, supplierId, null));
+        jdbc.update("UPDATE inventory SET reserved_quantity=4 WHERE part_id=?", partId);
+        assertThrows(IllegalStateException.class, () -> purchasing.cancelPurchase(receipt.purchaseNumber(), "Stock reserved for order"));
+        assertEquals(8, parts.findById(partId).quantity());
+        assertEquals("RECEIVED", jdbc.queryForObject("SELECT status FROM purchases WHERE id=?", String.class, receipt.purchaseId()));
     }
 
     @Test

@@ -120,6 +120,7 @@ public class MechMotorApplication extends Application {
         Button invoiceButton = new Button("Sales invoice PDF…");
         Button salesHistoryButton = new Button("Sales history");
         Button receiveStockButton = new Button("Receive stock");
+        Button receiveMultiStockButton = new Button("Receive multi-item");
         Button purchaseHistoryButton = new Button("Purchase history / cancel");
         Button fitmentButton = new Button("Vehicle fitment");
         MenuItem addCategoryItem = new MenuItem("Add root / subcategory…");
@@ -436,6 +437,14 @@ public class MechMotorApplication extends Application {
             showPurchaseDialog(stage, selected, supplierFilter.getValue(), status, loadPage);
         });
 
+        receiveMultiStockButton.setOnAction(e -> {
+            if (!licenseService.status().features().contains("PURCHASING")) {
+                showError("Feature not licensed", new IllegalArgumentException("Your activation key does not include PURCHASING."));
+                return;
+            }
+            showMultiPurchaseDialog(stage, supplierFilter.getValue(), status, loadPage);
+        });
+
         purchaseHistoryButton.setOnAction(e -> {
             if (!licenseService.status().features().contains("PURCHASING")) {
                 showError("Feature not licensed", new IllegalArgumentException("Your activation key does not include PURCHASING."));
@@ -565,7 +574,7 @@ public class MechMotorApplication extends Application {
         GridPane.setHgrow(savedViewsMenu, Priority.ALWAYS);
         for (int i = 0; i < 6; i++) GridPane.setHgrow(filters.getChildren().get(i), Priority.ALWAYS);
         FlowPane actions = new FlowPane(8, 8, addButton, editButton, deactivateButton, sellButton,
-                voidSaleButton, returnsButton, invoiceButton, salesHistoryButton, receiveStockButton, purchaseHistoryButton, fitmentButton,
+                voidSaleButton, returnsButton, invoiceButton, salesHistoryButton, receiveStockButton, receiveMultiStockButton, purchaseHistoryButton, fitmentButton,
                 categoryMenu, supplierMenu, backupButton, restoreButton, csvMenu,
                 previousButton, nextButton, pageLabel);
         actions.setAlignment(Pos.CENTER_LEFT);
@@ -968,6 +977,162 @@ public class MechMotorApplication extends Application {
             }
         });
         dialog.showAndWait();
+    }
+
+
+    private record PurchaseCartLine(Part part, int quantity, long unitCostPaise) {
+        long lineTotalPaise() { return Math.multiplyExact((long) quantity, unitCostPaise); }
+    }
+
+    private void showMultiPurchaseDialog(Stage owner, LookupOption defaultSupplier,
+                                         Label status, Runnable refreshInventory) {
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.initOwner(owner);
+        dialog.setTitle("Receive multi-item supplier receipt");
+        dialog.setHeaderText("Add up to 100 distinct parts. All stock, costs, receipt lines and ledger movements commit atomically.");
+        ButtonType receiveType = new ButtonType("Post receipt", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(receiveType, ButtonType.CANCEL);
+
+        ComboBox<LookupOption> supplier = new ComboBox<>(FXCollections.observableArrayList(suppliers));
+        supplier.setPromptText("Supplier");
+        if (defaultSupplier != null) supplier.setValue(suppliers.stream().filter(s -> s.id() == defaultSupplier.id()).findFirst().orElse(null));
+        supplier.setMaxWidth(Double.MAX_VALUE);
+        TextField invoice = new TextField();
+        invoice.setPromptText("Optional supplier invoice / delivery note");
+
+        TextField partQuery = new TextField();
+        partQuery.setPromptText("Search SKU, barcode or part name");
+        Button searchParts = new Button("Find parts");
+        ComboBox<Part> partPicker = new ComboBox<>();
+        partPicker.setPromptText("Select part");
+        partPicker.setMaxWidth(Double.MAX_VALUE);
+        partPicker.setConverter(new javafx.util.StringConverter<>() {
+            @Override public String toString(Part part) { return part == null ? "" : part.sku() + " — " + part.name() + " (stock " + part.quantity() + ")"; }
+            @Override public Part fromString(String value) { return null; }
+        });
+        TextField quantity = new TextField("1");
+        quantity.setPromptText("Quantity");
+        TextField unitCost = new TextField();
+        unitCost.setPromptText("Unit cost ₹");
+        Button addLine = new Button("Add line");
+        Button removeLine = new Button("Remove selected");
+
+        TableView<PurchaseCartLine> cart = new TableView<>();
+        cart.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+        cart.setPrefHeight(270);
+        TableColumn<PurchaseCartLine, String> skuCol = new TableColumn<>("SKU / Part");
+        skuCol.setCellValueFactory(c -> new javafx.beans.property.ReadOnlyStringWrapper(c.getValue().part().sku() + " — " + c.getValue().part().name()));
+        TableColumn<PurchaseCartLine, String> qtyCol = new TableColumn<>("Qty");
+        qtyCol.setCellValueFactory(c -> new javafx.beans.property.ReadOnlyStringWrapper(Integer.toString(c.getValue().quantity())));
+        TableColumn<PurchaseCartLine, String> costCol = new TableColumn<>("Unit cost");
+        costCol.setCellValueFactory(c -> new javafx.beans.property.ReadOnlyStringWrapper("₹" + rupees(c.getValue().unitCostPaise())));
+        TableColumn<PurchaseCartLine, String> totalCol = new TableColumn<>("Line total");
+        totalCol.setCellValueFactory(c -> new javafx.beans.property.ReadOnlyStringWrapper("₹" + rupees(c.getValue().lineTotalPaise())));
+        cart.getColumns().addAll(skuCol, qtyCol, costCol, totalCol);
+        Label totalLabel = new Label("0 line(s) • Total ₹0.00");
+        Label searchStatus = new Label("Search for a part to add it to this receipt.");
+
+        Runnable findParts = () -> {
+            searchParts.setDisable(true);
+            runBackground(() -> inventory.search(InventoryFilter.defaults(partQuery.getText())),
+                    page -> {
+                        partPicker.setItems(FXCollections.observableArrayList(page.items()));
+                        searchStatus.setText(page.totalItems() + " matching part(s); first " + page.items().size() + " shown.");
+                        searchParts.setDisable(false);
+                    }, error -> {
+                        searchParts.setDisable(false);
+                        showError("Could not search inventory", error);
+                    });
+        };
+        searchParts.setOnAction(e -> findParts.run());
+        partQuery.setOnAction(e -> findParts.run());
+        partPicker.valueProperty().addListener((obs, old, selected) -> {
+            if (selected != null) unitCost.setText(rupees(selected.purchasePricePaise()));
+        });
+        addLine.setOnAction(e -> {
+            try {
+                Part selected = partPicker.getValue();
+                if (selected == null) throw new IllegalArgumentException("Search and select a part.");
+                if (cart.getItems().size() >= 100) throw new IllegalArgumentException("A receipt can contain at most 100 distinct parts.");
+                if (cart.getItems().stream().anyMatch(line -> line.part().id() == selected.id())) {
+                    throw new IllegalArgumentException("This part is already on the receipt. Remove it before adding it again.");
+                }
+                PurchaseCartLine line = new PurchaseCartLine(selected,
+                        parseRequiredInteger(quantity.getText(), "Quantity received"),
+                        parsePaise(unitCost.getText(), "Unit cost"));
+                if (line.quantity() > 100_000) throw new IllegalArgumentException("Quantity cannot exceed 100,000 per part.");
+                line.lineTotalPaise();
+                cart.getItems().add(line);
+                updatePurchaseCartTotal(cart, totalLabel);
+            } catch (IllegalArgumentException | ArithmeticException ex) {
+                showError("Check purchase line", ex);
+            }
+        });
+        removeLine.setOnAction(e -> {
+            PurchaseCartLine selected = cart.getSelectionModel().getSelectedItem();
+            if (selected != null) cart.getItems().remove(selected);
+            updatePurchaseCartTotal(cart, totalLabel);
+        });
+
+        GridPane form = new GridPane();
+        form.setHgap(8); form.setVgap(8); form.setPadding(new Insets(12));
+        form.add(new Label("Supplier"), 0, 0); form.add(supplier, 1, 0);
+        form.add(new Label("Invoice reference"), 0, 1); form.add(invoice, 1, 1);
+        form.add(new Label("Find part"), 0, 2); form.add(new HBox(8, partQuery, searchParts), 1, 2);
+        form.add(new Label("Part"), 0, 3); form.add(partPicker, 1, 3);
+        form.add(new Label("Quantity"), 0, 4); form.add(quantity, 1, 4);
+        form.add(new Label("Unit cost ₹"), 0, 5); form.add(unitCost, 1, 5);
+        form.add(new HBox(8, addLine, removeLine), 1, 6);
+        form.add(searchStatus, 0, 7, 2, 1);
+        form.add(cart, 0, 8, 2, 1);
+        form.add(totalLabel, 0, 9, 2, 1);
+        GridPane.setHgrow(supplier, Priority.ALWAYS); GridPane.setHgrow(invoice, Priority.ALWAYS);
+        GridPane.setHgrow(partPicker, Priority.ALWAYS); GridPane.setHgrow(partQuery, Priority.ALWAYS);
+        GridPane.setHgrow(cart, Priority.ALWAYS); GridPane.setVgrow(cart, Priority.ALWAYS);
+        dialog.getDialogPane().setContent(form);
+        dialog.getDialogPane().setPrefSize(860, 720);
+
+        Button post = (Button) dialog.getDialogPane().lookupButton(receiveType);
+        post.addEventFilter(ActionEvent.ACTION, event -> {
+            event.consume();
+            try {
+                if (supplier.getValue() == null) throw new IllegalArgumentException("Choose a supplier.");
+                if (cart.getItems().isEmpty()) throw new IllegalArgumentException("Add at least one part.");
+                List<PurchaseLineDraft> lines = cart.getItems().stream()
+                        .map(line -> new PurchaseLineDraft(line.part().id(), line.quantity(), line.unitCostPaise())).toList();
+                PurchaseOrderDraft draft = new PurchaseOrderDraft(supplier.getValue().id(), invoice.getText(), lines);
+                post.setDisable(true);
+                runBackground(() -> purchasingService.receive(draft), receipt -> {
+                    dialog.close();
+                    status.setText("Receipt posted: " + receipt.purchaseNumber() + " • " + receipt.lineCount() + " line(s)");
+                    refreshInventory.run();
+                    Alert info = new Alert(Alert.AlertType.INFORMATION,
+                            "Receipt: " + receipt.purchaseNumber() + "\nSupplier: " + receipt.supplierName()
+                                    + "\nDistinct parts: " + receipt.lineCount() + "\nUnits received: " + receipt.units()
+                                    + "\nTotal: ₹" + rupees(receipt.totalPaise())
+                                    + "\nAll lines, stock and ledger movements were committed together.", ButtonType.OK);
+                    info.setTitle("Supplier receipt posted"); info.setHeaderText("Multi-item receipt completed"); info.show();
+                }, error -> { post.setDisable(false); showError("Could not post supplier receipt", error); });
+            } catch (IllegalArgumentException ex) {
+                showError("Check receipt details", ex);
+            }
+        });
+        dialog.show();
+        findParts.run();
+    }
+
+    private static void updatePurchaseCartTotal(TableView<PurchaseCartLine> cart, Label label) {
+        long total = 0;
+        int units = 0;
+        try {
+            for (PurchaseCartLine line : cart.getItems()) {
+                total = Math.addExact(total, line.lineTotalPaise());
+                units = Math.addExact(units, line.quantity());
+            }
+            label.setText(cart.getItems().size() + " line(s) • " + units + " unit(s) • Total ₹" + rupees(total));
+        } catch (ArithmeticException ex) {
+            label.setText("Total exceeds supported amount");
+        }
     }
 
     private record CartLine(Part part, int quantity, long unitPricePaise) {
