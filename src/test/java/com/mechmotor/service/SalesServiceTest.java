@@ -52,6 +52,37 @@ class SalesServiceTest {
     }
 
     @Test
+    void salesHistorySearchShowsPostedAndVoidedSalesWithRefundAudit() {
+        SaleReceipt sale = sales.checkout(new SaleDraft(partId, 1, 2500, 0,
+                "Utkarsh Walk-in", "UPI", "PAY-REF"));
+        var matching = sales.history("utkarsh", 100);
+        assertEquals(1, matching.size());
+        assertEquals(sale.saleNumber(), matching.get(0).saleNumber());
+        assertEquals("POSTED", matching.get(0).status());
+        assertEquals(1, matching.get(0).units());
+        assertEquals(2500L, matching.get(0).totalPaise());
+        assertTrue(matching.get(0).paymentMethods().contains("UPI"));
+        assertEquals(0L, matching.get(0).refundedPaise());
+
+        sales.voidSale(sale.saleNumber(), "Customer cancelled", "REF-1");
+        var voided = sales.history(sale.saleNumber().toLowerCase(java.util.Locale.ROOT), 100);
+        assertEquals(1, voided.size());
+        assertEquals("VOIDED", voided.get(0).status());
+        assertEquals(2500L, voided.get(0).refundedPaise());
+        assertTrue(sales.history("not-a-customer", 100).isEmpty());
+    }
+
+    @Test
+    void salesHistoryEscapesLikeWildcardsAndCapsResultLimit() {
+        SaleReceipt sale = sales.checkout(new SaleDraft(partId, 1, 2500, 0,
+                "100% Genuine", "CASH", null));
+        assertEquals(sale.saleNumber(), sales.history("100%", 5000).get(0).saleNumber());
+        assertTrue(sales.history("_Genuine", 100).isEmpty());
+        assertEquals(1, sales.history(null, 0).size());
+        assertThrows(IllegalArgumentException.class, () -> sales.history("x".repeat(121), 10));
+    }
+
+    @Test
     void checkoutPostsSalePaymentAndStockLedgerAtomically() {
         SaleReceipt receipt = sales.checkout(new SaleDraft(partId, 2, 2500, 500,
                 "Walk-in customer", "UPI", "UPI-REF-1"));

@@ -118,6 +118,7 @@ public class MechMotorApplication extends Application {
         Button voidSaleButton = new Button("Void sale / refund…");
         Button returnsButton = new Button("Returns / refunds");
         Button invoiceButton = new Button("Sales invoice PDF…");
+        Button salesHistoryButton = new Button("Sales history");
         Button receiveStockButton = new Button("Receive stock");
         Button fitmentButton = new Button("Vehicle fitment");
         MenuItem addCategoryItem = new MenuItem("Add root / subcategory…");
@@ -413,6 +414,14 @@ public class MechMotorApplication extends Application {
             });
         });
 
+        salesHistoryButton.setOnAction(e -> {
+            if (!licenseService.status().features().contains("SALES")) {
+                showError("Feature not licensed", new IllegalArgumentException("Your activation key does not include SALES."));
+                return;
+            }
+            showSalesHistoryDialog(stage, status);
+        });
+
         receiveStockButton.setOnAction(e -> {
             if (!licenseService.status().features().contains("PURCHASING")) {
                 showError("Feature not licensed", new IllegalArgumentException("Your activation key does not include PURCHASING."));
@@ -547,7 +556,7 @@ public class MechMotorApplication extends Application {
         GridPane.setHgrow(savedViewsMenu, Priority.ALWAYS);
         for (int i = 0; i < 6; i++) GridPane.setHgrow(filters.getChildren().get(i), Priority.ALWAYS);
         FlowPane actions = new FlowPane(8, 8, addButton, editButton, deactivateButton, sellButton,
-                voidSaleButton, returnsButton, invoiceButton, receiveStockButton, fitmentButton,
+                voidSaleButton, returnsButton, invoiceButton, salesHistoryButton, receiveStockButton, fitmentButton,
                 categoryMenu, supplierMenu, backupButton, restoreButton, csvMenu,
                 previousButton, nextButton, pageLabel);
         actions.setAlignment(Pos.CENTER_LEFT);
@@ -722,6 +731,69 @@ public class MechMotorApplication extends Application {
             }
         });
         dialog.showAndWait();
+    }
+
+    private void showSalesHistoryDialog(Stage owner, Label status) {
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.initOwner(owner);
+        dialog.setTitle("Sales history");
+        dialog.setHeaderText("Search recent sales, payment methods and recorded refunds. Showing at most 500 records.");
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+
+        TextField filter = new TextField();
+        filter.setPromptText("Search sale number or customer");
+        Button search = new Button("Search");
+        Button refresh = new Button("Refresh");
+        TableView<SaleHistoryRow> table = new TableView<>();
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
+        table.setPlaceholder(new Label("No sales match this search."));
+        table.setPrefSize(1050, 430);
+
+        addHistoryColumn(table, "Sale number", row -> row.saleNumber());
+        addHistoryColumn(table, "Customer", row -> row.customerName());
+        addHistoryColumn(table, "Created at", row -> row.createdAt());
+        addHistoryColumn(table, "Status", row -> row.status());
+        addHistoryColumn(table, "Payment", row -> row.paymentMethods());
+        addHistoryColumn(table, "Units", row -> Integer.toString(row.units()));
+        addHistoryColumn(table, "Subtotal", row -> "₹" + rupees(row.subtotalPaise()));
+        addHistoryColumn(table, "Discount", row -> "₹" + rupees(row.discountPaise()));
+        addHistoryColumn(table, "Total", row -> "₹" + rupees(row.totalPaise()));
+        addHistoryColumn(table, "Refund recorded", row -> "₹" + rupees(row.refundedPaise()));
+
+        Runnable load = () -> {
+            search.setDisable(true);
+            refresh.setDisable(true);
+            runBackground(() -> salesService.history(filter.getText(), 500), rows -> {
+                table.setItems(FXCollections.observableArrayList(rows));
+                search.setDisable(false);
+                refresh.setDisable(false);
+                status.setText("Sales history • " + rows.size() + " record(s) shown");
+            }, error -> {
+                search.setDisable(false);
+                refresh.setDisable(false);
+                showError("Could not load sales history", error);
+            });
+        };
+        search.setOnAction(e -> load.run());
+        refresh.setOnAction(e -> load.run());
+        filter.setOnAction(e -> load.run());
+        HBox controls = new HBox(8, filter, search, refresh);
+        HBox.setHgrow(filter, Priority.ALWAYS);
+        VBox content = new VBox(10, controls, table);
+        content.setPadding(new Insets(12));
+        VBox.setVgrow(table, Priority.ALWAYS);
+        dialog.getDialogPane().setContent(content);
+        dialog.getDialogPane().setPrefSize(1120, 540);
+        dialog.show();
+        load.run();
+    }
+
+    private static void addHistoryColumn(TableView<SaleHistoryRow> table, String title,
+                                         java.util.function.Function<SaleHistoryRow, String> value) {
+        TableColumn<SaleHistoryRow, String> column = new TableColumn<>(title);
+        column.setCellValueFactory(cell ->
+                new javafx.beans.property.ReadOnlyStringWrapper(value.apply(cell.getValue())));
+        table.getColumns().add(column);
     }
 
     private void showPurchaseDialog(Stage owner, Part part, LookupOption defaultSupplier,
