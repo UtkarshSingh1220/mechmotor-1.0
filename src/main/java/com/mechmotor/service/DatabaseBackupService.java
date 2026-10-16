@@ -137,7 +137,13 @@ public class DatabaseBackupService {
 
     private static void verifyDatabase(Path candidate, boolean requireCurrentSchema) throws Exception {
         Map<String, Set<String>> requiredColumns = new HashMap<>(REQUIRED_COLUMNS);
-        if (!requireCurrentSchema) { requiredColumns.remove("part_fitments"); requiredColumns.remove("saved_views"); }
+        if (!requireCurrentSchema) {
+            requiredColumns.remove("part_fitments");
+            requiredColumns.remove("saved_views");
+            requiredColumns.remove("sales");
+            requiredColumns.remove("sale_items");
+            requiredColumns.remove("payments");
+        }
         try (Connection connection = DriverManager.getConnection("jdbc:sqlite:" + candidate.toAbsolutePath().normalize());
              Statement statement = connection.createStatement()) {
             try (ResultSet result = statement.executeQuery("PRAGMA integrity_check")) {
