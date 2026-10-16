@@ -651,7 +651,9 @@ public class MechMotorApplication extends Application {
             if (selected < 0) { showError("Select a cart item", new IllegalArgumentException("Choose an item to update.")); return; }
             try {
                 int qty = parseRequiredInteger(quantity.getText(), "Quantity");
-                long price = parsePaise(unitPrice.getText(), "Unit price");
+                Long parsedPrice = parsePaise(unitPrice.getText(), "Unit price");
+                if (parsedPrice == null) throw new IllegalArgumentException("Unit price is required.");
+                long price = parsedPrice;
                 CartLine existing = cart.get(selected);
                 cart.set(selected, new CartLine(existing.part(), qty, price));
                 updateCartSummary(cart, discount.getText(), summary);
