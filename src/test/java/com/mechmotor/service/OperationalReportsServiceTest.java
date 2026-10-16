@@ -74,6 +74,25 @@ class OperationalReportsServiceTest {
     }
 
     @Test
+    void escapesSpreadsheetFormulasButPreservesNegativeMovementQuantities() throws Exception {
+        jdbc.update("INSERT INTO parts(sku,name) VALUES (?,?)", "SKU-CSV", "=1+1");
+        long partId = jdbc.queryForObject("SELECT id FROM parts WHERE sku=?", Long.class, "SKU-CSV");
+        jdbc.update("""
+            INSERT INTO stock_movements(part_id,movement_type,quantity,reference,reason,created_at)
+            VALUES (?,'REVERSAL',-1,?,?, '2026-10-16 10:00:00')
+            """, partId, "=2+2", "@SUM(A1:A2)");
+
+        Path target = tempDir.resolve("movements.csv");
+        assertEquals(1, reports.export(OperationalReportsService.ReportType.STOCK_MOVEMENTS, target,
+                LocalDate.of(2026, 1, 1), LocalDate.of(2027, 1, 1)));
+        String csv = Files.readString(target, StandardCharsets.UTF_8);
+        assertTrue(csv.contains("\"'=1+1\""), "Formula-like part names should be neutralized");
+        assertTrue(csv.contains("\"-1\""), "Negative movement quantities must remain numeric");
+        assertTrue(csv.contains("\"'=2+2\""), "Formula-like references should be neutralized");
+        assertTrue(csv.contains("\"'@SUM(A1:A2)\""), "Formula-like reasons should be neutralized");
+    }
+
+    @Test
     void rejectsNonCsvDestination() {
         assertThrows(IllegalArgumentException.class, () -> reports.export(
                 OperationalReportsService.ReportType.SALES, tempDir.resolve("report.txt"),
