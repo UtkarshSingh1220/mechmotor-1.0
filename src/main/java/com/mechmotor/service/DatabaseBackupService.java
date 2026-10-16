@@ -44,6 +44,7 @@ public class DatabaseBackupService {
             Map.entry("sales", Set.of("id", "sale_number", "customer_name", "subtotal_paise", "discount_paise", "total_paise", "status", "created_at")),
             Map.entry("sale_items", Set.of("id", "sale_id", "part_id", "sku_snapshot", "name_snapshot", "quantity", "unit_price_paise", "line_total_paise")),
             Map.entry("payments", Set.of("id", "sale_id", "method", "amount_paise", "reference", "created_at")),
+            Map.entry("sale_returns", Set.of("id", "return_number", "sale_id", "quantity", "refund_paise", "refund_method", "refund_reference", "reason", "created_at")),
             Map.entry("purchases", Set.of("id", "purchase_number", "supplier_id", "supplier_name_snapshot", "supplier_invoice_reference", "subtotal_paise", "status", "created_at")),
             Map.entry("purchase_items", Set.of("id", "purchase_id", "part_id", "sku_snapshot", "name_snapshot", "quantity", "unit_cost_paise", "line_total_paise")));
 
@@ -146,6 +147,7 @@ public class DatabaseBackupService {
             requiredColumns.remove("sales");
             requiredColumns.remove("sale_items");
             requiredColumns.remove("payments");
+            requiredColumns.remove("sale_returns");
             requiredColumns.remove("purchases");
             requiredColumns.remove("purchase_items");
         }

@@ -9,6 +9,8 @@
 
 ## Milestone status
 
+- Sales returns/refunds (in progress on feat/sales-returns-refunds): sale lookup, partial return limits, cumulative discount-aware refunds, stock restoration, refund records and transactional ledger; CI required before merge.
+
 - **Purchase receiving (in progress on `feat/purchase-receiving`):** supplier-linked one-item receipts with atomic stock increase, purchase-cost update and ledger entry; CI pending.
 
 - **Single-item sales checkout (in progress on `feat/sales-checkout`):** atomic sale/payment/stock-ledger transaction with insufficient-stock guard and UI; CI pending.

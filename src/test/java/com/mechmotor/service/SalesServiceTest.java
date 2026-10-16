@@ -3,6 +3,8 @@ package com.mechmotor.service;
 import com.mechmotor.domain.PartDraft;
 import com.mechmotor.domain.SaleDraft;
 import com.mechmotor.domain.SaleReceipt;
+import com.mechmotor.domain.SaleReturnDraft;
+import com.mechmotor.domain.SaleReturnReceipt;
 import com.mechmotor.repository.PartRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -75,4 +77,42 @@ class SalesServiceTest {
         assertEquals(3, parts.findById(partId).quantity());
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM sales", Integer.class));
     }
+
+    @Test
+    void partialReturnsRefundProportionallyAndCannotReturnMoreThanSold() {
+        SaleReceipt sale = sales.checkout(new SaleDraft(partId, 3, 2500, 500,
+                "Walk-in", "CASH", null));
+        SaleReturnReceipt first = sales.returnSale(new SaleReturnDraft(sale.saleNumber(), 1, "UPI", "REF-1", "Wrong item"));
+        assertEquals(2333L, first.refundPaise());
+        assertEquals(1, parts.findById(partId).quantity());
+
+        SaleReturnReceipt second = sales.returnSale(new SaleReturnDraft(sale.saleNumber(), 2, "CASH", null, "Customer return"));
+        assertEquals(4667L, second.refundPaise());
+        assertEquals(3, parts.findById(partId).quantity());
+        assertEquals(7000L, jdbc.queryForObject("SELECT SUM(refund_paise) FROM sale_returns WHERE sale_id=?", Long.class, sale.saleId()));
+        assertEquals(3, jdbc.queryForObject("SELECT SUM(quantity) FROM sale_returns WHERE sale_id=?", Integer.class, sale.saleId()));
+        assertEquals(3, jdbc.queryForObject("SELECT SUM(quantity) FROM stock_movements WHERE reference IN (SELECT return_number FROM sale_returns WHERE sale_id=?)", Integer.class, sale.saleId()));
+        assertThrows(IllegalArgumentException.class, () -> sales.returnSale(new SaleReturnDraft(sale.saleNumber(), 1, "CASH", null, null)));
+    }
+
+    @Test
+    void returnRollsBackWhenStockLedgerWriteFails() {
+        SaleReceipt sale = sales.checkout(new SaleDraft(partId, 1, 2500, 0, null, "CASH", null));
+        jdbc.execute("""
+            CREATE TRIGGER fail_return_ledger BEFORE INSERT ON stock_movements
+            WHEN NEW.movement_type = 'RETURN'
+            BEGIN SELECT RAISE(ABORT, 'simulated return ledger failure'); END
+            """);
+        assertThrows(org.springframework.dao.DataAccessException.class, () ->
+                sales.returnSale(new SaleReturnDraft(sale.saleNumber(), 1, "CASH", null, "Test rollback")));
+        assertEquals(2, parts.findById(partId).quantity());
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM sale_returns", Integer.class));
+    }
+
+    @Test
+    void returnableSaleRejectsUnknownSaleAndZeroQuantityIsRejected() {
+        assertThrows(IllegalArgumentException.class, () -> sales.returnableSale("UNKNOWN"));
+        assertThrows(IllegalArgumentException.class, () -> new SaleReturnDraft("MM-20261016-12345678", 0, "CASH", null, null));
+    }
+
 }

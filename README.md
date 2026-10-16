@@ -27,6 +27,10 @@ Use the **CSV** menu to export the currently applied inventory filters or import
 
 Select an inventory row and choose **Sell selected**. Checkout supports quantity, unit price, discount, optional customer/payment reference, and CASH/UPI/CARD/BANK_TRANSFER. The sale header, item snapshot, payment, stock decrement and stock-ledger movement commit atomically. Insufficient stock or a failed write prevents the sale from being posted. The current version supports one item per sale and full payment only; voids/refunds and PDF invoices are not yet implemented.
 
+## Sales returns and refunds
+
+Use Returns / refunds and enter the sale number from the original receipt. MechMotor checks the remaining returnable quantity, calculates refunds cumulatively from the original sale total including discount, records the refund method/reference, adds returned quantity to inventory, and writes a RETURN stock movement in one transaction. Repeated or excess returns are rejected. Current returns support the single-item sales model; refunds are recorded for manual settlement and are not sent automatically to a payment provider.
+
 ## Purchase receiving
 
 Select a part and choose **Receive stock**. Select the supplier, enter received quantity and unit cost, and optionally enter the supplier invoice/delivery-note reference. The app records a supplier receipt, snapshots item/supplier details, updates the latest purchase cost, increases inventory and writes a positive stock-ledger movement in one transaction. If any step fails, the complete receipt rolls back. Supplier payments, multi-item purchase orders and returns are not yet implemented.

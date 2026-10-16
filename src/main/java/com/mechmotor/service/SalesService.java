@@ -3,6 +3,9 @@ package com.mechmotor.service;
 import com.mechmotor.domain.PartDetails;
 import com.mechmotor.domain.SaleDraft;
 import com.mechmotor.domain.SaleReceipt;
+import com.mechmotor.domain.SaleReturnDraft;
+import com.mechmotor.domain.SaleReturnable;
+import com.mechmotor.domain.SaleReturnReceipt;
 import com.mechmotor.repository.PartRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.PreparedStatementCreator;
@@ -17,6 +20,8 @@ import java.sql.Statement;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.UUID;
+import java.math.BigInteger;
+import java.util.List;
 
 /** Posts a single-item sale atomically with stock deduction, ledger movement and payment. */
 @Service
@@ -99,5 +104,87 @@ public class SalesService {
             return new SaleReceipt(saleId, saleNumber, part.sku(), part.name(), draft.quantity(),
                     subtotal, draft.discountPaise(), total, draft.paymentMethod());
         });
+    }
+
+    public SaleReturnable returnableSale(String rawSaleNumber) {
+        return loadReturnableSale(normalizeSaleNumber(rawSaleNumber));
+    }
+
+    public SaleReturnReceipt returnSale(SaleReturnDraft draft) {
+        return transactions.execute(status -> {
+            SaleReturnable sale = loadReturnableSale(normalizeSaleNumber(draft.saleNumber()));
+            if (draft.quantity() > sale.remainingQuantity()) {
+                throw new IllegalArgumentException("Only " + sale.remainingQuantity() + " unit(s) remain eligible for return.");
+            }
+            int cumulativeQuantity = Math.addExact(sale.returnedQuantity(), draft.quantity());
+            long targetRefund = BigInteger.valueOf(sale.saleTotalPaise())
+                    .multiply(BigInteger.valueOf(cumulativeQuantity))
+                    .divide(BigInteger.valueOf(sale.soldQuantity())).longValueExact();
+            long refundAmount = Math.subtractExact(targetRefund, sale.refundedPaise());
+            if (refundAmount < 0 || refundAmount > sale.remainingRefundPaise()) {
+                throw new IllegalStateException("Calculated refund exceeds the remaining refundable amount.");
+            }
+
+            String returnNumber = "RET-" + LocalDate.now(clock).toString().replace("-", "")
+                    + "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(java.util.Locale.ROOT);
+            jdbc.update("""
+                INSERT INTO sale_returns(return_number,sale_id,quantity,refund_paise,refund_method,refund_reference,reason)
+                VALUES (?,?,?,?,?,?,?)
+                """, returnNumber, sale.saleId(), draft.quantity(), refundAmount,
+                    draft.refundMethod(), draft.refundReference(), draft.reason());
+
+            int changed = jdbc.update("""
+                INSERT INTO inventory(part_id,quantity_on_hand,reorder_level) VALUES (?,?,0)
+                ON CONFLICT(part_id) DO UPDATE
+                  SET quantity_on_hand=inventory.quantity_on_hand+excluded.quantity_on_hand
+                  WHERE inventory.quantity_on_hand <= ?
+                """, sale.partId(), draft.quantity(), Integer.MAX_VALUE - draft.quantity());
+            if (changed != 1) {
+                throw new IllegalStateException("Inventory quantity limit exceeded; no return was posted.");
+            }
+            jdbc.update("""
+                INSERT INTO stock_movements(part_id,movement_type,quantity,reference,reason)
+                VALUES (?,'RETURN',?,?,?)
+                """, sale.partId(), draft.quantity(), returnNumber, "Customer return for " + sale.saleNumber());
+
+            return new SaleReturnReceipt(returnNumber, sale.saleNumber(), sale.sku(), sale.partName(),
+                    draft.quantity(), refundAmount, draft.refundMethod());
+        });
+    }
+
+    private SaleReturnable loadReturnableSale(String saleNumber) {
+        List<SaleReturnable> sales = jdbc.query("""
+            SELECT s.id AS sale_id, s.sale_number, s.customer_name, s.total_paise,
+                   si.part_id, si.sku_snapshot, si.name_snapshot, si.quantity AS sold_quantity,
+                   COALESCE(r.returned_quantity,0) AS returned_quantity,
+                   COALESCE(r.refunded_paise,0) AS refunded_paise
+            FROM sales s
+            JOIN sale_items si ON si.sale_id=s.id
+            LEFT JOIN (
+                SELECT sale_id, SUM(quantity) AS returned_quantity, SUM(refund_paise) AS refunded_paise
+                FROM sale_returns GROUP BY sale_id
+            ) r ON r.sale_id=s.id
+            WHERE s.sale_number=? AND s.status='POSTED'
+            """, (rs, row) -> {
+                int soldQuantity = rs.getInt("sold_quantity");
+                int returnedQuantity = rs.getInt("returned_quantity");
+                long saleTotal = rs.getLong("total_paise");
+                long refunded = rs.getLong("refunded_paise");
+                return new SaleReturnable(rs.getLong("sale_id"), rs.getString("sale_number"),
+                        rs.getString("customer_name"), rs.getLong("part_id"),
+                        rs.getString("sku_snapshot"), rs.getString("name_snapshot"),
+                        soldQuantity, returnedQuantity, Math.max(0, soldQuantity - returnedQuantity),
+                        saleTotal, refunded, Math.max(0, saleTotal - refunded));
+            }, saleNumber);
+        if (sales.isEmpty()) throw new IllegalArgumentException("No posted sale found with that sale number.");
+        if (sales.size() != 1) throw new IllegalStateException("This version only supports returns for single-item sales.");
+        return sales.get(0);
+    }
+
+    private static String normalizeSaleNumber(String raw) {
+        if (raw == null || raw.isBlank()) throw new IllegalArgumentException("Enter a sale number.");
+        String value = raw.strip().toUpperCase(java.util.Locale.ROOT);
+        if (value.length() > 40) throw new IllegalArgumentException("Sale number is too long.");
+        return value;
     }
 }

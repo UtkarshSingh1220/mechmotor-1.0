@@ -50,6 +50,13 @@ Never run JDBC, report generation or Gmail operations on the JavaFX Application 
 - Any stock conflict or write failure rolls back the sale, payment and stock movement together. Sale numbers use a date prefix and random suffix; the database enforces uniqueness.
 - The current flow supports full payment by CASH, UPI, CARD or BANK_TRANSFER. Multi-item carts, partial payments, void/refund workflows and PDF invoices remain future work.
 
+## Sales returns and refunds
+
+- SalesService.returnableSale loads posted sale snapshots and aggregates prior return quantities/refunds.
+- SalesService.returnSale uses one transaction to record the return, calculate a cumulative proportional refund, restore inventory with overflow protection and append a positive RETURN stock movement.
+- Cumulative refund rounding is computed from total returned quantity, so returning all units refunds exactly the sale total including discount, without exceeding it.
+- Returns exceeding the remaining sold quantity are rejected; a ledger failure rolls back the return and inventory update. Refunds are recorded for manual settlement; no payment processor is called.
+
 ## Purchase receiving
 
 - `PurchasingService` posts one-item supplier receipts inside a `TransactionTemplate`.
