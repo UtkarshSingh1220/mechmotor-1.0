@@ -3,6 +3,7 @@ package com.mechmotor.service;
 import com.mechmotor.domain.PartDraft;
 import com.mechmotor.domain.SaleDraft;
 import com.mechmotor.domain.SaleReceipt;
+import com.mechmotor.domain.SaleVoidReceipt;
 import com.mechmotor.repository.PartRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -65,6 +66,46 @@ class SalesServiceTest {
         assertEquals(3, parts.findById(partId).quantity());
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM sales", Integer.class));
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM payments", Integer.class));
+    }
+
+
+    @Test
+    void voidSaleRestoresStockAndRecordsRefundAndReversalOnce() {
+        SaleReceipt sale = sales.checkout(new SaleDraft(partId, 2, 2500, 500,
+                "Walk-in customer", "UPI", "UPI-REF-2"));
+
+        SaleVoidReceipt result = sales.voidSale(sale.saleNumber(), "Customer returned item", "REFUND-REF-2");
+
+        assertEquals(2, result.unitsRestored());
+        assertEquals(4500L, result.amountRefundedPaise());
+        assertEquals("UPI", result.refundMethod());
+        assertEquals(3, parts.findById(partId).quantity());
+        assertEquals("VOIDED", jdbc.queryForObject("SELECT status FROM sales WHERE id=?", String.class, sale.saleId()));
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM sale_voids WHERE sale_id=?", Integer.class, sale.saleId()));
+        assertEquals(2, jdbc.queryForObject("SELECT quantity FROM stock_movements WHERE reference=? AND movement_type='REVERSAL'",
+                Integer.class, sale.saleNumber()));
+
+        assertThrows(IllegalStateException.class,
+                () -> sales.voidSale(sale.saleNumber(), "Duplicate request", null));
+        assertEquals(3, parts.findById(partId).quantity());
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM sale_voids WHERE sale_id=?", Integer.class, sale.saleId()));
+    }
+
+    @Test
+    void voidRollsBackStatusStockAndAuditIfLedgerWriteFails() {
+        SaleReceipt sale = sales.checkout(new SaleDraft(partId, 2, 2500, 0,
+                null, "CASH", null));
+        jdbc.execute("""
+            CREATE TRIGGER fail_sale_reversal BEFORE INSERT ON stock_movements
+            WHEN NEW.movement_type='REVERSAL'
+            BEGIN SELECT RAISE(ABORT, 'simulated reversal failure'); END
+            """);
+
+        assertThrows(org.springframework.dao.DataAccessException.class,
+                () -> sales.voidSale(sale.saleNumber(), "Test rollback", null));
+        assertEquals(1, parts.findById(partId).quantity());
+        assertEquals("POSTED", jdbc.queryForObject("SELECT status FROM sales WHERE id=?", String.class, sale.saleId()));
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM sale_voids", Integer.class));
     }
 
     @Test

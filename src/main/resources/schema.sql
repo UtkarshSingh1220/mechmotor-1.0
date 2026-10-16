@@ -159,3 +159,15 @@ CREATE INDEX IF NOT EXISTS idx_purchases_created_at ON purchases(created_at);
 CREATE INDEX IF NOT EXISTS idx_purchases_supplier_id ON purchases(supplier_id);
 CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase_id ON purchase_items(purchase_id);
 CREATE INDEX IF NOT EXISTS idx_purchase_items_part_id ON purchase_items(part_id);
+
+
+CREATE TABLE IF NOT EXISTS sale_voids (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  sale_id INTEGER NOT NULL UNIQUE REFERENCES sales(id),
+  reason TEXT NOT NULL,
+  amount_refunded_paise INTEGER NOT NULL CHECK(amount_refunded_paise >= 0),
+  refund_method TEXT CHECK(refund_method IS NULL OR refund_method IN ('CASH','UPI','CARD','BANK_TRANSFER')),
+  refund_reference TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_sale_voids_created_at ON sale_voids(created_at);
