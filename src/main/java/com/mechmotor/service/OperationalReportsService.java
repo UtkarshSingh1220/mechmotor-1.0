@@ -132,7 +132,7 @@ public class OperationalReportsService {
             if (i > 0) writer.write(',');
             String value = values[i] == null ? "" : values[i];
             // Neutralize spreadsheet formulas without turning signed numeric quantities into text.
-            boolean signedNumber = value.matches("-?\\\\d+(\\\\.\\\\d+)?");
+            boolean signedNumber = value.matches("-?\d+(\.\d+)?");
             if (!value.isEmpty() && "=+-@".indexOf(value.charAt(0)) >= 0 && !signedNumber) value = "'" + value;
             writer.write('"');
             writer.write(value.replace("\"", "\"\""));
