@@ -30,6 +30,10 @@ The inventory workspace trims and normalizes whitespace and performs case-insens
 Measure local search latency on representative hardware and data; initial target for common queries is 100–200 ms. Bound background work, paginate results, keep blocking work off the JavaFX thread, and test packaged startup on a clean Windows machine.
 
 
+## Formal purchase orders
+
+Formal purchase orders are stored separately from goods receipts. Creating an order snapshots the supplier and requested item quantities/costs and leaves on-hand inventory unchanged. Orders can be searched and cancelled with a required reason while still `ORDERED`. Receiving currently posts the entire order as one atomic goods receipt and links the receipt back to the order; partial receiving and supplier returns/credit notes remain future work.
+
 ## Sale voids and returns
 Sale voids are audited transactions: sale status, stock restoration, reversal ledger entries and refund metadata commit together. Actual money movement remains external and must be reconciled by the shop. Partial returns are separately recorded against original sales and should not be confused with a full sale void.
 
