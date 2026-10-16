@@ -45,10 +45,10 @@ Never run JDBC, report generation or Gmail operations on the JavaFX Application 
 
 ## Sales checkout
 
-- The initial checkout flow posts a single selected part per sale. `SalesService` wraps the operation in a Spring `TransactionTemplate`.
-- It snapshots SKU/name/unit price/quantity into `sale_items`, stores subtotal/discount/total in `sales`, deducts stock with a conditional `quantity_on_hand >= requested` update, writes a negative `SALE` stock movement and records a payment when the total is greater than zero.
-- Any stock conflict or write failure rolls back the sale, payment and stock movement together. Sale numbers use a date prefix and random suffix; the database enforces uniqueness.
-- The current flow supports full payment by CASH, UPI, CARD or BANK_TRANSFER. Multi-item carts, partial payments, void/refund workflows and PDF invoices remain future work.
+- Checkout supports a cart of up to 100 distinct parts in one sale. Each line snapshots SKU/name, quantity and unit price; the sale header stores subtotal, discount and total.
+- The service pre-validates stock and overflow-safe totals, then inserts the sale, each item snapshot, guarded stock deduction and negative SALE movement in a single TransactionTemplate.
+- A stock conflict or any later write failure rolls back all cart lines, stock deductions, ledger movements and payment. The database enforces unique sale numbers.
+- Current payment is full-payment only (CASH, UPI, CARD or BANK_TRANSFER). Partial payments, void/refund workflows and PDF invoices remain future work.
 
 ## Sale voids and refund audit
 

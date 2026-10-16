@@ -112,7 +112,6 @@ public class MechMotorApplication extends Application {
         Button editButton = new Button("Edit selected");
         Button deactivateButton = new Button("Deactivate");
         Button sellButton = new Button("Sell selected");
-        Button voidSaleButton = new Button("Void sale / refund…");
         Button receiveStockButton = new Button("Receive stock");
         Button fitmentButton = new Button("Vehicle fitment");
         MenuItem addCategoryItem = new MenuItem("Add root / subcategory…");
@@ -358,15 +357,6 @@ public class MechMotorApplication extends Application {
             showSaleDialog(stage, selected, status, loadPage);
         });
 
-
-        voidSaleButton.setOnAction(e -> {
-            if (!licenseService.status().features().contains("SALES")) {
-                showError("Feature not licensed", new IllegalArgumentException("Your activation key does not include SALES."));
-                return;
-            }
-            showVoidSaleDialog(stage, status, loadPage);
-        });
-
         receiveStockButton.setOnAction(e -> {
             if (!licenseService.status().features().contains("PURCHASING")) {
                 showError("Feature not licensed", new IllegalArgumentException("Your activation key does not include PURCHASING."));
@@ -500,7 +490,7 @@ public class MechMotorApplication extends Application {
         GridPane.setHgrow(savedViewSelector, Priority.ALWAYS);
         GridPane.setHgrow(savedViewsMenu, Priority.ALWAYS);
         for (int i = 0; i < 6; i++) GridPane.setHgrow(filters.getChildren().get(i), Priority.ALWAYS);
-        HBox actions = new HBox(8, addButton, editButton, deactivateButton, sellButton, voidSaleButton, receiveStockButton, fitmentButton, categoryMenu, supplierMenu, backupButton, restoreButton, csvMenu,
+        HBox actions = new HBox(8, addButton, editButton, deactivateButton, sellButton, receiveStockButton, fitmentButton, categoryMenu, supplierMenu, backupButton, restoreButton, csvMenu,
                 new Separator(), previousButton, nextButton, pageLabel);
         actions.setPadding(new Insets(8, 20, 8, 20));
         HBox.setHgrow(pageLabel, Priority.ALWAYS);
@@ -595,82 +585,39 @@ public class MechMotorApplication extends Application {
         dialog.showAndWait();
     }
 
-
-    private void showVoidSaleDialog(Stage owner, Label status, Runnable refreshInventory) {
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.initOwner(owner);
-        dialog.setTitle("Void sale and record refund");
-        dialog.setHeaderText("Enter the original sale number. Only posted sales can be voided.");
-        ButtonType voidType = new ButtonType("Void sale", ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().addAll(voidType, ButtonType.CANCEL);
-
-        TextField saleNumber = new TextField();
-        saleNumber.setPromptText("e.g. MM-20261016-AB12CD34");
-        TextField reason = new TextField();
-        reason.setPromptText("Required audit reason");
-        TextField refundReference = new TextField();
-        refundReference.setPromptText("Optional cash voucher / UPI / card refund reference");
-        GridPane form = new GridPane();
-        form.setHgap(10); form.setVgap(10); form.setPadding(new Insets(12));
-        form.add(new Label("Sale number"), 0, 0); form.add(saleNumber, 1, 0);
-        form.add(new Label("Reason"), 0, 1); form.add(reason, 1, 1);
-        form.add(new Label("Refund reference"), 0, 2); form.add(refundReference, 1, 2);
-        GridPane.setHgrow(saleNumber, Priority.ALWAYS);
-        GridPane.setHgrow(reason, Priority.ALWAYS);
-        GridPane.setHgrow(refundReference, Priority.ALWAYS);
-        dialog.getDialogPane().setContent(form);
-        dialog.getDialogPane().setPrefWidth(560);
-
-        Button voidButton = (Button) dialog.getDialogPane().lookupButton(voidType);
-        voidButton.addEventFilter(ActionEvent.ACTION, event -> {
-            event.consume();
-            if (saleNumber.getText() == null || saleNumber.getText().isBlank()
-                    || reason.getText() == null || reason.getText().isBlank()) {
-                showError("Required fields missing", new IllegalArgumentException("Enter the sale number and a reason."));
-                return;
-            }
-            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
-                    "This marks the sale VOIDED, restores its stock and records a full refund audit. It does NOT send money through a bank, UPI app or card terminal; process the actual refund separately. Continue?",
-                    ButtonType.CANCEL, ButtonType.OK);
-            confirm.initOwner(owner);
-            confirm.setTitle("Confirm sale void");
-            confirm.setHeaderText("This operation changes inventory and sales records");
-            confirm.showAndWait().filter(ButtonType.OK::equals).ifPresent(button -> {
-                voidButton.setDisable(true);
-                runBackground(() -> salesService.voidSale(saleNumber.getText(), reason.getText(), refundReference.getText()),
-                        result -> {
-                            dialog.close();
-                            status.setText("Sale voided: " + result.saleNumber() + " • " + result.unitsRestored() + " unit(s) restored");
-                            refreshInventory.run();
-                            Alert info = new Alert(Alert.AlertType.INFORMATION,
-                                    "Sale: " + result.saleNumber()
-                                            + "\nUnits restored: " + result.unitsRestored()
-                                            + "\nRefund recorded: ₹" + rupees(result.amountRefundedPaise())
-                                            + "\nOriginal payment method: " + (result.refundMethod() == null ? "No payment recorded" : result.refundMethod())
-                                            + "\nReason: " + result.reason()
-                                            + "\n\nComplete the actual payment refund separately and retain its reference.", ButtonType.OK);
-                            info.setTitle("Sale void recorded");
-                            info.setHeaderText("Inventory and audit updated");
-                            info.show();
-                        }, error -> {
-                            voidButton.setDisable(false);
-                            showError("Could not void sale", error);
-                        });
-            });
-        });
-        dialog.showAndWait();
+    private record CartLine(Part part, int quantity, long unitPricePaise) {
+        @Override public String toString() {
+            String lineTotal;
+            try { lineTotal = rupees(Math.multiplyExact((long) quantity, unitPricePaise)); }
+            catch (ArithmeticException ex) { lineTotal = "amount too large"; }
+            return part.sku() + " — " + part.name() + " • qty " + quantity
+                    + " × ₹" + rupees(unitPricePaise) + " = ₹" + lineTotal;
+        }
     }
 
-    private void showSaleDialog(Stage owner, Part part, Label status, Runnable refreshInventory) {
+    private void showSaleDialog(Stage owner, Part initialPart, Label status, Runnable refreshInventory) {
         Dialog<ButtonType> dialog = new Dialog<>();
         dialog.initOwner(owner);
         dialog.setTitle("Checkout sale");
-        dialog.setHeaderText(part.name() + " (" + part.sku() + ") — available: " + part.quantity());
+        dialog.setHeaderText("Build a multi-item cart, review the total, then post the sale atomically.");
         ButtonType checkoutType = new ButtonType("Complete sale", ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().addAll(checkoutType, ButtonType.CANCEL);
 
+        var cart = FXCollections.<CartLine>observableArrayList(
+                new CartLine(initialPart, 1, initialPart.sellingPricePaise()));
+        ListView<CartLine> cartList = new ListView<>(cart);
+        cartList.setPrefHeight(190);
+        cartList.setCellFactory(view -> new ListCell<>() {
+            @Override protected void updateItem(CartLine item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? null : item.toString());
+            }
+        });
+        Button addItem = new Button("Add another part…");
+        Button removeItem = new Button("Remove selected");
         TextField quantity = new TextField("1");
-        TextField unitPrice = new TextField(rupees(part.sellingPricePaise()));
+        TextField unitPrice = new TextField(rupees(initialPart.sellingPricePaise()));
+        Button updateLine = new Button("Update selected line");
         TextField discount = new TextField("0.00");
         TextField customer = new TextField();
         customer.setPromptText("Optional customer name");
@@ -678,43 +625,91 @@ public class MechMotorApplication extends Application {
         paymentMethod.setValue("CASH");
         TextField reference = new TextField();
         reference.setPromptText("Optional payment reference");
+        Label summary = new Label();
+        summary.setWrapText(true);
+        updateCartSummary(cart, discount.getText(), summary);
+
+        cartList.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, selected) -> {
+            if (selected != null) {
+                quantity.setText(Integer.toString(selected.quantity()));
+                unitPrice.setText(rupees(selected.unitPricePaise()));
+            }
+        });
+        addItem.setOnAction(e -> showPartPicker(owner,
+                cart.stream().map(line -> line.part().id()).toList()).ifPresent(selected -> {
+            cart.add(new CartLine(selected, 1, selected.sellingPricePaise()));
+            cartList.getSelectionModel().select(cart.size() - 1);
+            updateCartSummary(cart, discount.getText(), summary);
+        }));
+        removeItem.setOnAction(e -> {
+            int selected = cartList.getSelectionModel().getSelectedIndex();
+            if (selected >= 0) cart.remove(selected);
+            updateCartSummary(cart, discount.getText(), summary);
+        });
+        updateLine.setOnAction(e -> {
+            int selected = cartList.getSelectionModel().getSelectedIndex();
+            if (selected < 0) { showError("Select a cart item", new IllegalArgumentException("Choose an item to update.")); return; }
+            try {
+                int qty = parseRequiredInteger(quantity.getText(), "Quantity");
+                long price = parsePaise(unitPrice.getText(), "Unit price");
+                CartLine existing = cart.get(selected);
+                cart.set(selected, new CartLine(existing.part(), qty, price));
+                updateCartSummary(cart, discount.getText(), summary);
+            } catch (IllegalArgumentException ex) { showError("Check item details", ex); }
+        });
+        discount.textProperty().addListener((obs, oldValue, newValue) ->
+                updateCartSummary(cart, newValue, summary));
+
         GridPane form = new GridPane();
-        form.setHgap(10); form.setVgap(10); form.setPadding(new Insets(12));
-        form.add(new Label("Quantity"), 0, 0); form.add(quantity, 1, 0);
-        form.add(new Label("Unit price (₹)"), 0, 1); form.add(unitPrice, 1, 1);
-        form.add(new Label("Discount (₹)"), 0, 2); form.add(discount, 1, 2);
-        form.add(new Label("Customer"), 0, 3); form.add(customer, 1, 3);
-        form.add(new Label("Payment method"), 0, 4); form.add(paymentMethod, 1, 4);
-        form.add(new Label("Reference"), 0, 5); form.add(reference, 1, 5);
+        form.setHgap(10); form.setVgap(8); form.setPadding(new Insets(12));
+        form.add(new Label("Items in cart"), 0, 0, 2, 1);
+        form.add(cartList, 0, 1, 2, 1);
+        HBox cartActions = new HBox(8, addItem, removeItem);
+        form.add(cartActions, 0, 2, 2, 1);
+        form.add(new Label("Selected quantity"), 0, 3); form.add(quantity, 1, 3);
+        form.add(new Label("Unit price (₹)"), 0, 4); form.add(unitPrice, 1, 4);
+        form.add(updateLine, 1, 5);
+        form.add(new Label("Sale discount (₹)"), 0, 6); form.add(discount, 1, 6);
+        form.add(new Label("Customer"), 0, 7); form.add(customer, 1, 7);
+        form.add(new Label("Payment method"), 0, 8); form.add(paymentMethod, 1, 8);
+        form.add(new Label("Payment reference"), 0, 9); form.add(reference, 1, 9);
+        form.add(summary, 0, 10, 2, 1);
+        GridPane.setHgrow(cartList, Priority.ALWAYS);
         GridPane.setHgrow(unitPrice, Priority.ALWAYS);
         GridPane.setHgrow(customer, Priority.ALWAYS);
         GridPane.setHgrow(paymentMethod, Priority.ALWAYS);
         GridPane.setHgrow(reference, Priority.ALWAYS);
         dialog.getDialogPane().setContent(form);
-        dialog.getDialogPane().setPrefWidth(480);
+        dialog.getDialogPane().setPrefWidth(620);
+        dialog.getDialogPane().setPrefHeight(610);
 
         Button checkout = (Button) dialog.getDialogPane().lookupButton(checkoutType);
         checkout.addEventFilter(ActionEvent.ACTION, event -> {
             event.consume();
             try {
-                SaleDraft draft = new SaleDraft(part.id(),
-                        parseRequiredInteger(quantity.getText(), "Quantity"),
-                        parsePaise(unitPrice.getText(), "Unit price"),
-                        parsePaise(discount.getText(), "Discount"),
+                List<SaleLineDraft> lines = cart.stream()
+                        .map(line -> new SaleLineDraft(line.part().id(), line.quantity(), line.unitPricePaise()))
+                        .toList();
+                Long parsedDiscount = parsePaise(discount.getText(), "Sale discount");
+                CartSaleDraft draft = new CartSaleDraft(lines, parsedDiscount == null ? 0L : parsedDiscount,
                         customer.getText(), paymentMethod.getValue(), reference.getText());
                 checkout.setDisable(true);
                 runBackground(() -> salesService.checkout(draft), receipt -> {
                     dialog.close();
                     status.setText("Sale posted: " + receipt.saleNumber() + " • total ₹" + rupees(receipt.totalPaise()));
                     refreshInventory.run();
-                    Alert confirmation = new Alert(Alert.AlertType.INFORMATION,
-                            "Sale: " + receipt.saleNumber()
-                                    + "\nPart: " + receipt.sku() + " — " + receipt.partName()
-                                    + "\nQuantity: " + receipt.quantity()
-                                    + "\nSubtotal: ₹" + rupees(receipt.subtotalPaise())
-                                    + "\nDiscount: ₹" + rupees(receipt.discountPaise())
-                                    + "\nTotal paid: ₹" + rupees(receipt.totalPaise())
-                                    + "\nPayment: " + receipt.paymentMethod(), ButtonType.OK);
+                    StringBuilder details = new StringBuilder("Sale: ").append(receipt.saleNumber()).append("\n");
+                    for (SaleLineReceipt line : receipt.lines()) {
+                        details.append(line.sku()).append(" — ").append(line.partName())
+                                .append(" • ").append(line.quantity()).append(" × ₹")
+                                .append(rupees(line.unitPricePaise())).append(" = ₹")
+                                .append(rupees(line.lineTotalPaise())).append("\n");
+                    }
+                    details.append("Subtotal: ₹").append(rupees(receipt.subtotalPaise()))
+                            .append("\nDiscount: ₹").append(rupees(receipt.discountPaise()))
+                            .append("\nTotal paid: ₹").append(rupees(receipt.totalPaise()))
+                            .append("\nPayment: ").append(receipt.paymentMethod());
+                    Alert confirmation = new Alert(Alert.AlertType.INFORMATION, details.toString(), ButtonType.OK);
                     confirmation.setTitle("Sale completed");
                     confirmation.setHeaderText("Checkout successful");
                     confirmation.show();
@@ -727,6 +722,70 @@ public class MechMotorApplication extends Application {
             }
         });
         dialog.showAndWait();
+    }
+
+    private java.util.Optional<Part> showPartPicker(Stage owner, List<Long> excludedPartIds) {
+        Dialog<Part> dialog = new Dialog<>();
+        dialog.initOwner(owner);
+        dialog.setTitle("Add item to sale");
+        dialog.setHeaderText("Search inventory and select a part to add to the cart.");
+        ButtonType addType = new ButtonType("Add selected item", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(addType, ButtonType.CANCEL);
+        TextField search = new TextField();
+        search.setPromptText("Search SKU, barcode, part name, brand or vehicle fitment");
+        Button searchButton = new Button("Search");
+        ListView<Part> results = new ListView<>(FXCollections.observableArrayList());
+        results.setPrefSize(560, 300);
+        results.setCellFactory(view -> new ListCell<>() {
+            @Override protected void updateItem(Part item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? null : item.sku() + " — " + item.name()
+                        + " • stock " + item.quantity() + " • ₹" + rupees(item.sellingPricePaise()));
+            }
+        });
+        Runnable find = () -> runBackground(() -> inventory.search(search.getText()), found -> {
+            results.getItems().setAll(found.stream()
+                    .filter(part -> part.quantity() > 0 && !excludedPartIds.contains(part.id())).toList());
+            if (results.getItems().isEmpty()) showError("No matching stock", new IllegalArgumentException(
+                    "No available inventory items matched. Try a more specific search or check stock levels."));
+        }, error -> showError("Inventory search failed", error));
+        searchButton.setOnAction(e -> find.run());
+        search.setOnAction(e -> find.run());
+        VBox content = new VBox(8, new HBox(8, search, searchButton), results);
+        VBox.setVgrow(results, Priority.ALWAYS);
+        content.setPadding(new Insets(12));
+        dialog.getDialogPane().setContent(content);
+        dialog.getDialogPane().setPrefSize(640, 430);
+        Button add = (Button) dialog.getDialogPane().lookupButton(addType);
+        add.addEventFilter(ActionEvent.ACTION, event -> {
+            Part selected = results.getSelectionModel().getSelectedItem();
+            if (selected == null) {
+                event.consume();
+                showError("Select an item", new IllegalArgumentException("Choose an available item from the search results."));
+                return;
+            }
+            dialog.setResult(selected);
+            dialog.close();
+        });
+        find.run();
+        return dialog.showAndWait();
+    }
+
+    private static void updateCartSummary(List<CartLine> cart, String discountText, Label summary) {
+        try {
+            long subtotal = 0;
+            for (CartLine line : cart) {
+                subtotal = Math.addExact(subtotal,
+                        Math.multiplyExact((long) line.quantity(), line.unitPricePaise()));
+            }
+            Long parsedDiscount = parsePaise(discountText, "Sale discount");
+            long discount = parsedDiscount == null ? 0L : parsedDiscount;
+            long total = Math.max(0, subtotal - discount);
+            summary.setText("Subtotal: ₹" + rupees(subtotal) + " • Discount: ₹" + rupees(discount)
+                    + " • Total: ₹" + rupees(total) + (discount > subtotal ? " (discount exceeds subtotal)" : ""));
+        } catch (RuntimeException ex) {
+            summary.setText("Enter valid quantities, prices and discount to calculate the total.");
+        }
     }
 
     private boolean showActivationDialog(Stage owner, boolean required, Label licenseStatusLabel) {

@@ -15,7 +15,7 @@ Offline-first Windows desktop software for a vehicle spare-parts shop. The initi
 Dashboard; parts and inventory; categories and vehicle fitment; suppliers and purchasing; sales and customers; stock movement ledger; PDF/CSV reports; backup/restore; license and activation; scheduled Gmail reports; settings.
 
 ## Search contract
-The inventory workspace trims and normalizes whitespace and performs case-insensitive matching across SKU, barcode, part number, name, brand/company, material, color, category and supplier. Exact SKU/barcode/part-number matches rank first. The initial advanced filters include brand, material, color, category, supplier, stock status, quantity range and selling-price range. Filter groups are combined with AND; free-text matches across searchable fields use OR. Results are paged and sort keys are allowlisted. Vehicle fitment, saved views and performance benchmarking remain planned. User values are always bound parameters.
+The inventory workspace trims and normalizes whitespace and performs case-insensitive matching across SKU, barcode, part number, name, brand/company, material, color, category and supplier. Exact SKU/barcode/part-number matches rank first. The initial advanced filters include brand, material, color, category, supplier, stock status, quantity range and selling-price range. Filter groups are combined with AND; free-text matches across searchable fields use OR. Results are paged and sort keys are allowlisted. Vehicle fitment and saved views are implemented; performance benchmarking remains planned. User values are always bound parameters.
 
 ## Integrity and security
 - Store currency as integer paise, never floating point.

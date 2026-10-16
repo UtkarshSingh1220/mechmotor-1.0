@@ -1,9 +1,12 @@
 package com.mechmotor.service;
 
+import com.mechmotor.domain.CartSaleDraft;
+import com.mechmotor.domain.CartSaleReceipt;
 import com.mechmotor.domain.PartDetails;
 import com.mechmotor.domain.SaleDraft;
+import com.mechmotor.domain.SaleLineDraft;
+import com.mechmotor.domain.SaleLineReceipt;
 import com.mechmotor.domain.SaleReceipt;
-import com.mechmotor.domain.SaleVoidReceipt;
 import com.mechmotor.repository.PartRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.PreparedStatementCreator;
@@ -17,10 +20,11 @@ import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.time.Clock;
 import java.time.LocalDate;
-import java.util.UUID;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
-/** Posts a single-item sale atomically with stock deduction, ledger movement and payment. */
+/** Posts sales atomically, including multi-item carts, stock deduction, ledger movements and payment. */
 @Service
 public class SalesService {
     private final JdbcTemplate jdbc;
@@ -39,88 +43,38 @@ public class SalesService {
         this.clock = clock;
     }
 
-    public SaleVoidReceipt voidSale(String rawSaleNumber, String rawReason, String rawRefundReference) {
-        String saleNumber = rawSaleNumber == null ? "" : rawSaleNumber.strip();
-        if (saleNumber.isEmpty() || saleNumber.length() > 64) {
-            throw new IllegalArgumentException("Enter a valid sale number.");
-        }
-        String reason = rawReason == null ? "" : rawReason.strip().replaceAll("\\s+", " ");
-        if (reason.isEmpty()) throw new IllegalArgumentException("A reason is required to void a sale.");
-        if (reason.length() > 240) throw new IllegalArgumentException("Void reason cannot exceed 240 characters.");
-        String refundReference = rawRefundReference == null || rawRefundReference.isBlank()
-                ? null : rawRefundReference.strip().replaceAll("\\s+", " ");
-        if (refundReference != null && refundReference.length() > 120) {
-            throw new IllegalArgumentException("Refund reference cannot exceed 120 characters.");
-        }
-
-        return transactions.execute(status -> {
-            List<SaleHeader> headers = jdbc.query(
-                    "SELECT id,sale_number,total_paise,status FROM sales WHERE sale_number=? COLLATE NOCASE",
-                    (rs, row) -> new SaleHeader(rs.getLong("id"), rs.getString("sale_number"),
-                            rs.getLong("total_paise"), rs.getString("status")), saleNumber);
-            if (headers.isEmpty()) throw new IllegalArgumentException("Sale number was not found.");
-            SaleHeader sale = headers.get(0);
-            if (!"POSTED".equals(sale.status())) {
-                throw new IllegalStateException("Only a posted sale can be voided. This sale is already " + sale.status() + ".");
-            }
-
-            List<SaleLine> lines = jdbc.query(
-                    "SELECT part_id,quantity FROM sale_items WHERE sale_id=? ORDER BY id",
-                    (rs, row) -> new SaleLine(rs.getLong("part_id"), rs.getInt("quantity")), sale.id());
-            if (lines.isEmpty()) throw new IllegalStateException("Sale has no item lines; no changes were made.");
-
-            String refundMethod = null;
-            if (sale.totalPaise() > 0) {
-                List<String> methods = jdbc.query(
-                        "SELECT method FROM payments WHERE sale_id=? ORDER BY id LIMIT 1",
-                        (rs, row) -> rs.getString("method"), sale.id());
-                if (methods.isEmpty()) {
-                    throw new IllegalStateException("Sale payment record is missing. Resolve the payment audit before voiding.");
-                }
-                refundMethod = methods.get(0);
-            }
-
-            int marked = jdbc.update("UPDATE sales SET status='VOIDED' WHERE id=? AND status='POSTED'", sale.id());
-            if (marked != 1) throw new IllegalStateException("Sale status changed. Reload and try again.");
-
-            for (SaleLine line : lines) {
-                int restored = jdbc.update("""
-                    UPDATE inventory SET quantity_on_hand=quantity_on_hand+?
-                    WHERE part_id=? AND quantity_on_hand<=?
-                    """, line.quantity(), line.partId(), Integer.MAX_VALUE - line.quantity());
-                if (restored != 1) {
-                    throw new IllegalStateException("Could not safely restore stock for a sale item; the void was rolled back.");
-                }
-                jdbc.update("""
-                    INSERT INTO stock_movements(part_id,movement_type,quantity,reference,reason)
-                    VALUES (?,'REVERSAL',?,?,?)
-                    """, line.partId(), line.quantity(), sale.saleNumber(), "Sale void: " + reason);
-            }
-
-            jdbc.update("""
-                INSERT INTO sale_voids(sale_id,reason,amount_refunded_paise,refund_method,refund_reference)
-                VALUES (?,?,?,?,?)
-                """, sale.id(), reason, sale.totalPaise(), refundMethod, refundReference);
-
-            return new SaleVoidReceipt(sale.id(), sale.saleNumber(), lines.size(),
-                    lines.stream().mapToInt(SaleLine::quantity).sum(), sale.totalPaise(), refundMethod, reason);
-        });
+    /** Backward-compatible single-item checkout entry point. */
+    public SaleReceipt checkout(SaleDraft draft) {
+        CartSaleReceipt receipt = checkout(new CartSaleDraft(
+                List.of(new SaleLineDraft(draft.partId(), draft.quantity(), draft.unitPricePaise())),
+                draft.discountPaise(), draft.customerName(), draft.paymentMethod(), draft.paymentReference()));
+        SaleLineReceipt line = receipt.lines().get(0);
+        return new SaleReceipt(receipt.saleId(), receipt.saleNumber(), line.sku(), line.partName(),
+                line.quantity(), receipt.subtotalPaise(), receipt.discountPaise(),
+                receipt.totalPaise(), receipt.paymentMethod());
     }
 
-    private record SaleHeader(long id, String saleNumber, long totalPaise, String status) { }
-    private record SaleLine(long partId, int quantity) { }
-
-    public SaleReceipt checkout(SaleDraft draft) {
+    public CartSaleReceipt checkout(CartSaleDraft draft) {
         return transactions.execute(status -> {
-            PartDetails part = parts.findDetailsById(draft.partId());
-            if (part.quantity() < draft.quantity()) {
-                throw new IllegalStateException("Insufficient stock. Available quantity: " + part.quantity() + ".");
-            }
-            long subtotal;
-            try {
-                subtotal = Math.multiplyExact((long) draft.quantity(), draft.unitPricePaise());
-            } catch (ArithmeticException ex) {
-                throw new IllegalArgumentException("Sale amount is too large.", ex);
+            List<PartDetails> cartParts = new ArrayList<>(draft.lines().size());
+            long subtotal = 0;
+            List<SaleLineReceipt> receiptLines = new ArrayList<>(draft.lines().size());
+            for (SaleLineDraft line : draft.lines()) {
+                PartDetails part = parts.findDetailsById(line.partId());
+                if (part.quantity() < line.quantity()) {
+                    throw new IllegalStateException("Insufficient stock for " + part.sku()
+                            + ". Available quantity: " + part.quantity() + ".");
+                }
+                long lineTotal;
+                try {
+                    lineTotal = Math.multiplyExact((long) line.quantity(), line.unitPricePaise());
+                    subtotal = Math.addExact(subtotal, lineTotal);
+                } catch (ArithmeticException ex) {
+                    throw new IllegalArgumentException("Sale amount is too large.", ex);
+                }
+                cartParts.add(part);
+                receiptLines.add(new SaleLineReceipt(part.id(), part.sku(), part.name(),
+                        line.quantity(), line.unitPricePaise(), lineTotal));
             }
             if (draft.discountPaise() > subtotal) {
                 throw new IllegalArgumentException("Discount cannot exceed the sale subtotal.");
@@ -129,6 +83,7 @@ public class SalesService {
             String saleNumber = "MM-" + LocalDate.now(clock).toString().replace("-", "")
                     + "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(java.util.Locale.ROOT);
 
+            final long saleSubtotal = subtotal;
             KeyHolder key = new GeneratedKeyHolder();
             jdbc.update((PreparedStatementCreator) connection -> {
                 PreparedStatement ps = connection.prepareStatement("""
@@ -137,7 +92,7 @@ public class SalesService {
                     """, Statement.RETURN_GENERATED_KEYS);
                 ps.setString(1, saleNumber);
                 ps.setString(2, draft.customerName());
-                ps.setLong(3, subtotal);
+                ps.setLong(3, saleSubtotal);
                 ps.setLong(4, draft.discountPaise());
                 ps.setLong(5, total);
                 return ps;
@@ -146,31 +101,37 @@ public class SalesService {
             if (generated == null) throw new IllegalStateException("Database did not return the sale ID.");
             long saleId = generated.longValue();
 
-            jdbc.update("""
-                INSERT INTO sale_items(sale_id,part_id,sku_snapshot,name_snapshot,quantity,unit_price_paise,line_total_paise)
-                VALUES (?,?,?,?,?,?,?)
-                """, saleId, part.id(), part.sku(), part.name(), draft.quantity(), draft.unitPricePaise(), subtotal);
+            for (int i = 0; i < draft.lines().size(); i++) {
+                SaleLineDraft line = draft.lines().get(i);
+                PartDetails part = cartParts.get(i);
+                SaleLineReceipt receiptLine = receiptLines.get(i);
+                jdbc.update("""
+                    INSERT INTO sale_items(sale_id,part_id,sku_snapshot,name_snapshot,quantity,unit_price_paise,line_total_paise)
+                    VALUES (?,?,?,?,?,?,?)
+                    """, saleId, part.id(), part.sku(), part.name(), line.quantity(),
+                        line.unitPricePaise(), receiptLine.lineTotalPaise());
 
-            int changed = jdbc.update("""
-                UPDATE inventory SET quantity_on_hand=quantity_on_hand-?
-                WHERE part_id=? AND quantity_on_hand>=?
-                """, draft.quantity(), part.id(), draft.quantity());
-            if (changed != 1) {
-                throw new IllegalStateException("Stock changed during checkout. No sale was posted; reload and try again.");
+                int changed = jdbc.update("""
+                    UPDATE inventory SET quantity_on_hand=quantity_on_hand-?
+                    WHERE part_id=? AND quantity_on_hand>=?
+                    """, line.quantity(), part.id(), line.quantity());
+                if (changed != 1) {
+                    throw new IllegalStateException("Stock changed during checkout for " + part.sku()
+                            + ". No sale was posted; reload and try again.");
+                }
+                jdbc.update("""
+                    INSERT INTO stock_movements(part_id,movement_type,quantity,reference,reason)
+                    VALUES (?,'SALE',?,?,?)
+                    """, part.id(), -line.quantity(), saleNumber, "Sale checkout");
             }
-
-            jdbc.update("""
-                INSERT INTO stock_movements(part_id,movement_type,quantity,reference,reason)
-                VALUES (?,'SALE',?,?,?)
-                """, part.id(), -draft.quantity(), saleNumber, "Sale checkout");
             if (total > 0) {
                 jdbc.update("""
                     INSERT INTO payments(sale_id,method,amount_paise,reference)
                     VALUES (?,?,?,?)
                     """, saleId, draft.paymentMethod(), total, draft.paymentReference());
             }
-            return new SaleReceipt(saleId, saleNumber, part.sku(), part.name(), draft.quantity(),
-                    subtotal, draft.discountPaise(), total, draft.paymentMethod());
+            return new CartSaleReceipt(saleId, saleNumber, receiptLines, subtotal,
+                    draft.discountPaise(), total, draft.paymentMethod());
         });
     }
 }
