@@ -327,6 +327,10 @@ The finished desktop UI is intended to provide:
 
 Database, file, PDF and network operations must not block the JavaFX Application Thread. Use bounded background tasks/executors, disable duplicate submissions while work is in progress and update UI state on the JavaFX thread. Cancellation should only be offered where it is safe.
 
+## Service-layer license enforcement
+
+The application checks signed license features at the Spring service boundary as well as in the desktop UI. Inventory operations require `INVENTORY`; CSV import/export requires `CSV`; sales, returns and invoice generation require `SALES`; supplier receiving requires `PURCHASING`. An inactive, expired, invalid or insufficient key blocks the proxied service call.
+
 ## Security, privacy and offline behavior
 
 - Core CRUD, inventory, sales/purchases and local PDF/CSV work are intended to operate without internet.

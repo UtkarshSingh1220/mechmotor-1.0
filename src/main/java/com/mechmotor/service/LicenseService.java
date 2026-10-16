@@ -85,6 +85,22 @@ public class LicenseService {
         return status();
     }
 
+
+    /** Enforce signed feature access at the service boundary, not only in UI controls. */
+    public void requireFeature(String rawFeature) {
+        String feature = rawFeature == null ? "" : rawFeature.strip().toUpperCase(Locale.ROOT);
+        if (!ALLOWED_FEATURES.contains(feature)) {
+            throw new IllegalArgumentException("Unknown MechMotor feature gate: " + feature);
+        }
+        LicenseStatus current = status();
+        if (!current.active()) {
+            throw new IllegalStateException("A valid activation key is required: " + current.message());
+        }
+        if (!current.features().contains(feature)) {
+            throw new IllegalStateException("The installed activation key does not include " + feature + ".");
+        }
+    }
+
     public Path activationFile() { return activationFile; }
 
     private LicenseStatus verifyToken(String token, Path path) {

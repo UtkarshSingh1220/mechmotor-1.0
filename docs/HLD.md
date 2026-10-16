@@ -38,3 +38,7 @@ Partial returns are tracked per sale item. Sale-level discounts are allocated pr
 
 
 Invoice PDFs are generated locally from immutable sale/item snapshots plus payment, return and void audit records. The PDF is a business record, not proof of external refund settlement.
+
+
+## Service-level license enforcement
+Signed feature entitlements are checked both in the UI and through a Spring AOP guard on business services. The UI layer is for user-friendly feedback; service interception is the enforcement boundary for inventory, CSV, sales/invoices and purchasing operations.

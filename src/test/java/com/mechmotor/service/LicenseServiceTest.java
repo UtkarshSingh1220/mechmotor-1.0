@@ -46,6 +46,17 @@ class LicenseServiceTest {
     }
 
     @Test
+    void serviceBoundaryRejectsMissingOrUnlicensedFeatures() throws Exception {
+        assertThrows(IllegalStateException.class, () -> service.requireFeature("INVENTORY"));
+        service.activate(token("MM-TEST-GATE", "Test Shop", LocalDate.of(2026, 10, 15),
+                LocalDate.of(2027, 10, 16), "INVENTORY,CSV"));
+        assertDoesNotThrow(() -> service.requireFeature("inventory"));
+        assertDoesNotThrow(() -> service.requireFeature("CSV"));
+        assertThrows(IllegalStateException.class, () -> service.requireFeature("SALES"));
+        assertThrows(IllegalArgumentException.class, () -> service.requireFeature("UNKNOWN"));
+    }
+
+    @Test
     void rejectsTamperedKeyWithoutReplacingCurrentActivation() throws Exception {
         String valid = token("MM-TEST-002", "Test Shop", LocalDate.of(2026, 10, 15),
                 LocalDate.of(2027, 10, 16), "INVENTORY");

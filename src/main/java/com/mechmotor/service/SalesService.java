@@ -30,6 +30,7 @@ import java.math.BigInteger;
 import java.util.UUID;
 
 /** Posts sales atomically, including multi-item carts, stock deduction, ledger movements and payment. */
+@RequiresFeature("SALES")
 @Service
 public class SalesService {
     private final JdbcTemplate jdbc;
