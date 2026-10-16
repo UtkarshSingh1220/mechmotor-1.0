@@ -208,6 +208,22 @@ class PurchasingServiceTest {
     }
 
     @Test
+    void supplierReturnCreditCanExceedOutstandingAndBlocksFurtherPaymentAndReceiptCancellation() {
+        var receipt = purchasing.receive(new PurchaseDraft(partId, 3, 1250, supplierId, "INV-CREDIT-ONLY"));
+        Long purchaseItemId = jdbc.queryForObject("SELECT id FROM purchase_items WHERE purchase_id=?",
+                Long.class, receipt.purchaseId());
+        var returned = purchasing.recordSupplierReturn(new SupplierReturnDraft(receipt.purchaseNumber(),
+                "All units damaged", "CN-FULL",
+                java.util.List.of(new SupplierReturnLineDraft(purchaseItemId, 3))));
+        assertEquals(0, returned.outstandingPaise());
+        assertEquals(3, parts.findById(partId).quantity());
+        assertThrows(IllegalStateException.class, () -> purchasing.recordSupplierPayment(new SupplierPaymentDraft(
+                receipt.purchaseNumber(), 100, SupplierPaymentDraft.Method.CASH, null)));
+        assertThrows(IllegalStateException.class,
+                () -> purchasing.cancelPurchase(receipt.purchaseNumber(), "Already returned through credit note"));
+    }
+
+    @Test
     void supplierReturnFailureRollsBackCreditNoteStockAndLedger() {
         var receipt = purchasing.receive(new PurchaseDraft(partId, 2, 1250, supplierId, "INV-RETURN-ROLLBACK"));
         Long purchaseItemId = jdbc.queryForObject("SELECT id FROM purchase_items WHERE purchase_id=?",
