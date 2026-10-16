@@ -134,3 +134,28 @@ CREATE INDEX IF NOT EXISTS idx_sales_created_at ON sales(created_at);
 CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id);
 CREATE INDEX IF NOT EXISTS idx_sale_items_part_id ON sale_items(part_id);
 CREATE INDEX IF NOT EXISTS idx_payments_sale_id ON payments(sale_id);
+
+CREATE TABLE IF NOT EXISTS purchases (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  purchase_number TEXT NOT NULL UNIQUE,
+  supplier_id INTEGER NOT NULL REFERENCES suppliers(id),
+  supplier_name_snapshot TEXT NOT NULL,
+  supplier_invoice_reference TEXT,
+  subtotal_paise INTEGER NOT NULL CHECK(subtotal_paise >= 0),
+  status TEXT NOT NULL DEFAULT 'RECEIVED' CHECK(status IN ('RECEIVED','CANCELLED')),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS purchase_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  purchase_id INTEGER NOT NULL REFERENCES purchases(id),
+  part_id INTEGER NOT NULL REFERENCES parts(id),
+  sku_snapshot TEXT NOT NULL,
+  name_snapshot TEXT NOT NULL,
+  quantity INTEGER NOT NULL CHECK(quantity > 0),
+  unit_cost_paise INTEGER NOT NULL CHECK(unit_cost_paise >= 0),
+  line_total_paise INTEGER NOT NULL CHECK(line_total_paise >= 0)
+);
+CREATE INDEX IF NOT EXISTS idx_purchases_created_at ON purchases(created_at);
+CREATE INDEX IF NOT EXISTS idx_purchases_supplier_id ON purchases(supplier_id);
+CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase_id ON purchase_items(purchase_id);
+CREATE INDEX IF NOT EXISTS idx_purchase_items_part_id ON purchase_items(part_id);
