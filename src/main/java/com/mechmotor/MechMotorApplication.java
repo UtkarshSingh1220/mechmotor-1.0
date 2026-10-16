@@ -1104,7 +1104,7 @@ public class MechMotorApplication extends Application {
                 PurchaseBalance balance=(PurchaseBalance)result[0];
                 @SuppressWarnings("unchecked") List<SupplierPaymentRow> rows=(List<SupplierPaymentRow>)result[1];
                 supplierLabel.setText("Supplier: "+balance.supplierName()+" • Status: "+balance.status());
-                totalLabel.setText("Receipt total: ₹"+rupees(balance.totalPaise()));
+                totalLabel.setText("Net receipt total: ₹"+rupees(balance.totalPaise()));
                 paidLabel.setText("Paid: ₹"+rupees(balance.paidPaise()));
                 dueLabel.setText("Outstanding: ₹"+rupees(balance.outstandingPaise()));
                 table.setItems(FXCollections.observableArrayList(rows));
