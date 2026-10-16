@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class OperationalReportsServiceTest {
     @TempDir Path tempDir;
     private OperationalReportsService reports;
+    private JdbcTemplate jdbc;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -30,7 +31,8 @@ class OperationalReportsServiceTest {
         try (Connection connection = source.getConnection()) {
             ScriptUtils.executeSqlScript(connection, new ClassPathResource("schema.sql"));
         }
-        reports = new OperationalReportsService(new JdbcTemplate(source));
+        jdbc = new JdbcTemplate(source);
+        reports = new OperationalReportsService(jdbc);
     }
 
     @Test
