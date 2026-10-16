@@ -26,6 +26,21 @@ public class PartRepository {
 
     public PartRepository(JdbcTemplate jdbc) { this.jdbc = jdbc; }
 
+    public InventoryDashboardMetrics dashboardMetrics() {
+        return jdbc.queryForObject("""
+            SELECT COUNT(*) AS active_parts,
+                   COALESCE(SUM(COALESCE(i.quantity_on_hand,0)),0) AS total_units,
+                   COALESCE(SUM(CASE WHEN COALESCE(i.quantity_on_hand,0)>0
+                       AND COALESCE(i.quantity_on_hand,0)<=COALESCE(i.reorder_level,0) THEN 1 ELSE 0 END),0) AS low_stock_parts,
+                   COALESCE(SUM(CASE WHEN COALESCE(i.quantity_on_hand,0)=0 THEN 1 ELSE 0 END),0) AS out_of_stock_parts,
+                   COALESCE(SUM(COALESCE(i.quantity_on_hand,0)*p.selling_price_paise),0) AS retail_stock_value_paise
+            FROM parts p LEFT JOIN inventory i ON i.part_id=p.id
+            WHERE p.active=1
+            """, (rs, row) -> new InventoryDashboardMetrics(
+                rs.getLong("active_parts"), rs.getLong("total_units"), rs.getLong("low_stock_parts"),
+                rs.getLong("out_of_stock_parts"), rs.getLong("retail_stock_value_paise")));
+    }
+
     public List<Part> search(String rawQuery) {
         return findPage(InventoryFilter.defaults(rawQuery)).items();
     }

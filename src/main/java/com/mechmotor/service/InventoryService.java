@@ -1,6 +1,7 @@
 package com.mechmotor.service;
 
 import com.mechmotor.domain.InventoryFilter;
+import com.mechmotor.domain.InventoryDashboardMetrics;
 import com.mechmotor.domain.InventoryPage;
 import com.mechmotor.domain.LookupOption;
 import com.mechmotor.domain.Part;
@@ -22,6 +23,8 @@ public class InventoryService {
     private final PartRepository repository;
 
     public InventoryService(PartRepository repository) { this.repository = repository; }
+
+    public InventoryDashboardMetrics dashboardMetrics() { return repository.dashboardMetrics(); }
 
     public List<Part> search(String query) { return repository.search(query); }
 
