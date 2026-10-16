@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /** Generates a printable sale invoice/receipt from immutable sale snapshots and audit records. */
+@RequiresFeature("SALES")
 @Service
 public class InvoiceService {
     private static final int LINES_PER_PAGE = 44;

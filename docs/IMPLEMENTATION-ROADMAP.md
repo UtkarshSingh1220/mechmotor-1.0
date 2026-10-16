@@ -7,11 +7,13 @@
 - Vehicle fitment management and fitment-aware search.
 - Saved inventory views, filtered CSV export and transactional create-only CSV import.
 - Inventory dashboard metrics.
-- Signed Ed25519 activation/license verification and feature gating.
+- Signed Ed25519 activation/license verification and UI feature gating.
 - Single-item sales checkout and atomic single-item supplier stock receiving.
 - Windows CI on Java 21 with Maven clean verify.
 
 ## Current milestone
+- **Service-layer feature enforcement — in progress on `feat/service-layer-license-enforcement`:** add `@RequiresFeature` and an AOP guard so feature entitlements are checked at service boundaries, not only in UI controls.
+
 - **Multi-item sales cart — merged:** up to 100 distinct items, overflow-safe totals, atomic sale snapshots, stock deductions, ledger movements and payment.
 
 ## Remaining production-readiness work

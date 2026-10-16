@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.UUID;
 
 /** Receives a single inventory item from a supplier in one atomic SQLite transaction. */
+@RequiresFeature("PURCHASING")
 @Service
 public class PurchasingService {
     private final JdbcTemplate jdbc;

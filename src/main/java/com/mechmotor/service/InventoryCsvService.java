@@ -28,6 +28,7 @@ import java.util.Locale;
 import java.util.List;
 
 /** Streams the complete filtered active inventory to an Excel-friendly UTF-8 CSV file. */
+@RequiresFeature("CSV")
 @Service
 public class InventoryCsvService {
     private static final int EXPORT_PAGE_SIZE = 200;
