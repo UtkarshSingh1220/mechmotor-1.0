@@ -12,6 +12,7 @@
 - Windows CI on Java 21 with Maven clean verify.
 
 ## Current milestone
+- **Versioned database bootstrap (in progress on `feat/versioned-schema-migrations`):** replace repeat schema initialization with a one-time baseline, additive legacy-column upgrades, schema validation and ordered SQL migrations.
 - **Service-layer feature enforcement — in progress on `feat/service-layer-license-enforcement`:** add `@RequiresFeature` and an AOP guard so feature entitlements are checked at service boundaries, not only in UI controls.
 
 - **Multi-item sales cart — merged:** up to 100 distinct items, overflow-safe totals, atomic sale snapshots, stock deductions, ledger movements and payment.
