@@ -102,6 +102,20 @@ class OperationalReportsServiceTest {
             """, "PUR-RECON-1", supplierId, "Central Auto");
         long purchaseId = jdbc.queryForObject("SELECT id FROM purchases WHERE purchase_number=?",
                 Long.class, "PUR-RECON-1");
+        long partId = jdbc.queryForObject("SELECT id FROM parts LIMIT 1", Long.class);
+        jdbc.update("""
+            INSERT INTO purchase_items(purchase_id,part_id,sku_snapshot,name_snapshot,quantity,unit_cost_paise,line_total_paise)
+            VALUES (?,?,'SKU-RECON','Air filter',4,2500,10000)
+            """, purchaseId, partId);
+        long purchaseItemId = jdbc.queryForObject("SELECT id FROM purchase_items WHERE purchase_id=?",Long.class,purchaseId);
+        jdbc.update("""
+            INSERT INTO supplier_returns(return_number,purchase_id,supplier_id,reason,credit_note_reference,total_paise,status)
+            VALUES ('RET-RECON-1',?,?,'Damaged stock','CN-1',2500,'POSTED')
+            """,purchaseId,supplierId);
+        jdbc.update("""
+            INSERT INTO supplier_return_items(supplier_return_id,purchase_item_id,part_id,sku_snapshot,name_snapshot,quantity,unit_cost_paise,line_total_paise)
+            SELECT r.id,?,?,'SKU-RECON','Air filter',1,2500,2500 FROM supplier_returns r WHERE r.return_number='RET-RECON-1'
+            """,purchaseItemId,partId);
         jdbc.update("""
             INSERT INTO supplier_payments(purchase_id,method,amount_paise,reference,status)
             VALUES (?,'BANK_TRANSFER',2500,'PAY-POSTED','POSTED')
