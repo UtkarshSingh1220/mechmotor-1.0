@@ -9,6 +9,8 @@
 
 ## Milestone status
 
+- **Saved inventory views (in progress on `feat/saved-inventory-views`):** persist/load/delete filter presets with case-insensitive unique names; CI pending.
+
 - **Vehicle fitment (in progress on `feat/vehicle-fitment`):** per-part make/model/year compatibility records, fitment search, management UI and legacy-backup schema upgrade; CI pending.
 
 - **Filtered CSV export (in progress on `feat/inventory-csv-export`):** stream all rows matching the active filters to a spreadsheet-friendly CSV; CI pending.
@@ -17,7 +19,7 @@
 - **Supplier management — merged:** supplier name, phone and unique code editing with stable IDs; CI passed for the code commit.
 
 - **Backup/restore hardening — merged:** verified SQLite snapshots, integrity/schema validation, staged restore, pre-restore safety backup, desktop actions and regression tests; CI passed.
-1. **Inventory foundation — partially implemented:** part create/edit/deactivate, category/supplier selection and creation, global search, initial structured filters, allowlisted sorting, bounded pagination, stock-adjustment audit and repository regression tests are committed on `codex/inventory-foundation`. Still required: saved views, CSV import, representative-catalog benchmarks, and release-level end-to-end validation.
+1. **Inventory foundation — partially implemented:** part create/edit/deactivate, category/supplier selection and creation, global search, initial structured filters, allowlisted sorting, bounded pagination, stock-adjustment audit and repository regression tests are committed on `codex/inventory-foundation`. Still required: CSV import, representative-catalog benchmarks, and release-level end-to-end validation.
 2. **Business workflows:** purchase receipts, sales/cart, returns, payment records, immutable stock movement audit, atomic transactions and invoice snapshots.
 3. **Dashboard and reports:** KPI drill-downs, charts with accessible table alternatives, PDF/CSV export, backup/restore and shop settings.
 4. **Licensing:** canonical signed payload, Ed25519 verification, protected issuer utility kept outside this repository, masked activation UI, injected clock and expiry-boundary tests. Never commit a private signing key or real activation secret.

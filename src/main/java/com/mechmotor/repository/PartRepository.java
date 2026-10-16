@@ -59,6 +59,59 @@ public class PartRepository {
                 (rs, row) -> new LookupOption(rs.getLong("id"), rs.getString("name")));
     }
 
+    public List<LookupOption> savedViews() {
+        return jdbc.query("SELECT id,name FROM saved_views ORDER BY name COLLATE NOCASE",
+                (rs, row) -> new LookupOption(rs.getLong("id"), rs.getString("name")));
+    }
+
+    public long saveView(String rawName, InventoryFilter filter) {
+        String name = cleanRequiredName(rawName, "Saved view");
+        Integer existing = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM saved_views WHERE name=? COLLATE NOCASE", Integer.class, name);
+        if (existing != null && existing > 0) {
+            throw new IllegalArgumentException("A saved view with this name already exists. Delete it before saving a replacement.");
+        }
+        jdbc.update("""
+            INSERT INTO saved_views(name,query,brand,material,color,category_id,supplier_id,stock_status,
+                min_quantity,max_quantity,min_selling_price_paise,max_selling_price_paise,sort_by,ascending)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """, name, filter.query(), filter.brand(), filter.material(), filter.color(),
+                filter.categoryId(), filter.supplierId(), filter.stockStatus().name(),
+                filter.minQuantity(), filter.maxQuantity(), filter.minSellingPricePaise(),
+                filter.maxSellingPricePaise(), filter.sortBy(), filter.ascending() ? 1 : 0);
+        return jdbc.queryForObject("SELECT id FROM saved_views WHERE name=? COLLATE NOCASE", Long.class, name);
+    }
+
+    public SavedInventoryView savedView(long id) {
+        List<SavedInventoryView> rows = jdbc.query("SELECT * FROM saved_views WHERE id=?", (rs, row) -> {
+            InventoryFilter filter = new InventoryFilter(
+                    rs.getString("query"), rs.getString("brand"), rs.getString("material"), rs.getString("color"),
+                    nullableLong(rs, "category_id"), nullableLong(rs, "supplier_id"),
+                    InventoryFilter.StockStatus.valueOf(rs.getString("stock_status")),
+                    nullableInteger(rs, "min_quantity"), nullableInteger(rs, "max_quantity"),
+                    nullableLong(rs, "min_selling_price_paise"), nullableLong(rs, "max_selling_price_paise"),
+                    0, 50, rs.getString("sort_by"), rs.getInt("ascending") == 1);
+            return new SavedInventoryView(rs.getLong("id"), rs.getString("name"), filter);
+        }, id);
+        if (rows.isEmpty()) throw new IllegalArgumentException("Saved inventory view was not found.");
+        return rows.get(0);
+    }
+
+    public void deleteSavedView(long id) {
+        int changed = jdbc.update("DELETE FROM saved_views WHERE id=?", id);
+        if (changed == 0) throw new IllegalArgumentException("Saved inventory view was not found.");
+    }
+
+    private static Long nullableLong(java.sql.ResultSet rs, String column) throws java.sql.SQLException {
+        long value = rs.getLong(column);
+        return rs.wasNull() ? null : value;
+    }
+
+    private static Integer nullableInteger(java.sql.ResultSet rs, String column) throws java.sql.SQLException {
+        int value = rs.getInt(column);
+        return rs.wasNull() ? null : value;
+    }
+
     public List<VehicleFitment> fitments(long partId) {
         return jdbc.query("""
             SELECT id,part_id,make,model,year_from,year_to,engine,trim,notes
