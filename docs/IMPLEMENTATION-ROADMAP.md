@@ -14,6 +14,7 @@
 - Service-layer feature entitlement enforcement using `@RequiresFeature` and an AOP guard.
 
 ## Current milestone
+- **Purchase history and guarded receipt cancellation (in progress):** searchable receipt history, audited stock reversal, and restoration of prior purchase cost only when no later receipt or manual cost change supersedes it.
 - **Versioned database bootstrap (in progress on `feat/versioned-schema-migrations`):** replace repeat schema initialization with a one-time baseline, additive legacy-column upgrades, schema validation and ordered SQL migrations.
 
 - **Multi-item sales cart — merged:** up to 100 distinct items, overflow-safe totals, atomic sale snapshots, stock deductions, ledger movements and payment.

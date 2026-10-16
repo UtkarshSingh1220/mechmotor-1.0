@@ -41,7 +41,7 @@ Use **Returns / refunds** and enter the original sale number. Select the item li
 
 ## Purchase receiving
 
-Select a part and choose **Receive stock**. Select the supplier, enter received quantity and unit cost, and optionally enter the supplier invoice/delivery-note reference. The app records a supplier receipt, snapshots item/supplier details, updates the latest purchase cost, increases inventory and writes a positive stock-ledger movement in one transaction. If any step fails, the complete receipt rolls back. Supplier payments, multi-item purchase orders and returns are not yet implemented.
+Select a part and choose **Receive stock**. Select the supplier, enter received quantity and unit cost, and optionally enter the supplier invoice/delivery-note reference. The app records a supplier receipt, snapshots item/supplier details, updates the latest purchase cost, increases inventory and writes a positive stock-ledger movement in one transaction. If any step fails, the complete receipt rolls back. Purchase history and stock-receipt cancellation are being added. Supplier payments, multi-item purchase orders and supplier returns remain future work.
 
 ## Database upgrades
 
