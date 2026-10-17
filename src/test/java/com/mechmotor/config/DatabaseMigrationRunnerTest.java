@@ -89,6 +89,12 @@ class DatabaseMigrationRunnerTest {
                 assertEquals("ADJUSTMENT", movement.getString("movement_type"));
                 assertFalse(movement.getString("created_at").isBlank());
             }
+            statement.execute("INSERT INTO stock_movements(part_id,movement_type,quantity,reference,reason) VALUES (1,'SUPPLIER_RETURN',-1,'SR-TEST','Supplier return migration test')");
+            try (ResultSet supplierReturn = statement.executeQuery("SELECT movement_type,quantity FROM stock_movements WHERE reference='SR-TEST'")) {
+                assertTrue(supplierReturn.next());
+                assertEquals("SUPPLIER_RETURN", supplierReturn.getString("movement_type"));
+                assertEquals(-1, supplierReturn.getInt("quantity"));
+            }
             try (ResultSet version = statement.executeQuery("SELECT MAX(version) FROM schema_version")) {
                 assertTrue(version.next());
                 assertEquals(6, version.getInt(1));
