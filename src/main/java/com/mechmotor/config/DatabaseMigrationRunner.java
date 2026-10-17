@@ -169,6 +169,7 @@ public final class DatabaseMigrationRunner implements ApplicationRunner {
         try {
             ScriptUtils.executeSqlScript(connection, migration);
             if (version == 3) createSupplierPaymentTriggers(connection);
+            if (version == 7) createStockMovementTimestampTrigger(connection);
             verifyCurrentSchema(connection, version);
             recordVersion(connection, version);
             connection.commit();
@@ -186,6 +187,17 @@ public final class DatabaseMigrationRunner implements ApplicationRunner {
      * SQLite trigger bodies contain internal semicolons; install them as complete JDBC
      * statements rather than splitting them with Spring's generic SQL script parser.
      */
+    private static void createStockMovementTimestampTrigger(Connection connection) throws SQLException {
+        execute(connection, """
+            CREATE TRIGGER IF NOT EXISTS trg_stock_movements_legacy_created_at
+            AFTER INSERT ON stock_movements
+            WHEN NEW.created_at IS NULL OR NEW.created_at=''
+            BEGIN
+              UPDATE stock_movements SET created_at=CURRENT_TIMESTAMP WHERE id=NEW.id;
+            END
+            """);
+    }
+
     private static void createSupplierPaymentTriggers(Connection connection) throws SQLException {
         execute(connection, """
             CREATE TRIGGER IF NOT EXISTS trg_supplier_payment_no_overpay
