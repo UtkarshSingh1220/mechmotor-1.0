@@ -21,9 +21,3 @@ FROM stock_movements_v6;
 
 DROP TABLE stock_movements_v6;
 
-CREATE TRIGGER IF NOT EXISTS trg_stock_movements_legacy_created_at
-AFTER INSERT ON stock_movements
-WHEN NEW.created_at IS NULL OR NEW.created_at=''
-BEGIN
-  UPDATE stock_movements SET created_at=CURRENT_TIMESTAMP WHERE id=NEW.id;
-END;
