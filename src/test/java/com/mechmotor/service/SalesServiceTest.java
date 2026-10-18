@@ -99,6 +99,37 @@ class SalesServiceTest {
     }
 
     @Test
+    void taxExclusiveCheckoutAddsRoundedTaxAndSnapshotsProvisionalLocalClassification() {
+        new ShopProfileService(jdbc).save(new ShopProfileService.ShopProfile(
+                "Test Shop", "", "", "", "", "06", "GST", 1800, true));
+        SaleReceipt receipt = sales.checkout(new SaleDraft(partId, 1, 10000, 1000,
+                "Walk-in", "CASH", null));
+        assertEquals(10620L, receipt.totalPaise());
+        assertEquals(9000L, jdbc.queryForObject("SELECT taxable_base_paise FROM sales WHERE id=?", Long.class, receipt.saleId()));
+        assertEquals(1620L, jdbc.queryForObject("SELECT tax_amount_paise FROM sales WHERE id=?", Long.class, receipt.saleId()));
+        assertEquals(810L, jdbc.queryForObject("SELECT cgst_paise FROM sales WHERE id=?", Long.class, receipt.saleId()));
+        assertEquals(810L, jdbc.queryForObject("SELECT sgst_paise FROM sales WHERE id=?", Long.class, receipt.saleId()));
+        assertEquals("PROVISIONAL_LOCAL", jdbc.queryForObject("SELECT tax_classification FROM sales WHERE id=?", String.class, receipt.saleId()));
+        assertEquals(10620L, jdbc.queryForObject("SELECT amount_paise FROM payments WHERE sale_id=?", Long.class, receipt.saleId()));
+    }
+
+    @Test
+    void knownDifferentBuyerStateUsesIgstAndSameStateUsesLocalComponents() {
+        new ShopProfileService(jdbc).save(new ShopProfileService.ShopProfile(
+                "Test Shop", "", "", "", "", "06", "GST", 500, true));
+        var interstate = sales.checkout(new CartSaleDraft(List.of(new SaleLineDraft(partId, 1, 10000)),
+                0, "Buyer", "UPI", null), "07");
+        assertEquals(10500L, interstate.totalPaise());
+        assertEquals(500L, jdbc.queryForObject("SELECT igst_paise FROM sales WHERE id=?", Long.class, interstate.saleId()));
+        assertEquals("INTERSTATE", jdbc.queryForObject("SELECT tax_classification FROM sales WHERE id=?", String.class, interstate.saleId()));
+        var local = sales.checkout(new CartSaleDraft(List.of(new SaleLineDraft(secondPartId, 1, 10000)),
+                0, "Buyer", "UPI", null), "06");
+        assertEquals(250L, jdbc.queryForObject("SELECT cgst_paise FROM sales WHERE id=?", Long.class, local.saleId()));
+        assertEquals(250L, jdbc.queryForObject("SELECT sgst_paise FROM sales WHERE id=?", Long.class, local.saleId()));
+        assertEquals("LOCAL", jdbc.queryForObject("SELECT tax_classification FROM sales WHERE id=?", String.class, local.saleId()));
+    }
+
+    @Test
     void multiItemCartPostsAllLinesAndDeductsStockAtomically() {
         var receipt = sales.checkout(new CartSaleDraft(List.of(
                 new SaleLineDraft(partId, 2, 2500),
