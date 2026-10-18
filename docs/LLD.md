@@ -48,7 +48,8 @@ Never run JDBC, report generation or Gmail operations on the JavaFX Application 
 - Checkout supports a cart of up to 100 distinct parts in one sale. Each line snapshots SKU/name, quantity and unit price; the sale header stores subtotal, discount and total.
 - The service pre-validates stock and overflow-safe totals, then inserts the sale, each item snapshot, guarded stock deduction and negative SALE movement in a single TransactionTemplate.
 - A stock conflict or any later write failure rolls back all cart lines, stock deductions, ledger movements and payment. The database enforces unique sale numbers.
-- Current payment is full-payment only (CASH, UPI, CARD or BANK_TRANSFER). Partial payments, void/refund workflows and PDF invoices remain future work.
+- Current payment is full-payment only (CASH, UPI, CARD or BANK_TRANSFER). Supplier-payment tracking is separate and supports partial payments against purchase payables.
+- Sale voids, per-item partial returns, discount-aware refund rounding and PDF invoices are implemented in separate audited workflows. Refund records are bookkeeping only; the application does not transfer money through a bank, UPI app or card terminal.
 
 ## Sale voids and refund audit
 
@@ -77,7 +78,9 @@ Never run JDBC, report generation or Gmail operations on the JavaFX Application 
 - The purchase header, item, inventory update and stock ledger share one transaction. Any failure rolls back the complete receipt.
 - `FormalPurchaseOrderDraft` validates supplier, optional ISO expected date, notes and up to 100 distinct item lines; money remains integer paise.
 - `purchase_orders` and `purchase_order_items` are added by migration V4. Creating an order snapshots supplier and item details without changing stock. Order states are `ORDERED`, `RECEIVED`, and `CANCELLED`; cancellation requires a reason and is allowed only before receipt.
-- `PurchasingService.receivePurchaseOrder` receives the complete ordered quantities in one transaction, creates a linked supplier receipt, updates stock/cost/ledger, then marks the order received. Partial receipt/backorder quantities are not yet supported; supplier returns and credit notes remain future work.
+- `PurchasingService.receivePurchaseOrder` accepts one or more partial deliveries, validates each line against the remaining ordered quantity, creates linked supplier receipts, updates stock/cost/ledger atomically and transitions the order to `PARTIALLY_RECEIVED` or `RECEIVED` as appropriate. Over-receipt and receipt cancellation that would invalidate received stock are rejected.
+- Supplier payments are recorded against purchase payables with duplicate-reference and overpayment safeguards; voided payments are excluded from the payable report.
+- Supplier returns are linked to original receipt lines and validate remaining returnable quantity and available stock before posting stock/ledger/payable changes. A return total above the current outstanding payable is rejected before writes to avoid an untracked supplier-credit balance. Credit carry-forward/settlement is not implemented; actual supplier settlement remains external.
 
 ## Build and test
 - `mvn clean test`

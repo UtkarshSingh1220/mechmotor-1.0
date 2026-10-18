@@ -32,7 +32,7 @@ Measure local search latency on representative hardware and data; initial target
 
 ## Formal purchase orders
 
-Formal purchase orders are stored separately from goods receipts. Creating an order snapshots the supplier and requested item quantities/costs and leaves on-hand inventory unchanged. Orders can be searched and cancelled with a required reason while still `ORDERED`. Receiving currently posts the entire order as one atomic goods receipt and links the receipt back to the order; partial receiving and supplier returns/credit notes remain future work.
+Formal purchase orders are stored separately from goods receipts. Creating an order snapshots the supplier and requested item quantities/costs and leaves on-hand inventory unchanged. Orders can be searched and cancelled with a required reason while still `ORDERED`. Partial receiving supports multiple deliveries, per-line outstanding-quantity validation, linked receipt history and atomic stock/ledger updates; over-receipts are rejected. Supplier returns/credit notes are linked to original receipt lines and reduce stock and outstanding payable atomically. A return that exceeds outstanding payable is rejected because supplier-credit carry-forward and settlement are not modeled yet.
 
 ## Sale voids and returns
 Sale voids are audited transactions: sale status, stock restoration, reversal ledger entries and refund metadata commit together. Actual money movement remains external and must be reconciled by the shop. Partial returns are separately recorded against original sales and should not be confused with a full sale void.

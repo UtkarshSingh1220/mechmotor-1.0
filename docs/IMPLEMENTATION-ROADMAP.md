@@ -28,10 +28,10 @@
 
 ## Remaining production-readiness work
 1. **Sales lifecycle:** merged full-sale voids, per-item partial returns/refunds, discount-aware cumulative rounding and atomic stock reversal/return audit. Remaining: end-to-end cashier workflow validation.
-2. **Purchasing lifecycle:** multi-item receipts and supplier payment tracking are implemented. Remaining: validate return/credit-note reconciliation against real shop records and complete Windows workflow acceptance, including multiple partial receipts and supplier returns.
+2. **Purchasing lifecycle:** multi-item receipts, partial receiving and supplier payment tracking are implemented. PR #53 prevents untracked supplier credits by rejecting returns above outstanding payable. Remaining: reconcile returns/payables against sanitized shop records and decide/implement a supplier-credit balance workflow if the business requires returns after full payment.
 3. **Invoices and reports:** merged printable PDF sales invoices generated from immutable snapshots. Operational CSV exports for sales, supplier receipts, stock movements and supplier payable reconciliation are implemented. Remaining: validate reconciliation against real shop records, shop profile/tax settings and invoice template review.
-4. **Windows distribution:** validated JavaFX runtime layout, jpackage EXE installer, clean-machine install/launch/upgrade/uninstall testing, preserving user data.
-5. **Release quality:** representative-catalog performance tests, accessibility and UI workflow tests, dependency/license/vulnerability scans, backup/restore drills and documented recovery procedures.
+4. **Windows distribution:** hosted workflow builds app-image, EXE and MSI and tests install/launch/uninstall plus a seeded legacy database. Still required: physical supported-Windows acceptance, upgrade from a populated prior build, activation/data retention checks, and documented installer SHA-256/evidence.
+5. **Release quality:** representative-catalog performance tests, accessibility and UI workflow tests, dependency/license/vulnerability review, backup/restore drills and documented recovery procedures. Automated CI is not a substitute for real-shop reconciliation.
 6. **Operational readiness:** support diagnostics, structured local logs, safe application shutdown, data retention/export policies and a signed release process.
 7. **Email automation (optional scope):** Gmail desktop OAuth, protected token storage, report scheduling, idempotency keys and bounded retries.
 
