@@ -110,6 +110,16 @@ CREATE TABLE IF NOT EXISTS sales (
   discount_paise INTEGER NOT NULL CHECK(discount_paise >= 0),
   total_paise INTEGER NOT NULL CHECK(total_paise >= 0),
   status TEXT NOT NULL DEFAULT 'POSTED' CHECK(status IN ('POSTED','VOIDED')),
+  taxable_base_paise INTEGER NOT NULL DEFAULT 0 CHECK(taxable_base_paise >= 0),
+  tax_rate_bps INTEGER NOT NULL DEFAULT 0 CHECK(tax_rate_bps BETWEEN 0 AND 10000),
+  tax_label_snapshot TEXT NOT NULL DEFAULT 'GST',
+  tax_amount_paise INTEGER NOT NULL DEFAULT 0 CHECK(tax_amount_paise >= 0),
+  cgst_paise INTEGER NOT NULL DEFAULT 0 CHECK(cgst_paise >= 0),
+  sgst_paise INTEGER NOT NULL DEFAULT 0 CHECK(sgst_paise >= 0),
+  igst_paise INTEGER NOT NULL DEFAULT 0 CHECK(igst_paise >= 0),
+  seller_state_code_snapshot TEXT NOT NULL DEFAULT '',
+  buyer_state_code_snapshot TEXT NOT NULL DEFAULT '',
+  tax_classification TEXT NOT NULL DEFAULT 'NONE',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS sale_items (
