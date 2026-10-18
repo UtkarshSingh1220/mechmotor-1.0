@@ -1,0 +1,53 @@
+name: Windows desktop package
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'pom.xml'
+      - 'src/**'
+      - '.github/workflows/windows-package.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-app-image:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Verify tests
+        run: mvn --batch-mode --no-transfer-progress clean verify
+
+      - name: Assemble thin desktop distribution
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force target/dist/lib | Out-Null
+          mvn --batch-mode --no-transfer-progress dependency:copy-dependencies "-DincludeScope=runtime" "-DoutputDirectory=target/dist/lib"
+          jar --create --file target/dist/mechmotor.jar -C target/classes .
+
+      - name: Build Windows app image
+        shell: pwsh
+        run: |
+          jpackage --type app-image --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --class-path "lib/*" --dest target/installer
+          if (-not (Test-Path "target/installer/MechMotor/MechMotor.exe")) {
+            throw "jpackage did not produce the expected MechMotor.exe launcher."
+          }
+          Compress-Archive -Path target/installer/MechMotor -DestinationPath target/MechMotor-Windows-x64.zip -Force
+
+      - name: Upload Windows app image
+        uses: actions/upload-artifact@v4
+        with:
+          name: MechMotor-Windows-x64-app-image
+          path: target/MechMotor-Windows-x64.zip
+          if-no-files-found: error
+          retention-days: 14
