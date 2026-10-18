@@ -11,9 +11,9 @@ import org.sqlite.SQLiteDataSource;
 import java.nio.file.Path;
 import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
-class SupplierCreditBalanceTest {
+class SupplierCreditNoteIdempotencyTest {
  @TempDir Path dir;
- @Test void creditAfterFullPaymentMustNotCreateUnrepresentedNegativePayable() {
+ @Test void creditAfterFullPaymentMustNotCreateUnrepresentedNegativePayable() throws Exception {
   var ds=new SQLiteDataSource(); ds.setUrl("jdbc:sqlite:"+dir.resolve("t.db"));
   new DatabaseMigrationRunner(ds).run(new DefaultApplicationArguments(new String[0]));
   var jdbc=new JdbcTemplate(ds); var parts=new PartRepository(jdbc);
