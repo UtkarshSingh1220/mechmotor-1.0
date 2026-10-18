@@ -669,6 +669,11 @@ public class PurchasingService {
                 total = Math.addExact(total,Math.multiplyExact((long)request.quantity(),line.unitCostPaise()));
                 units = Math.addExact(units,request.quantity());
             }
+            PurchaseBalance currentBalance = balance(purchase.purchaseNumber());
+            if (total > currentBalance.outstandingPaise()) {
+                throw new IllegalStateException(
+                        "Supplier return would create an untracked supplier credit; return value cannot exceed the outstanding payable.");
+            }
             String returnNumber = "RET-" + UUID.randomUUID().toString().replace("-","").substring(0,12).toUpperCase(java.util.Locale.ROOT);
             KeyHolder key = new GeneratedKeyHolder();
             long returnTotal = total;
