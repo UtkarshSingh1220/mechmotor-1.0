@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 jobs:
-  windows-app-image:
+  windows-app-image-and-installers:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,16 +38,42 @@ jobs:
       - name: Build Windows app image
         shell: pwsh
         run: |
-          jpackage --type app-image --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --dest target/installer
-          if (-not (Test-Path "target/installer/MechMotor/MechMotor.exe")) {
+          jpackage --type app-image --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --dest target/app-image
+          if (-not (Test-Path "target/app-image/MechMotor/MechMotor.exe")) {
             throw "jpackage did not produce the expected MechMotor.exe launcher."
           }
-          Compress-Archive -Path target/installer/MechMotor -DestinationPath target/MechMotor-Windows-x64.zip -Force
+          Compress-Archive -Path target/app-image/MechMotor -DestinationPath target/MechMotor-Windows-x64-app-image.zip -Force
+
+      - name: Build Windows EXE installer
+        shell: pwsh
+        run: |
+          jpackage --type exe --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --dest target/installers/exe --win-menu --win-shortcut --win-per-user-install
+          if (-not (Test-Path "target/installers/exe/MechMotor-1.0.0.exe")) {
+            throw "jpackage did not produce the expected EXE installer."
+          }
+
+      - name: Build Windows MSI installer
+        shell: pwsh
+        run: |
+          jpackage --type msi --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --dest target/installers/msi --win-menu --win-shortcut --win-per-user-install
+          if (-not (Test-Path "target/installers/msi/MechMotor-1.0.0.msi")) {
+            throw "jpackage did not produce the expected MSI installer."
+          }
 
       - name: Upload Windows app image
         uses: actions/upload-artifact@v4
         with:
           name: MechMotor-Windows-x64-app-image
-          path: target/MechMotor-Windows-x64.zip
+          path: target/MechMotor-Windows-x64-app-image.zip
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Windows installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: MechMotor-Windows-x64-installers
+          path: |
+            target/installers/exe/MechMotor-1.0.0.exe
+            target/installers/msi/MechMotor-1.0.0.msi
           if-no-files-found: error
           retention-days: 14
