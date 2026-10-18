@@ -57,14 +57,15 @@ class DatabaseMigrationRunnerTest {
                     brand TEXT,
                     company TEXT,
                     material TEXT,
-                    color TEXT
-                )
+                    color TEXT,
+                    category_id INTEGER REFERENCES categories(id),
+                    supplier_id INTEGER REFERENCES suppliers(id)
                 """);
             statement.execute("CREATE TABLE inventory(part_id INTEGER PRIMARY KEY, quantity_on_hand INTEGER NOT NULL DEFAULT 0)");
             statement.execute("CREATE TABLE stock_movements(id INTEGER PRIMARY KEY, part_id INTEGER NOT NULL, quantity INTEGER NOT NULL, reason TEXT)");
             statement.execute("INSERT INTO categories(id,name) VALUES (1,'Brakes')");
             statement.execute("INSERT INTO suppliers(id,name) VALUES (1,'Legacy Supplier')");
-            statement.execute("INSERT INTO parts(id,sku,name,brand,material,color) VALUES (1,'LEGACY-001','Brake pad','Brand','Ceramic','Black')");
+            statement.execute("INSERT INTO parts(id,sku,name,brand,material,color,category_id,supplier_id) VALUES (1,'LEGACY-001','Brake pad','Brand','Ceramic','Black',1,1)");
             statement.execute("INSERT INTO inventory(part_id,quantity_on_hand) VALUES (1,7)");
             statement.execute("INSERT INTO stock_movements(id,part_id,quantity,reason) VALUES (1,1,-2,'Legacy adjustment')");
         }
@@ -78,6 +79,8 @@ class DatabaseMigrationRunnerTest {
                 assertTrue(part.next());
                 assertEquals("LEGACY-001", part.getString("sku"));
                 assertEquals("Brake pad", part.getString("name"));
+                assertEquals(1, part.getInt("category_id"), "Legacy category relationship must survive the upgrade.");
+                assertEquals(1, part.getInt("supplier_id"), "Legacy supplier relationship must survive the upgrade.");
                 assertFalse(part.getString("updated_at").isBlank());
                 assertEquals(0, part.getLong("purchase_price_paise"));
                 assertEquals(0, part.getLong("selling_price_paise"));
@@ -104,6 +107,17 @@ class DatabaseMigrationRunnerTest {
                 assertTrue(supplierReturn.next());
                 assertEquals("SUPPLIER_RETURN", supplierReturn.getString("movement_type"));
                 assertEquals(-1, supplierReturn.getInt("quantity"));
+            }
+            try (ResultSet category = statement.executeQuery("SELECT name FROM categories WHERE id=1")) {
+                assertTrue(category.next());
+                assertEquals("Brakes", category.getString(1));
+            }
+            try (ResultSet supplier = statement.executeQuery("SELECT name FROM suppliers WHERE id=1")) {
+                assertTrue(supplier.next());
+                assertEquals("Legacy Supplier", supplier.getString(1));
+            }
+            try (ResultSet foreignKeys = statement.executeQuery("PRAGMA foreign_key_check")) {
+                assertFalse(foreignKeys.next(), "Upgrade must not leave broken foreign-key relationships.");
             }
             try (ResultSet version = statement.executeQuery("SELECT MAX(version) FROM schema_version")) {
                 assertTrue(version.next());
