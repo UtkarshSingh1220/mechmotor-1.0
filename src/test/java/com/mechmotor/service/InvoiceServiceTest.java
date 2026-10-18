@@ -94,6 +94,25 @@ class InvoiceServiceTest {
     }
 
     @Test
+    void invoiceIncludesSavedShopProfileAndTransparentTaxConfiguration() throws Exception {
+        new ShopProfileService(jdbc).save(new ShopProfileService.ShopProfile(
+                "North Road Spares", "12 Market Road, Gurugram", "+91 9876543210",
+                "sales@example.com", "22AAAAA0000A1Z5", "06", "GST", 1800, true));
+        SaleReceipt sale = sales.checkout(new SaleDraft(brakePart, 1, 2500, 0,
+                "Walk-in", "CASH", null));
+        Path output = tempDir.resolve("profile-invoice.pdf");
+        invoices.exportSaleInvoice(sale.saleNumber(), output);
+        try (PDDocument document = Loader.loadPDF(output.toFile())) {
+            String text = new PDFTextStripper().getText(document);
+            assertTrue(text.contains("North Road Spares"));
+            assertTrue(text.contains("12 Market Road, Gurugram"));
+            assertTrue(text.contains("22AAAAA0000A1Z5"));
+            assertTrue(text.contains("GST 18.00%"));
+            assertTrue(text.contains("no tax amount is calculated"));
+        }
+    }
+
+    @Test
     void refusesToOverwriteAnExistingInvoice() throws Exception {
         SaleReceipt sale = sales.checkout(new SaleDraft(brakePart, 1, 2500, 0,
                 null, "CASH", null));
