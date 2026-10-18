@@ -129,6 +129,99 @@ jobs:
             throw "MechMotor launcher remains after MSI uninstall: $launcher"
           }
 
+      - name: Validate EXE installer install, launch, and uninstall
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path "target/packages/exe/MechMotor-1.0.0.exe").Path
+          $install = Start-Process -FilePath $exe -ArgumentList @("/quiet", "/norestart") -Wait -PassThru
+          if ($install.ExitCode -notin @(0, 3010)) {
+            throw "EXE installer failed with exit code $($install.ExitCode)."
+          }
+
+          $uninstallKeys = @(
+            "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*",
+            "HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
+          )
+          $entry = Get-ItemProperty $uninstallKeys -ErrorAction SilentlyContinue |
+            Where-Object { $_.DisplayName -like "MechMotor*" } |
+            Select-Object -First 1
+          $candidates = @()
+          if ($entry -and $entry.InstallLocation) {
+            $candidates += (Join-Path $entry.InstallLocation "MechMotor.exe")
+          }
+          $candidates += (Join-Path $env:ProgramFiles "MechMotor\MechMotor.exe")
+          $launcher = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $launcher) {
+            throw "EXE installer completed, but MechMotor.exe was not found in the installed location."
+          }
+
+          $app = Start-Process -FilePath $launcher -PassThru
+          Start-Sleep -Seconds 10
+          $app.Refresh()
+          if ($app.HasExited) {
+            throw "EXE-installed MechMotor exited during the 10-second launch smoke test (exit code $($app.ExitCode))."
+          }
+          Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+
+          $entry = Get-ItemProperty $uninstallKeys -ErrorAction SilentlyContinue |
+            Where-Object { $_.DisplayName -like "MechMotor*" } |
+            Select-Object -First 1
+          if (-not $entry) {
+            throw "Could not find MechMotor uninstall registry entry after EXE installation."
+          }
+          $uninstallText = if ($entry.QuietUninstallString) { $entry.QuietUninstallString } else { $entry.UninstallString }
+          if (-not $uninstallText) {
+            throw "MechMotor uninstall command was not registered."
+          }
+          if ($uninstallText -match '(?i)msiexec(?:\.exe)?\s+.*?(/i|/package)\s+(\{[0-9A-F-]+\})') {
+            $productCode = $Matches[2]
+            $uninstall = Start-Process -FilePath "msiexec.exe" -ArgumentList @("/x", $productCode, "/qn", "/norestart") -Wait -PassThru
+          } else {
+            $command = $uninstallText.Trim()
+            $uninstaller = $null
+            $arguments = ""
+            if ($command -match '^"([^"]+)"\s*(.*)
+        uses: actions/upload-artifact@v4
+        with:
+          name: MechMotor-Windows-x64-installers
+          path: |
+            target/MechMotor-Windows-x64-app-image.zip
+            target/packages/exe/MechMotor-1.0.0.exe
+            target/packages/msi/MechMotor-1.0.0.msi
+          if-no-files-found: error
+          retention-days: 14
+) {
+              $uninstaller = $Matches[1]
+              $arguments = $Matches[2]
+            } elseif ($command -match '^([^\s]+)\s*(.*)
+        uses: actions/upload-artifact@v4
+        with:
+          name: MechMotor-Windows-x64-installers
+          path: |
+            target/MechMotor-Windows-x64-app-image.zip
+            target/packages/exe/MechMotor-1.0.0.exe
+            target/packages/msi/MechMotor-1.0.0.msi
+          if-no-files-found: error
+          retention-days: 14
+) {
+              $uninstaller = $Matches[1]
+              $arguments = $Matches[2]
+            }
+            if (-not $uninstaller -or -not (Test-Path $uninstaller)) {
+              throw "Could not resolve registered MechMotor uninstaller: $uninstallText"
+            }
+            if ($arguments -notmatch '(?i)(/quiet|/qn|/silent|/s\b)') {
+              $arguments = "$arguments /quiet"
+            }
+            $uninstall = Start-Process -FilePath $uninstaller -ArgumentList $arguments -Wait -PassThru
+          }
+          if ($uninstall.ExitCode -notin @(0, 3010, 1605, 1614)) {
+            throw "EXE-installed MechMotor uninstall failed with exit code $($uninstall.ExitCode)."
+          }
+          if (Test-Path $launcher) {
+            throw "MechMotor launcher remains after EXE installer uninstall: $launcher"
+          }
+
       - name: Upload Windows packages
         uses: actions/upload-artifact@v4
         with:
