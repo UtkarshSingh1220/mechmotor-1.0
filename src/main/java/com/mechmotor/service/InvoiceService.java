@@ -130,7 +130,7 @@ public class InvoiceService {
             lines.add(new InvoiceLine("Seller state: " + safeNullable(sale.sellerStateCodeSnapshot())
                     + " | Buyer state: " + safeNullable(sale.buyerStateCodeSnapshot()), false, 8));
         }
-        lines.add(new InvoiceLine("NET SALE TOTAL (INCLUDING TAX): " + money(sale.totalPaise()), true, 12));
+        lines.add(new InvoiceLine((sale.taxAmountPaise() > 0 ? "NET SALE TOTAL (INCLUDING TAX): " : "NET SALE TOTAL: ") + money(sale.totalPaise()), true, 12));
         if (!payments.isEmpty()) {
             lines.add(new InvoiceLine("PAYMENT", true, 10));
             for (PaymentLine payment : payments) {
