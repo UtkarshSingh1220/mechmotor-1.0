@@ -18,7 +18,7 @@ public final class TaxCalculationService {
         String sellerState = normalizeState(profile.stateCode(), "Seller");
         String buyerState = normalizeState(rawBuyerStateCode, "Buyer");
         if (!profile.taxEnabled() || profile.defaultTaxRateBps() == 0) {
-            return new TaxSnapshot(base, profile.defaultTaxRateBps(), profile.taxLabel(), 0, 0, 0, 0,
+            return new TaxSnapshot(base, profile.taxEnabled() ? profile.defaultTaxRateBps() : 0, profile.taxLabel(), 0, 0, 0, 0,
                     sellerState, buyerState, "NONE", base);
         }
         long tax = roundedTax(base, profile.defaultTaxRateBps());
