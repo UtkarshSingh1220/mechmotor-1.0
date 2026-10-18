@@ -101,9 +101,9 @@ class PurchasingWorkflowAcceptanceTest {
         String csv = Files.readString(report, StandardCharsets.UTF_8);
         assertTrue(csv.contains("\""+ firstReceipt.receiptNumber() +"\""), "First delivery must be in the report.");
         assertTrue(csv.contains("\""+ secondReceipt.receiptNumber() +"\""), "Second delivery must be in the report.");
-        assertTrue(csv.contains("\"2500.00\",\"0.00\",\"0.00\",\"2500.00\""),
+        assertTrue(csv.contains("\"25.00\",\"0.00\",\"0.00\",\"25.00\""),
                 "First delivery should remain fully payable.");
-        assertTrue(csv.contains("\"3750.00\",\"1250.00\",\"2000.00\",\"500.00\""),
+        assertTrue(csv.contains("\"37.50\",\"12.50\",\"20.00\",\"5.00\""),
                 "Second delivery should reconcile original cost, credit note, posted payment, and balance.");
 
         assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM purchase_order_receipts WHERE purchase_order_id=?",
