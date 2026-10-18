@@ -113,6 +113,23 @@ class InvoiceServiceTest {
     }
 
     @Test
+    void invoiceWrapsLongShopAddressInsteadOfTruncatingIt() throws Exception {
+        String longAddress = "Unit 4, Industrial Estate, Sector 18, Main Market Road, Near Central Warehouse, "
+                + "Gurugram Haryana 122015, India, Building C, Second Floor, Office 204";
+        new ShopProfileService(jdbc).save(new ShopProfileService.ShopProfile(
+                "Long Address Shop", longAddress, "", "", "", "", "GST", 0, false));
+        SaleReceipt sale = sales.checkout(new SaleDraft(brakePart, 1, 2500, 0,
+                "Walk-in", "CASH", null));
+        Path output = tempDir.resolve("long-address-invoice.pdf");
+        invoices.exportSaleInvoice(sale.saleNumber(), output);
+        try (PDDocument document = Loader.loadPDF(output.toFile())) {
+            String text = new PDFTextStripper().getText(document);
+            assertTrue(text.contains("Near Central Warehouse"));
+            assertTrue(text.contains("Building C, Second Floor, Office 204"));
+        }
+    }
+
+    @Test
     void refusesToOverwriteAnExistingInvoice() throws Exception {
         SaleReceipt sale = sales.checkout(new SaleDraft(brakePart, 1, 2500, 0,
                 null, "CASH", null));

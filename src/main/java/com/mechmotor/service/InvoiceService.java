@@ -129,6 +129,8 @@ public class InvoiceService {
         lines.add(new InvoiceLine("Generated locally by MechMotor. Keep this receipt for your records.", false, 8));
         lines.add(new InvoiceLine("Refunds are audit records; this PDF does not prove external payment settlement.", false, 8));
 
+        lines = wrapLines(lines, 100);
+
         Path target = requestedTarget.toAbsolutePath().normalize();
         Path parent = target.getParent();
         if (parent == null) throw new IOException("Choose a valid destination folder.");
@@ -141,9 +143,15 @@ public class InvoiceService {
                 while (offset < lines.size()) {
                     PDPage page = new PDPage();
                     document.addPage(page);
+                    int end = offset;
+                    float y = 790;
+                    while (end < lines.size() && y - lines.get(end).size() - 7 >= 48) {
+                        y -= lines.get(end).size() + 7;
+                        end++;
+                    }
+                    if (end == offset) end++;
                     try (PDPageContentStream stream = new PDPageContentStream(document, page)) {
-                        float y = 790;
-                        int end = Math.min(offset + LINES_PER_PAGE, lines.size());
+                        y = 790;
                         for (int i = offset; i < end; i++) {
                             InvoiceLine line = lines.get(i);
                             PDType1Font font = new PDType1Font(line.bold()
@@ -162,7 +170,7 @@ public class InvoiceService {
                         stream.showText("Page " + (document.getNumberOfPages()) + " | MechMotor 1.0");
                         stream.endText();
                     }
-                    offset += LINES_PER_PAGE;
+                    offset = end;
                 }
                 document.save(temporary.toFile());
             }
@@ -177,6 +185,38 @@ public class InvoiceService {
         }
     }
 
+
+    /** Wraps long business/customer/item fields instead of silently truncating invoice content. */
+    private static List<InvoiceLine> wrapLines(List<InvoiceLine> source, int maxChars) {
+        List<InvoiceLine> wrapped = new ArrayList<>();
+        for (InvoiceLine line : source) {
+            String text = ascii(line.text());
+            if (text.isEmpty()) {
+                wrapped.add(new InvoiceLine("", line.bold(), line.size()));
+                continue;
+            }
+            StringBuilder current = new StringBuilder();
+            for (String word : text.split("\\s+")) {
+                if (current.length() > 0 && current.length() + 1 + word.length() > maxChars) {
+                    wrapped.add(new InvoiceLine(current.toString(), line.bold(), line.size()));
+                    current.setLength(0);
+                }
+                while (word.length() > maxChars) {
+                    if (current.length() > 0) {
+                        wrapped.add(new InvoiceLine(current.toString(), line.bold(), line.size()));
+                        current.setLength(0);
+                    }
+                    wrapped.add(new InvoiceLine(word.substring(0, maxChars), line.bold(), line.size()));
+                    word = word.substring(maxChars);
+                }
+                if (current.length() > 0) current.append(' ');
+                current.append(word);
+            }
+            if (current.length() > 0) wrapped.add(new InvoiceLine(current.toString(), line.bold(), line.size()));
+        }
+        return wrapped;
+    }
+
     private static String money(long paise) {
         return "INR " + BigDecimal.valueOf(paise, 2).setScale(2).toPlainString();
     }
@@ -188,7 +228,7 @@ public class InvoiceService {
     private static String ascii(String value) {
         String normalized = Normalizer.normalize(value == null ? "" : value, Normalizer.Form.NFKD);
         String ascii = normalized.replaceAll("[^\\x20-\\x7E]", "?");
-        return ascii.length() > 115 ? ascii.substring(0, 112) + "..." : ascii;
+        return ascii;
     }
 
     private record SaleHeader(long id, String saleNumber, String customerName, long subtotalPaise,
