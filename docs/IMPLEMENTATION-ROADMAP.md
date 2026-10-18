@@ -18,7 +18,7 @@
 - Supplier payment tracking and payable balances (merged): partial payments, outstanding balance, payment audit/void, overpayment protection and receipt-cancellation safeguards.
 
 - **Multi-item sales cart — merged:** up to 100 distinct items, overflow-safe totals, atomic sale snapshots, stock deductions, ledger movements and payment.
-- **Formal purchase orders — merged and CI-verified:** create and search orders before delivery, expected date/notes, reasoned cancellation, and linked stock receipts. Partial receiving supports multiple deliveries, per-line outstanding-quantity validation, linked receipt history, and atomic stock/ledger updates; CI and Windows workflow acceptance must be confirmed for this addition. PR #31 merged to `main` at `c2819f52defd9ec730d5c1c1e95d143f099430dd`; its Windows Java 21 / Maven `clean verify` passed in [GitHub Actions run #136](https://github.com/UtkarshSingh1220/mechmotor-1.0/actions/runs/38862611660). Supplier returns/credit notes remain future work.
+- **Formal purchase orders — merged and CI-verified:** create and search orders before delivery, expected date/notes, reasoned cancellation, and linked stock receipts. Partial receiving supports multiple deliveries, per-line outstanding-quantity validation, linked receipt history, and atomic stock/ledger updates; CI and Windows workflow acceptance must be confirmed for this addition. PR #31 merged to `main` at `c2819f52defd9ec730d5c1c1e95d143f099430dd`; its Windows Java 21 / Maven `clean verify` passed in [GitHub Actions run #136](https://github.com/UtkarshSingh1220/mechmotor-1.0/actions/runs/38862611660). Supplier returns and credit notes are implemented on the current branch; CI and Windows workflow acceptance are pending.
 
 ## Post-merge verification record
 - PR #31 (`feat: add formal purchase order lifecycle`) is merged to `main`.
@@ -28,7 +28,7 @@
 
 ## Remaining production-readiness work
 1. **Sales lifecycle:** merged full-sale voids, per-item partial returns/refunds, discount-aware cumulative rounding and atomic stock reversal/return audit. Remaining: end-to-end cashier workflow validation.
-2. **Purchasing lifecycle:** multi-item receipts and supplier payment tracking are implemented. Remaining: supplier returns/credit notes and end-to-end payable reconciliation validation, including multiple partial receipts on Windows.
+2. **Purchasing lifecycle:** multi-item receipts and supplier payment tracking are implemented. Remaining: validate return/credit-note reconciliation against real shop records and complete Windows workflow acceptance, including multiple partial receipts and supplier returns.
 3. **Invoices and reports:** merged printable PDF sales invoices generated from immutable snapshots. Operational CSV exports for sales, supplier receipts, stock movements and supplier payable reconciliation are implemented. Remaining: validate reconciliation against real shop records, shop profile/tax settings and invoice template review.
 4. **Windows distribution:** validated JavaFX runtime layout, jpackage EXE installer, clean-machine install/launch/upgrade/uninstall testing, preserving user data.
 5. **Release quality:** representative-catalog performance tests, accessibility and UI workflow tests, dependency/license/vulnerability scans, backup/restore drills and documented recovery procedures.

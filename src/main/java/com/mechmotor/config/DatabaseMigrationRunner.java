@@ -169,6 +169,7 @@ public final class DatabaseMigrationRunner implements ApplicationRunner {
         try {
             ScriptUtils.executeSqlScript(connection, migration);
             if (version == 3) createSupplierPaymentTriggers(connection);
+            if (version == 7) createStockMovementTimestampTrigger(connection);
             verifyCurrentSchema(connection, version);
             recordVersion(connection, version);
             connection.commit();
@@ -186,6 +187,17 @@ public final class DatabaseMigrationRunner implements ApplicationRunner {
      * SQLite trigger bodies contain internal semicolons; install them as complete JDBC
      * statements rather than splitting them with Spring's generic SQL script parser.
      */
+    private static void createStockMovementTimestampTrigger(Connection connection) throws SQLException {
+        execute(connection, """
+            CREATE TRIGGER IF NOT EXISTS trg_stock_movements_legacy_created_at
+            AFTER INSERT ON stock_movements
+            WHEN NEW.created_at IS NULL OR NEW.created_at=''
+            BEGIN
+              UPDATE stock_movements SET created_at=CURRENT_TIMESTAMP WHERE id=NEW.id;
+            END
+            """);
+    }
+
     private static void createSupplierPaymentTriggers(Connection connection) throws SQLException {
         execute(connection, """
             CREATE TRIGGER IF NOT EXISTS trg_supplier_payment_no_overpay
@@ -335,6 +347,24 @@ public final class DatabaseMigrationRunner implements ApplicationRunner {
             for (String column : List.of("id", "purchase_order_receipt_id", "purchase_order_item_id", "purchase_item_id", "quantity")) {
                 if (!columnExists(connection, "purchase_order_receipt_items", column)) {
                     throw new IllegalStateException("Database table 'purchase_order_receipt_items' is missing required column '" + column + "'.");
+                }
+            }
+        }
+        if (version >= 6) {
+            if (!tableExists(connection, "supplier_returns")
+                    || !tableExists(connection, "supplier_return_items")) {
+                throw new IllegalStateException("Database is missing supplier return / credit note tables.");
+            }
+            for (String column : List.of("id", "return_number", "purchase_id", "supplier_id", "reason",
+                    "credit_note_reference", "total_paise", "status", "created_at")) {
+                if (!columnExists(connection, "supplier_returns", column)) {
+                    throw new IllegalStateException("Database table 'supplier_returns' is missing required column '" + column + "'.");
+                }
+            }
+            for (String column : List.of("id", "supplier_return_id", "purchase_item_id", "part_id", "sku_snapshot",
+                    "name_snapshot", "quantity", "unit_cost_paise", "line_total_paise")) {
+                if (!columnExists(connection, "supplier_return_items", column)) {
+                    throw new IllegalStateException("Database table 'supplier_return_items' is missing required column '" + column + "'.");
                 }
             }
         }
