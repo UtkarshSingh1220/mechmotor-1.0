@@ -513,11 +513,11 @@ The launcher JAR and input layout in this example must be adapted to the actual 
 - Sale voids/refunds and return workflows with explicit reversal records.
 - Formal purchase orders and partial receiving are implemented; supplier returns/credit notes are in review pending CI and Windows workflow acceptance. End-to-end accounting reconciliation remains a release gate.
 - PDF invoices and reports, shop settings and report scheduling/email integration.
-- Windows EXE/MSI installer generation is automated in CI; clean-machine install/upgrade/uninstall and data-preservation validation remain required.
+- Windows EXE/MSI generation and MSI install/launch/uninstall checks run in CI on a fresh hosted Windows runner; EXE installer behavior, upgrade paths, and real user-database preservation still require acceptance testing.
 - Representative inventory performance benchmarks, dependency/security/license scanning, restore drills and end-to-end shop workflow tests.
 
 This is not yet certified production-ready. Do not use it as the sole system of record until the release blockers and clean Windows validation are complete.
-## Windows packaging\n\nThe Windows packaging workflow builds a Java 21 app-image, runs a packaged-launch smoke test, and produces EXE/MSI installers. Download artifacts from the successful [Windows desktop package workflow](https://github.com/UtkarshSingh1220/mechmotor-1.0/actions/workflows/windows-package.yml). CI packaging is not a substitute for testing installation, upgrade, uninstall, and database preservation on a clean Windows machine.\n\n## Design documents
+## Windows packaging\n\nThe Windows packaging workflow builds a Java 21 app-image, runs packaged and installed launch smoke tests, produces EXE/MSI installers, and validates MSI install/uninstall on a fresh hosted Windows runner. Download artifacts from a successful [Windows desktop package workflow](https://github.com/UtkarshSingh1220/mechmotor-1.0/actions/workflows/windows-package.yml). CI validation does not yet cover the EXE installer, upgrades from an older release, or preservation of a real shop database across upgrade/uninstall; those remain release gates.\n\n## Design documents
 
 - [High-Level Design (HLD)](docs/HLD.md) — system architecture, modules, technology decisions, UX, non-functional requirements and release acceptance criteria.
 - [Low-Level Design (LLD)](docs/LLD.md) — packages, data model, search/query rules, transaction behavior, license logic, testing and build/packaging steps.
