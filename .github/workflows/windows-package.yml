@@ -92,6 +92,12 @@ jobs:
         shell: pwsh
         run: java -cp "target/dist/*" tools/acceptance/WindowsDatabaseLifecycle.java seed
 
+      - name: Apply and verify legacy database migrations
+        shell: pwsh
+        run: |
+          java -cp "target/dist/*" tools/acceptance/WindowsDatabaseLifecycle.java migrate
+          java -cp "target/dist/*" tools/acceptance/WindowsDatabaseLifecycle.java verify
+
       - name: Validate MSI install, launch, and uninstall
         shell: pwsh
         run: |
