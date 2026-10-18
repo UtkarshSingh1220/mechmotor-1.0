@@ -160,7 +160,7 @@ class InvoiceServiceTest {
             lines.add(new com.mechmotor.domain.SaleLineDraft(partId, 1, 200));
             expectedSkus.add(sku);
         }
-        SaleReceipt sale = sales.checkout(new com.mechmotor.domain.CartSaleDraft(
+        var sale = sales.checkout(new com.mechmotor.domain.CartSaleDraft(
                 lines, 0, "Pagination acceptance", "CASH", null));
 
         Path output = tempDir.resolve("multi-page-invoice.pdf");
