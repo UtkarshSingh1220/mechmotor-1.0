@@ -6,6 +6,7 @@ import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -24,9 +25,17 @@ import java.util.List;
 public class InvoiceService {
     private static final int LINES_PER_PAGE = 44;
     private final JdbcTemplate jdbc;
+    private final ShopProfileService shopProfileService;
 
+    /** Compatibility constructor for isolated invoice tests using a JdbcTemplate. */
     public InvoiceService(JdbcTemplate jdbc) {
+        this(jdbc, new ShopProfileService(jdbc));
+    }
+
+    @Autowired
+    public InvoiceService(JdbcTemplate jdbc, ShopProfileService shopProfileService) {
         this.jdbc = jdbc;
+        this.shopProfileService = shopProfileService;
     }
 
     public Path exportSaleInvoice(String rawSaleNumber, Path requestedTarget) throws Exception {
@@ -63,8 +72,15 @@ public class InvoiceService {
             """, rs -> rs.next() ? new VoidDetails(rs.getString("reason"), rs.getLong("amount_refunded_paise"),
                 rs.getString("refund_method"), rs.getString("refund_reference")) : null, sale.id());
 
+        ShopProfileService.ShopProfile shop = shopProfileService.load();
         List<InvoiceLine> lines = new ArrayList<>();
-        lines.add(new InvoiceLine("MECHMOTOR 1.0 - VEHICLE PARTS", true, 18));
+        lines.add(new InvoiceLine(shop.shopName(), true, 18));
+        if (!shop.address().isBlank()) lines.add(new InvoiceLine("Address: " + shop.address(), false, 9));
+        if (!shop.phone().isBlank()) lines.add(new InvoiceLine("Phone: " + shop.phone(), false, 9));
+        if (!shop.email().isBlank()) lines.add(new InvoiceLine("Email: " + shop.email(), false, 9));
+        if (!shop.gstin().isBlank()) lines.add(new InvoiceLine("GSTIN: " + shop.gstin(), false, 9));
+        if (!shop.stateCode().isBlank()) lines.add(new InvoiceLine("State code: " + shop.stateCode(), false, 9));
+        lines.add(new InvoiceLine("MECHMOTOR 1.0 - VEHICLE PARTS", false, 9));
         lines.add(new InvoiceLine("SALES INVOICE / RECEIPT", true, 14));
         lines.add(new InvoiceLine("Invoice number: " + sale.saleNumber(), true, 11));
         lines.add(new InvoiceLine("Sale date (local database time): " + sale.createdAt(), false, 10));
@@ -91,6 +107,11 @@ public class InvoiceService {
         lines.add(new InvoiceLine("--------------------------------------------------------------------------", false, 9));
         lines.add(new InvoiceLine("Subtotal: " + money(sale.subtotalPaise()), false, 10));
         lines.add(new InvoiceLine("Discount: -" + money(sale.discountPaise()), false, 10));
+        if (shop.taxEnabled()) {
+            lines.add(new InvoiceLine("Tax profile: " + shop.taxLabel() + " " + shop.formattedTaxRate()
+                    + (shop.gstin().isBlank() ? "" : " | GSTIN " + shop.gstin()), false, 9));
+            lines.add(new InvoiceLine("Tax is configured as a default only; no tax amount is calculated or added to this saved sale.", false, 8));
+        }
         lines.add(new InvoiceLine("NET SALE TOTAL: " + money(sale.totalPaise()), true, 12));
         if (!payments.isEmpty()) {
             lines.add(new InvoiceLine("PAYMENT", true, 10));
