@@ -1898,6 +1898,8 @@ public class MechMotorApplication extends Application {
         TextField discount = new TextField("0.00");
         TextField customer = new TextField();
         customer.setPromptText("Optional customer name");
+        TextField buyerStateCode = new TextField();
+        buyerStateCode.setPromptText("Optional 2-digit state code; blank = provisional");
         ComboBox<String> paymentMethod = new ComboBox<>(FXCollections.observableArrayList("CASH", "UPI", "CARD", "BANK_TRANSFER"));
         paymentMethod.setValue("CASH");
         TextField reference = new TextField();
@@ -1950,12 +1952,14 @@ public class MechMotorApplication extends Application {
         form.add(updateLine, 1, 5);
         form.add(new Label("Sale discount (₹)"), 0, 6); form.add(discount, 1, 6);
         form.add(new Label("Customer"), 0, 7); form.add(customer, 1, 7);
-        form.add(new Label("Payment method"), 0, 8); form.add(paymentMethod, 1, 8);
-        form.add(new Label("Payment reference"), 0, 9); form.add(reference, 1, 9);
-        form.add(summary, 0, 10, 2, 1);
+        form.add(new Label("Buyer state code (optional)"), 0, 8); form.add(buyerStateCode, 1, 8);
+        form.add(new Label("Payment method"), 0, 9); form.add(paymentMethod, 1, 9);
+        form.add(new Label("Payment reference"), 0, 10); form.add(reference, 1, 10);
+        form.add(summary, 0, 11, 2, 1);
         GridPane.setHgrow(cartList, Priority.ALWAYS);
         GridPane.setHgrow(unitPrice, Priority.ALWAYS);
         GridPane.setHgrow(customer, Priority.ALWAYS);
+        GridPane.setHgrow(buyerStateCode, Priority.ALWAYS);
         GridPane.setHgrow(paymentMethod, Priority.ALWAYS);
         GridPane.setHgrow(reference, Priority.ALWAYS);
         dialog.getDialogPane().setContent(form);
@@ -1972,8 +1976,9 @@ public class MechMotorApplication extends Application {
                 Long parsedDiscount = parsePaise(discount.getText(), "Sale discount");
                 CartSaleDraft draft = new CartSaleDraft(lines, parsedDiscount == null ? 0L : parsedDiscount,
                         customer.getText(), paymentMethod.getValue(), reference.getText());
+                String buyerState = buyerStateCode.getText();
                 checkout.setDisable(true);
-                runBackground(() -> salesService.checkout(draft), receipt -> {
+                runBackground(() -> salesService.checkout(draft, buyerState), receipt -> {
                     dialog.close();
                     status.setText("Sale posted: " + receipt.saleNumber() + " • total ₹" + rupees(receipt.totalPaise()));
                     refreshInventory.run();
@@ -1986,7 +1991,7 @@ public class MechMotorApplication extends Application {
                     }
                     details.append("Subtotal: ₹").append(rupees(receipt.subtotalPaise()))
                             .append("\nDiscount: ₹").append(rupees(receipt.discountPaise()))
-                            .append("\nTotal paid: ₹").append(rupees(receipt.totalPaise()))
+                            .append("\nTotal including configured tax: ₹").append(rupees(receipt.totalPaise()))
                             .append("\nPayment: ").append(receipt.paymentMethod());
                     Alert confirmation = new Alert(Alert.AlertType.INFORMATION, details.toString(), ButtonType.OK);
                     confirmation.setTitle("Sale completed");
@@ -2061,7 +2066,9 @@ public class MechMotorApplication extends Application {
             long discount = parsedDiscount == null ? 0L : parsedDiscount;
             long total = Math.max(0, subtotal - discount);
             summary.setText("Subtotal: ₹" + rupees(subtotal) + " • Discount: ₹" + rupees(discount)
-                    + " • Total: ₹" + rupees(total) + (discount > subtotal ? " (discount exceeds subtotal)" : ""));
+                    + " • Pre-tax total: ₹" + rupees(total)
+                    + (discount > subtotal ? " (discount exceeds subtotal)" : "")
+                    + "\nConfigured tax, if enabled, is added at checkout. Blank buyer state is classified provisionally.");
         } catch (RuntimeException ex) {
             summary.setText("Enter valid quantities, prices and discount to calculate the total.");
         }

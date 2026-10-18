@@ -28,10 +28,15 @@ class DatabaseMigrationRunnerTest {
              Statement statement = connection.createStatement();
              ResultSet version = statement.executeQuery("SELECT MAX(version) FROM schema_version")) {
             assertTrue(version.next());
-            assertEquals(8, version.getInt(1));
+            assertEquals(9, version.getInt(1));
             try (ResultSet sales = statement.executeQuery("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='sales'")) {
                 assertTrue(sales.next());
                 assertEquals(1, sales.getInt(1));
+            }
+            try (ResultSet taxColumn = statement.executeQuery(
+                    "SELECT COUNT(*) FROM pragma_table_info('sales') WHERE name='tax_amount_paise'")) {
+                assertTrue(taxColumn.next());
+                assertEquals(1, taxColumn.getInt(1));
             }
         }
     }
@@ -78,6 +83,11 @@ class DatabaseMigrationRunnerTest {
                 assertEquals(0, part.getLong("selling_price_paise"));
                 assertEquals(1, part.getInt("active"));
             }
+            try (ResultSet taxColumn = statement.executeQuery(
+                    "SELECT COUNT(*) FROM pragma_table_info('sales') WHERE name='tax_amount_paise'")) {
+                assertTrue(taxColumn.next());
+                assertEquals(1, taxColumn.getInt(1));
+            }
             try (ResultSet stock = statement.executeQuery("SELECT quantity_on_hand,reserved_quantity,reorder_level FROM inventory WHERE part_id=1")) {
                 assertTrue(stock.next());
                 assertEquals(7, stock.getInt("quantity_on_hand"));
@@ -97,7 +107,7 @@ class DatabaseMigrationRunnerTest {
             }
             try (ResultSet version = statement.executeQuery("SELECT MAX(version) FROM schema_version")) {
                 assertTrue(version.next());
-                assertEquals(8, version.getInt(1));
+                assertEquals(9, version.getInt(1));
             }
         }
     }

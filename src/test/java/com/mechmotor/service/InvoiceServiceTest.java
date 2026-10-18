@@ -108,7 +108,27 @@ class InvoiceServiceTest {
             assertTrue(text.contains("12 Market Road, Gurugram"));
             assertTrue(text.contains("22AAAAA0000A1Z5"));
             assertTrue(text.contains("GST 18.00%"));
-            assertTrue(text.contains("no tax amount is calculated"));
+            assertTrue(text.contains("Tax classification: PROVISIONAL_LOCAL"));
+            assertTrue(text.contains("CGST: INR 2.25 | SGST: INR 2.25"));
+        }
+    }
+
+    @Test
+    void invoiceShowsTransactionTaxSnapshotsNotCurrentShopDefaults() throws Exception {
+        new ShopProfileService(jdbc).save(new ShopProfileService.ShopProfile(
+                "Tax Shop", "Address", "", "", "", "06", "GST", 1800, true));
+        SaleReceipt sale = sales.checkout(new SaleDraft(brakePart, 1, 10000, 1000, "Buyer", "CASH", null));
+        new ShopProfileService(jdbc).save(new ShopProfileService.ShopProfile(
+                "Tax Shop", "Address", "", "", "", "06", "GST", 500, true));
+        Path output = tempDir.resolve("tax-snapshot-invoice.pdf");
+        invoices.exportSaleInvoice(sale.saleNumber(), output);
+        try (PDDocument document = Loader.loadPDF(output.toFile())) {
+            String text = new PDFTextStripper().getText(document);
+            assertTrue(text.contains("Taxable base: INR 90.00"));
+            assertTrue(text.contains("CGST: INR 8.10 | SGST: INR 8.10"));
+            assertTrue(text.contains("PROVISIONAL_LOCAL"));
+            assertTrue(text.contains("NET SALE TOTAL (INCLUDING TAX): INR 106.20"));
+            assertFalse(text.contains("5.00%"));
         }
     }
 

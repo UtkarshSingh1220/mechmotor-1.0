@@ -44,11 +44,17 @@ public class InvoiceService {
             throw new IllegalArgumentException("Enter a valid sale number.");
         }
         SaleHeader sale = jdbc.query("""
-            SELECT id,sale_number,customer_name,subtotal_paise,discount_paise,total_paise,status,created_at
+            SELECT id,sale_number,customer_name,subtotal_paise,discount_paise,total_paise,status,created_at,
+                   taxable_base_paise,tax_rate_bps,tax_label_snapshot,tax_amount_paise,cgst_paise,sgst_paise,igst_paise,
+                   seller_state_code_snapshot,buyer_state_code_snapshot,tax_classification
             FROM sales WHERE sale_number=? COLLATE NOCASE
             """, rs -> rs.next() ? new SaleHeader(rs.getLong("id"), rs.getString("sale_number"),
                 rs.getString("customer_name"), rs.getLong("subtotal_paise"), rs.getLong("discount_paise"),
-                rs.getLong("total_paise"), rs.getString("status"), rs.getString("created_at")) : null, saleNumber);
+                rs.getLong("total_paise"), rs.getString("status"), rs.getString("created_at"),
+                rs.getLong("taxable_base_paise"), rs.getInt("tax_rate_bps"), rs.getString("tax_label_snapshot"),
+                rs.getLong("tax_amount_paise"), rs.getLong("cgst_paise"), rs.getLong("sgst_paise"),
+                rs.getLong("igst_paise"), rs.getString("seller_state_code_snapshot"),
+                rs.getString("buyer_state_code_snapshot"), rs.getString("tax_classification")) : null, saleNumber);
         if (sale == null) throw new IllegalArgumentException("No sale found with that sale number.");
 
         List<SaleLine> items = jdbc.query("""
@@ -107,12 +113,24 @@ public class InvoiceService {
         lines.add(new InvoiceLine("--------------------------------------------------------------------------", false, 9));
         lines.add(new InvoiceLine("Subtotal: " + money(sale.subtotalPaise()), false, 10));
         lines.add(new InvoiceLine("Discount: -" + money(sale.discountPaise()), false, 10));
-        if (shop.taxEnabled()) {
-            lines.add(new InvoiceLine("Tax profile: " + shop.taxLabel() + " " + shop.formattedTaxRate()
-                    + (shop.gstin().isBlank() ? "" : " | GSTIN " + shop.gstin()), false, 9));
-            lines.add(new InvoiceLine("Tax is configured as a default only; no tax amount is calculated or added to this saved sale.", false, 8));
+        if (sale.taxRateBps() > 0 || sale.taxAmountPaise() > 0) {
+            lines.add(new InvoiceLine("Taxable base: " + money(sale.taxableBasePaise()), false, 10));
+            lines.add(new InvoiceLine(sale.taxLabelSnapshot() + " " + String.format(java.util.Locale.ROOT,
+                    "%d.%02d%%", sale.taxRateBps() / 100, sale.taxRateBps() % 100) + " rate", false, 9));
+            if (sale.cgstPaise() > 0 || sale.sgstPaise() > 0) {
+                lines.add(new InvoiceLine("CGST: " + money(sale.cgstPaise()) + " | SGST: " + money(sale.sgstPaise()), false, 10));
+            }
+            if (sale.igstPaise() > 0) lines.add(new InvoiceLine("IGST: " + money(sale.igstPaise()), false, 10));
+            if (sale.taxAmountPaise() > 0 && sale.cgstPaise() == 0 && sale.sgstPaise() == 0 && sale.igstPaise() == 0) {
+                lines.add(new InvoiceLine("Tax amount: " + money(sale.taxAmountPaise()), false, 10));
+            }
+            lines.add(new InvoiceLine("Tax classification: " + sale.taxClassification()
+                    + ("PROVISIONAL_LOCAL".equals(sale.taxClassification())
+                       ? " (buyer state not supplied; provisional classification)" : ""), false, 8));
+            lines.add(new InvoiceLine("Seller state: " + safeNullable(sale.sellerStateCodeSnapshot())
+                    + " | Buyer state: " + safeNullable(sale.buyerStateCodeSnapshot()), false, 8));
         }
-        lines.add(new InvoiceLine("NET SALE TOTAL: " + money(sale.totalPaise()), true, 12));
+        lines.add(new InvoiceLine((sale.taxAmountPaise() > 0 ? "NET SALE TOTAL (INCLUDING TAX): " : "NET SALE TOTAL: ") + money(sale.totalPaise()), true, 12));
         if (!payments.isEmpty()) {
             lines.add(new InvoiceLine("PAYMENT", true, 10));
             for (PaymentLine payment : payments) {
@@ -232,7 +250,10 @@ public class InvoiceService {
     }
 
     private record SaleHeader(long id, String saleNumber, String customerName, long subtotalPaise,
-                              long discountPaise, long totalPaise, String status, String createdAt) { }
+                              long discountPaise, long totalPaise, String status, String createdAt,
+                              long taxableBasePaise, int taxRateBps, String taxLabelSnapshot, long taxAmountPaise,
+                              long cgstPaise, long sgstPaise, long igstPaise, String sellerStateCodeSnapshot,
+                              String buyerStateCodeSnapshot, String taxClassification) { }
     private record SaleLine(String sku, String name, int quantity, long unitPricePaise, long lineTotalPaise) { }
     private record PaymentLine(String method, long amountPaise, String reference) { }
     private record ReturnTotals(int quantity, long refundPaise) { }
