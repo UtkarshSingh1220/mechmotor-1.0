@@ -464,7 +464,7 @@ The committed CI workflow runs `mvn --batch-mode --no-transfer-progress clean ve
 
 ## Windows EXE packaging
 
-The target packaging approach is JDK `jpackage`, built and tested on Windows. The installer should bundle the application runtime so users do not need a separate Java installation.
+The packaging work is being validated in stages using JDK `jpackage` on Windows. The GitHub Actions workflow `.github/workflows/windows-package.yml` now builds a thin classpath distribution and creates a Windows **app-image** containing the `MechMotor.exe` launcher. Its ZIP is published as a short-lived workflow artifact for inspection. This app-image is not yet an installer and does not by itself prove clean-machine launch or upgrade/uninstall behavior.
 
 Planned release flow:
 
