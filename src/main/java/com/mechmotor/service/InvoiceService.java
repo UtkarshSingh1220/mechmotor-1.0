@@ -143,9 +143,15 @@ public class InvoiceService {
                 while (offset < lines.size()) {
                     PDPage page = new PDPage();
                     document.addPage(page);
+                    int end = offset;
+                    float y = 790;
+                    while (end < lines.size() && y - lines.get(end).size() - 7 >= 48) {
+                        y -= lines.get(end).size() + 7;
+                        end++;
+                    }
+                    if (end == offset) end++;
                     try (PDPageContentStream stream = new PDPageContentStream(document, page)) {
-                        float y = 790;
-                        int end = Math.min(offset + LINES_PER_PAGE, lines.size());
+                        y = 790;
                         for (int i = offset; i < end; i++) {
                             InvoiceLine line = lines.get(i);
                             PDType1Font font = new PDType1Font(line.bold()
@@ -164,7 +170,7 @@ public class InvoiceService {
                         stream.showText("Page " + (document.getNumberOfPages()) + " | MechMotor 1.0");
                         stream.endText();
                     }
-                    offset += LINES_PER_PAGE;
+                    offset = end;
                 }
                 document.save(temporary.toFile());
             }
