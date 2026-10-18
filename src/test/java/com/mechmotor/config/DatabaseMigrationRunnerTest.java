@@ -60,6 +60,7 @@ class DatabaseMigrationRunnerTest {
                     color TEXT,
                     category_id INTEGER REFERENCES categories(id),
                     supplier_id INTEGER REFERENCES suppliers(id)
+                )
                 """);
             statement.execute("CREATE TABLE inventory(part_id INTEGER PRIMARY KEY, quantity_on_hand INTEGER NOT NULL DEFAULT 0)");
             statement.execute("CREATE TABLE stock_movements(id INTEGER PRIMARY KEY, part_id INTEGER NOT NULL, quantity INTEGER NOT NULL, reason TEXT)");
