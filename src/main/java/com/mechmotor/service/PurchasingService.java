@@ -629,6 +629,17 @@ public class PurchasingService {
             }
             Long supplierId = jdbc.queryForObject("SELECT supplier_id FROM purchases WHERE id=?",Long.class,purchase.id());
             if (supplierId == null) throw new IllegalStateException("Supplier receipt has no supplier.");
+            String creditNoteReference = draft.creditNoteReference();
+            if (creditNoteReference != null) {
+                Integer duplicateCreditNotes = jdbc.queryForObject("""
+                    SELECT COUNT(*) FROM supplier_returns
+                    WHERE supplier_id=? AND credit_note_reference=? COLLATE NOCASE AND status='POSTED'
+                    """, Integer.class, supplierId, creditNoteReference);
+                if (duplicateCreditNotes != null && duplicateCreditNotes > 0) {
+                    throw new IllegalArgumentException(
+                            "This supplier credit note reference has already been recorded.");
+                }
+            }
             java.util.Map<Long,SupplierReturnLineDraft> requested = new java.util.LinkedHashMap<>();
             for (SupplierReturnLineDraft line : draft.lines()) {
                 if (requested.putIfAbsent(line.purchaseItemId(),line) != null) {
