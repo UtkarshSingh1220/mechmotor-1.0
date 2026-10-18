@@ -367,6 +367,32 @@ class PurchasingServiceTest {
     }
 
     @Test
+    void duplicateSupplierInvoiceReferenceCannotBeReceivedTwiceForSameSupplier() {
+        var firstOrder = purchasing.createPurchaseOrder(new FormalPurchaseOrderDraft(supplierId, null, null,
+                java.util.List.of(new PurchaseLineDraft(partId, 5, 1250))));
+        var firstReceipt = purchasing.receivePurchaseOrder(firstOrder.orderNumber(), "SUP-INV-2026-01");
+        assertEquals(5, firstReceipt.units());
+        assertEquals(8, parts.findById(partId).quantity());
+
+        var secondOrder = purchasing.createPurchaseOrder(new FormalPurchaseOrderDraft(supplierId, null, null,
+                java.util.List.of(new PurchaseLineDraft(partId, 2, 1250))));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> purchasing.receivePurchaseOrder(secondOrder.orderNumber(), "  sup-inv-2026-01  "));
+
+        assertEquals(8, parts.findById(partId).quantity(),
+                "A duplicate supplier invoice must not add stock twice.");
+        assertEquals("ORDERED", purchasing.purchaseOrders(secondOrder.orderNumber(), 10).get(0).status(),
+                "The rejected receipt must leave the second order open.");
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM purchases WHERE supplier_id=? AND supplier_invoice_reference=?",
+                Integer.class, supplierId, "SUP-INV-2026-01"));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM stock_movements WHERE reference=? AND movement_type='PURCHASE'",
+                Integer.class, firstReceipt.receiptNumber()));
+    }
+
+    @Test
     void formalPurchaseOrderSupportsMultiplePartialReceiptsAndBlocksOverReceipt() {
         var order = purchasing.createPurchaseOrder(new FormalPurchaseOrderDraft(supplierId, null, null,
                 java.util.List.of(new PurchaseLineDraft(partId, 5, 1250))));

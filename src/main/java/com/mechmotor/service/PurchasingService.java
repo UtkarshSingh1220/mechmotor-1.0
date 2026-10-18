@@ -205,6 +205,19 @@ public class PurchasingService {
             LookupOption supplier = parts.suppliers().stream()
                     .filter(option -> option.id() == draft.supplierId())
                     .findFirst().orElseThrow(() -> new IllegalArgumentException("Selected supplier does not exist."));
+            String invoiceReference = draft.supplierInvoiceReference();
+            if (invoiceReference != null) {
+                Integer duplicateInvoices = jdbc.queryForObject("""
+                    SELECT COUNT(*) FROM purchases
+                    WHERE supplier_id=? AND supplier_invoice_reference=? COLLATE NOCASE
+                      AND status='RECEIVED'
+                    """, Integer.class, supplier.id(), invoiceReference);
+                if (duplicateInvoices != null && duplicateInvoices > 0) {
+                    throw new IllegalArgumentException(
+                            "This supplier invoice reference has already been received. Check the invoice number before receiving stock.");
+                }
+            }
+
             List<PreparedPurchaseLine> prepared = new java.util.ArrayList<>();
             long total = 0;
             int totalUnits = 0;
