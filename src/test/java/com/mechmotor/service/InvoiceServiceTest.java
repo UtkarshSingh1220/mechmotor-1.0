@@ -113,6 +113,25 @@ class InvoiceServiceTest {
     }
 
     @Test
+    void invoiceShowsTransactionTaxSnapshotsNotCurrentShopDefaults() throws Exception {
+        new ShopProfileService(jdbc).save(new ShopProfileService.ShopProfile(
+                "Tax Shop", "Address", "", "", "", "06", "GST", 1800, true));
+        SaleReceipt sale = sales.checkout(new SaleDraft(brakePart, 1, 10000, 1000, "Buyer", "CASH", null));
+        new ShopProfileService(jdbc).save(new ShopProfileService.ShopProfile(
+                "Tax Shop", "Address", "", "", "", "06", "GST", 500, true));
+        Path output = tempDir.resolve("tax-snapshot-invoice.pdf");
+        invoices.exportSaleInvoice(sale.saleNumber(), output);
+        try (PDDocument document = Loader.loadPDF(output.toFile())) {
+            String text = new PDFTextStripper().getText(document);
+            assertTrue(text.contains("Taxable base: INR 90.00"));
+            assertTrue(text.contains("CGST: INR 8.10 | SGST: INR 8.10"));
+            assertTrue(text.contains("PROVISIONAL_LOCAL"));
+            assertTrue(text.contains("NET SALE TOTAL (INCLUDING TAX): INR 106.20"));
+            assertFalse(text.contains("5.00%"));
+        }
+    }
+
+    @Test
     void invoiceWrapsLongShopAddressInsteadOfTruncatingIt() throws Exception {
         String longAddress = "Unit 4, Industrial Estate, Sector 18, Main Market Road, Near Central Warehouse, "
                 + "Gurugram Haryana 122015, India, Building C, Second Floor, Office 204";
