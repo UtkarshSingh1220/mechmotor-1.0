@@ -27,11 +27,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: java-kotlin
-          build-mode: autobuild
+          build-mode: manual
+
+      - name: Build for CodeQL tracing
+        run: mvn --batch-mode --no-transfer-progress -DskipTests package
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@v3
