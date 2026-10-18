@@ -115,8 +115,8 @@ public class InvoiceService {
         lines.add(new InvoiceLine("Discount: -" + money(sale.discountPaise()), false, 10));
         if (sale.taxRateBps() > 0 || sale.taxAmountPaise() > 0) {
             lines.add(new InvoiceLine("Taxable base: " + money(sale.taxableBasePaise()), false, 10));
-            lines.add(new InvoiceLine(sale.taxLabelSnapshot() + " rate: " + String.format(java.util.Locale.ROOT,
-                    "%d.%02d%%", sale.taxRateBps() / 100, sale.taxRateBps() % 100), false, 9));
+            lines.add(new InvoiceLine(sale.taxLabelSnapshot() + " " + String.format(java.util.Locale.ROOT,
+                    "%d.%02d%%", sale.taxRateBps() / 100, sale.taxRateBps() % 100) + " rate", false, 9));
             if (sale.cgstPaise() > 0 || sale.sgstPaise() > 0) {
                 lines.add(new InvoiceLine("CGST: " + money(sale.cgstPaise()) + " | SGST: " + money(sale.sgstPaise()), false, 10));
             }
