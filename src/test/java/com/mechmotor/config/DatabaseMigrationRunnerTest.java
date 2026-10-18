@@ -28,7 +28,7 @@ class DatabaseMigrationRunnerTest {
              Statement statement = connection.createStatement();
              ResultSet version = statement.executeQuery("SELECT MAX(version) FROM schema_version")) {
             assertTrue(version.next());
-            assertEquals(6, version.getInt(1));
+            assertEquals(7, version.getInt(1));
             try (ResultSet sales = statement.executeQuery("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='sales'")) {
                 assertTrue(sales.next());
                 assertEquals(1, sales.getInt(1));
@@ -97,7 +97,7 @@ class DatabaseMigrationRunnerTest {
             }
             try (ResultSet version = statement.executeQuery("SELECT MAX(version) FROM schema_version")) {
                 assertTrue(version.next());
-                assertEquals(6, version.getInt(1));
+                assertEquals(7, version.getInt(1));
             }
         }
     }
