@@ -33,6 +33,11 @@ class DatabaseMigrationRunnerTest {
                 assertTrue(sales.next());
                 assertEquals(1, sales.getInt(1));
             }
+            try (ResultSet taxColumn = statement.executeQuery(
+                    "SELECT COUNT(*) FROM pragma_table_info('sales') WHERE name='tax_amount_paise'")) {
+                assertTrue(taxColumn.next());
+                assertEquals(1, taxColumn.getInt(1));
+            }
         }
     }
 
@@ -77,6 +82,11 @@ class DatabaseMigrationRunnerTest {
                 assertEquals(0, part.getLong("purchase_price_paise"));
                 assertEquals(0, part.getLong("selling_price_paise"));
                 assertEquals(1, part.getInt("active"));
+            }
+            try (ResultSet taxColumn = statement.executeQuery(
+                    "SELECT COUNT(*) FROM pragma_table_info('sales') WHERE name='tax_amount_paise'")) {
+                assertTrue(taxColumn.next());
+                assertEquals(1, taxColumn.getInt(1));
             }
             try (ResultSet stock = statement.executeQuery("SELECT quantity_on_hand,reserved_quantity,reorder_level FROM inventory WHERE part_id=1")) {
                 assertTrue(stock.next());
