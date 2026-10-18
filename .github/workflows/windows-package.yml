@@ -180,30 +180,10 @@ jobs:
             $command = $uninstallText.Trim()
             $uninstaller = $null
             $arguments = ""
-            if ($command -match '^"([^"]+)"\s*(.*)
-        uses: actions/upload-artifact@v4
-        with:
-          name: MechMotor-Windows-x64-installers
-          path: |
-            target/MechMotor-Windows-x64-app-image.zip
-            target/packages/exe/MechMotor-1.0.0.exe
-            target/packages/msi/MechMotor-1.0.0.msi
-          if-no-files-found: error
-          retention-days: 14
-) {
+            if ($command -match '^"([^"]+)"\s*(.*)$') {
               $uninstaller = $Matches[1]
               $arguments = $Matches[2]
-            } elseif ($command -match '^([^\s]+)\s*(.*)
-        uses: actions/upload-artifact@v4
-        with:
-          name: MechMotor-Windows-x64-installers
-          path: |
-            target/MechMotor-Windows-x64-app-image.zip
-            target/packages/exe/MechMotor-1.0.0.exe
-            target/packages/msi/MechMotor-1.0.0.msi
-          if-no-files-found: error
-          retention-days: 14
-) {
+            } elseif ($command -match '^([^\s]+)\s*(.*)$') {
               $uninstaller = $Matches[1]
               $arguments = $Matches[2]
             }
