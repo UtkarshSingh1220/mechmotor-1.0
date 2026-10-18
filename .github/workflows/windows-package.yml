@@ -61,13 +61,17 @@ jobs:
         shell: pwsh
         run: |
           choco install wixtoolset --yes --no-progress
-          $wixBin = Get-ChildItem "C:\Program Files (x86)\WiX Toolset v3.*\bin" -Directory -ErrorAction SilentlyContinue |
-            Sort-Object FullName -Descending |
+          $wixRoot = Get-ChildItem "C:\Program Files (x86)" -Directory -Filter "WiX Toolset v3.*" -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending |
             Select-Object -First 1
-          if (-not $wixBin) {
-            throw "WiX Toolset v3 bin directory was not found after installation."
+          if (-not $wixRoot) {
+            throw "WiX Toolset v3 installation directory was not found after installation."
           }
-          Add-Content -Path $env:GITHUB_PATH -Value $wixBin.FullName
+          $wixBin = Join-Path $wixRoot.FullName "bin"
+          if (-not (Test-Path (Join-Path $wixBin "candle.exe"))) {
+            throw "WiX Toolset candle.exe was not found in $wixBin."
+          }
+          Add-Content -Path $env:GITHUB_PATH -Value $wixBin
 
       - name: Build EXE and MSI installers
         shell: pwsh
