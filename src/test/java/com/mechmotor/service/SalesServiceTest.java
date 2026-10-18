@@ -114,6 +114,17 @@ class SalesServiceTest {
     }
 
     @Test
+    void customerReturnRefundIncludesTheOriginalSavedTaxAmount() {
+        new ShopProfileService(jdbc).save(new ShopProfileService.ShopProfile(
+                "Test Shop", "", "", "", "", "06", "GST", 500, true));
+        SaleReceipt sale = sales.checkout(new SaleDraft(partId, 1, 10000, 0, "Buyer", "CASH", null));
+        var returnable = sales.returnableSale(sale.saleNumber()).get(0);
+        var returned = sales.returnSale(new SaleReturnDraft(sale.saleNumber(), returnable.saleItemId(),
+                1, "CASH", null, "Wrong item"));
+        assertEquals(10500L, returned.refundPaise());
+    }
+
+    @Test
     void knownDifferentBuyerStateUsesIgstAndSameStateUsesLocalComponents() {
         new ShopProfileService(jdbc).save(new ShopProfileService.ShopProfile(
                 "Test Shop", "", "", "", "", "06", "GST", 500, true));
