@@ -224,6 +224,28 @@ class PurchasingServiceTest {
     }
 
     @Test
+    void supplierReturnCannotCreateUnrepresentedCreditAfterInvoiceIsFullyPaid() {
+        var receipt = purchasing.receive(new PurchaseDraft(partId, 2, 1250, supplierId, "INV-PAID-RETURN"));
+        var payment = purchasing.recordSupplierPayment(new SupplierPaymentDraft(
+                receipt.purchaseNumber(), 2500, SupplierPaymentDraft.Method.BANK_TRANSFER, "UTR-PAID-RETURN"));
+        assertEquals(0L, payment.outstandingPaise());
+        int stockBefore = parts.findById(partId).quantity();
+        Long purchaseItemId = jdbc.queryForObject("SELECT id FROM purchase_items WHERE purchase_id=?",
+                Long.class, receipt.purchaseId());
+
+        assertThrows(IllegalStateException.class, () -> purchasing.recordSupplierReturn(
+                new SupplierReturnDraft(receipt.purchaseNumber(), "Return after full payment", "CN-PAID-RETURN",
+                        java.util.List.of(new SupplierReturnLineDraft(purchaseItemId, 1)))));
+
+        assertEquals(stockBefore, parts.findById(partId).quantity());
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM supplier_returns WHERE purchase_id=?",
+                Integer.class, receipt.purchaseId()));
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM stock_movements WHERE movement_type='SUPPLIER_RETURN'",
+                Integer.class));
+        assertEquals(0L, purchasing.balance(receipt.purchaseNumber()).outstandingPaise());
+    }
+
+    @Test
     void supplierReturnFailureRollsBackCreditNoteStockAndLedger() {
         var receipt = purchasing.receive(new PurchaseDraft(partId, 2, 1250, supplierId, "INV-RETURN-ROLLBACK"));
         Long purchaseItemId = jdbc.queryForObject("SELECT id FROM purchase_items WHERE purchase_id=?",
