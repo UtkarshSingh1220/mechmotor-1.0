@@ -28,17 +28,17 @@ jobs:
       - name: Verify tests
         run: mvn --batch-mode --no-transfer-progress clean verify
 
-      - name: Assemble thin desktop distribution
+      - name: Assemble desktop distribution
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force target/dist/lib | Out-Null
-          mvn --batch-mode --no-transfer-progress dependency:copy-dependencies "-DincludeScope=runtime" "-DoutputDirectory=target/dist/lib"
+          New-Item -ItemType Directory -Force target/dist | Out-Null
+          mvn --batch-mode --no-transfer-progress dependency:copy-dependencies "-DincludeScope=runtime" "-DoutputDirectory=target/dist"
           jar --create --file target/dist/mechmotor.jar -C target/classes .
 
       - name: Build Windows app image
         shell: pwsh
         run: |
-          jpackage --type app-image --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --class-path "lib/*" --dest target/installer
+          jpackage --type app-image --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --dest target/installer
           if (-not (Test-Path "target/installer/MechMotor/MechMotor.exe")) {
             throw "jpackage did not produce the expected MechMotor.exe launcher."
           }
