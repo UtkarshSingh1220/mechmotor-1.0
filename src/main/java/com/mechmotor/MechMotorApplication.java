@@ -1977,8 +1977,9 @@ public class MechMotorApplication extends Application {
                 Long parsedDiscount = parsePaise(discount.getText(), "Sale discount");
                 CartSaleDraft draft = new CartSaleDraft(lines, parsedDiscount == null ? 0L : parsedDiscount,
                         customer.getText(), paymentMethod.getValue(), reference.getText());
+                String buyerState = buyerStateCode.getText();
                 checkout.setDisable(true);
-                runBackground(() -> salesService.checkout(draft, buyerStateCode.getText()), receipt -> {
+                runBackground(() -> salesService.checkout(draft, buyerState), receipt -> {
                     dialog.close();
                     status.setText("Sale posted: " + receipt.saleNumber() + " • total ₹" + rupees(receipt.totalPaise()));
                     refreshInventory.run();
