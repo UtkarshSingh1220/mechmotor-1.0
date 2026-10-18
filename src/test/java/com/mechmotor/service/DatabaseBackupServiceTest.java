@@ -58,6 +58,13 @@ class DatabaseBackupServiceTest {
 
         Path safetyBackup = service.restoreFrom(backup);
         assertTrue(Files.isRegularFile(safetyBackup));
+        try (Connection connection = java.sql.DriverManager.getConnection("jdbc:sqlite:" + safetyBackup);
+             Statement statement = connection.createStatement();
+             var result = statement.executeQuery("SELECT sku FROM parts")) {
+            assertTrue(result.next(), "The pre-restore safety snapshot must retain the current database contents.");
+            assertEquals("FILTER-002", result.getString(1));
+            assertFalse(result.next());
+        }
         try (Connection connection = dataSource.getConnection(); Statement statement = connection.createStatement();
              var result = statement.executeQuery("SELECT sku FROM parts")) {
             assertTrue(result.next());
@@ -106,6 +113,17 @@ class DatabaseBackupServiceTest {
              var result = statement.executeQuery("SELECT sku FROM parts")) {
             assertTrue(result.next());
             assertEquals("BRAKE-001", result.getString(1));
+        }
+    }
+
+    @Test
+    void liveDatabaseCannotBeUsedAsItsOwnRestoreSource() throws Exception {
+        assertThrows(IllegalArgumentException.class, () -> service.restoreFrom(databaseFile));
+        try (Connection connection = dataSource.getConnection(); Statement statement = connection.createStatement();
+             var result = statement.executeQuery("SELECT sku FROM parts")) {
+            assertTrue(result.next());
+            assertEquals("BRAKE-001", result.getString(1));
+            assertFalse(result.next());
         }
     }
 
