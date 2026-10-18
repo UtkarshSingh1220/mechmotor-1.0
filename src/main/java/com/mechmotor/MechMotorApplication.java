@@ -2068,7 +2068,7 @@ public class MechMotorApplication extends Application {
             summary.setText("Subtotal: ₹" + rupees(subtotal) + " • Discount: ₹" + rupees(discount)
                     + " • Pre-tax total: ₹" + rupees(total)
                     + (discount > subtotal ? " (discount exceeds subtotal)" : "")
-                    + "\\nConfigured tax, if enabled, is added at checkout. Blank buyer state is classified provisionally.");
+                    + "\nConfigured tax, if enabled, is added at checkout. Blank buyer state is classified provisionally.");
         } catch (RuntimeException ex) {
             summary.setText("Enter valid quantities, prices and discount to calculate the total.");
         }
