@@ -55,10 +55,23 @@ public final class DatabaseMigrationRunner implements ApplicationRunner {
                     throw new IllegalStateException("Database migration sequence is incomplete. Expected V"
                             + (version + 1) + " but found V" + migrationVersion + ".");
                 }
-                applyMigration(connection, migration, migrationVersion);
+                if (migrationVersion == 9 && hasColumn(connection, "sales", "taxable_base_paise")) {
+                    // The baseline schema may already contain additive fields for fresh databases.
+                    recordVersion(connection, migrationVersion);
+                } else {
+                    applyMigration(connection, migration, migrationVersion);
+                }
                 version = migrationVersion;
             }
             verifyCurrentSchema(connection, version);
+        }
+    }
+
+    private static boolean hasColumn(Connection connection, String table, String column) throws SQLException {
+        try (Statement statement = connection.createStatement();
+             ResultSet result = statement.executeQuery("PRAGMA table_info(" + table + ")")) {
+            while (result.next()) if (column.equalsIgnoreCase(result.getString("name"))) return true;
+            return false;
         }
     }
 
@@ -454,9 +467,7 @@ public final class DatabaseMigrationRunner implements ApplicationRunner {
         tables.put("part_fitments", List.of("id", "part_id", "make", "model", "year_from", "year_to", "engine", "trim", "notes"));
         tables.put("saved_views", List.of("id", "name", "query", "brand", "material", "color", "category_id", "supplier_id",
                 "stock_status", "min_quantity", "max_quantity", "min_selling_price_paise", "max_selling_price_paise", "sort_by", "ascending", "created_at", "updated_at"));
-        tables.put("sales", List.of("id", "sale_number", "customer_name", "subtotal_paise", "discount_paise", "total_paise", "status",
-                "taxable_base_paise", "tax_rate_bps", "tax_label_snapshot", "tax_amount_paise", "cgst_paise", "sgst_paise",
-                "igst_paise", "seller_state_code_snapshot", "buyer_state_code_snapshot", "tax_classification", "created_at"));
+        tables.put("sales", List.of("id", "sale_number", "customer_name", "subtotal_paise", "discount_paise", "total_paise", "status", "created_at"));
         tables.put("sale_items", List.of("id", "sale_id", "part_id", "sku_snapshot", "name_snapshot", "quantity", "unit_price_paise", "line_total_paise"));
         tables.put("payments", List.of("id", "sale_id", "method", "amount_paise", "reference", "created_at"));
         tables.put("purchases", List.of("id", "purchase_number", "supplier_id", "supplier_name_snapshot", "supplier_invoice_reference", "subtotal_paise", "status", "created_at"));
