@@ -86,6 +86,49 @@ jobs:
             throw "jpackage did not produce the expected MSI installer."
           }
 
+
+      - name: Validate MSI install, launch, and uninstall
+        shell: pwsh
+        run: |
+          $msi = (Resolve-Path "target/packages/msi/MechMotor-1.0.0.msi").Path
+          $install = Start-Process -FilePath "msiexec.exe" -ArgumentList @("/i", "`"$msi`"", "/qn", "/norestart") -Wait -PassThru
+          if ($install.ExitCode -notin @(0, 3010)) {
+            throw "MSI install failed with exit code $($install.ExitCode)."
+          }
+
+          $uninstallKeys = @(
+            "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*",
+            "HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
+          )
+          $entry = Get-ItemProperty $uninstallKeys -ErrorAction SilentlyContinue |
+            Where-Object { $_.DisplayName -like "MechMotor*" } |
+            Select-Object -First 1
+          $candidates = @()
+          if ($entry -and $entry.InstallLocation) {
+            $candidates += (Join-Path $entry.InstallLocation "MechMotor.exe")
+          }
+          $candidates += (Join-Path $env:ProgramFiles "MechMotor\MechMotor.exe")
+          $launcher = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $launcher) {
+            throw "MSI installation completed, but MechMotor.exe was not found in the installed location."
+          }
+
+          $app = Start-Process -FilePath $launcher -PassThru
+          Start-Sleep -Seconds 10
+          $app.Refresh()
+          if ($app.HasExited) {
+            throw "Installed MechMotor exited during the 10-second launch smoke test (exit code $($app.ExitCode))."
+          }
+          Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+
+          $uninstall = Start-Process -FilePath "msiexec.exe" -ArgumentList @("/x", "`"$msi`"", "/qn", "/norestart") -Wait -PassThru
+          if ($uninstall.ExitCode -notin @(0, 3010)) {
+            throw "MSI uninstall failed with exit code $($uninstall.ExitCode)."
+          }
+          if (Test-Path $launcher) {
+            throw "MechMotor launcher remains after MSI uninstall: $launcher"
+          }
+
       - name: Upload Windows packages
         uses: actions/upload-artifact@v4
         with:
