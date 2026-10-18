@@ -75,7 +75,7 @@ class DatabaseMigrationRunnerTest {
         runner.run(new DefaultApplicationArguments(new String[0]));
 
         try (Connection connection = source.getConnection(); Statement statement = connection.createStatement()) {
-            try (ResultSet part = statement.executeQuery("SELECT sku,name,updated_at,purchase_price_paise,selling_price_paise,active FROM parts WHERE id=1")) {
+            try (ResultSet part = statement.executeQuery("SELECT sku,name,category_id,supplier_id,updated_at,purchase_price_paise,selling_price_paise,active FROM parts WHERE id=1")) {
                 assertTrue(part.next());
                 assertEquals("LEGACY-001", part.getString("sku"));
                 assertEquals("Brake pad", part.getString("name"));
