@@ -321,4 +321,44 @@ class SalesServiceTest {
         assertEquals(3, parts.findById(partId).quantity());
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM sales", Integer.class));
     }
+
+
+    @Test
+    void endToEndTaxedMultiItemSaleRefundsExactlyTheOriginalTotalAcrossReturns() {
+        new ShopProfileService(jdbc).save(new ShopProfileService.ShopProfile(
+                "Test Shop", "", "", "", "", "06", "GST", 500, true));
+
+        var sale = sales.checkout(new CartSaleDraft(List.of(
+                new SaleLineDraft(partId, 2, 2500),
+                new SaleLineDraft(secondPartId, 3, 1200)),
+                400, "Buyer", "CASH", null), "06");
+
+        assertEquals(8600L, sale.subtotalPaise());
+        assertEquals(400L, sale.discountPaise());
+        assertEquals(8200L, jdbc.queryForObject(
+                "SELECT taxable_base_paise FROM sales WHERE id=?", Long.class, sale.saleId()));
+        assertEquals(410L, jdbc.queryForObject(
+                "SELECT tax_amount_paise FROM sales WHERE id=?", Long.class, sale.saleId()));
+        assertEquals(8610L, sale.totalPaise());
+        assertEquals(8610L, jdbc.queryForObject(
+                "SELECT amount_paise FROM payments WHERE sale_id=?", Long.class, sale.saleId()));
+
+        List<SaleReturnable> returnable = sales.returnableSale(sale.saleNumber());
+        long refunded = 0;
+        for (SaleReturnable line : returnable) {
+            SaleReturnReceipt receipt = sales.returnSale(new SaleReturnDraft(
+                    sale.saleNumber(), line.saleItemId(), line.remainingQuantity(),
+                    "CASH", null, "End-to-end tax refund verification"));
+            refunded = Math.addExact(refunded, receipt.refundPaise());
+        }
+
+        assertEquals(sale.totalPaise(), refunded);
+        assertEquals(sale.totalPaise(), jdbc.queryForObject(
+                "SELECT SUM(refund_paise) FROM sale_returns WHERE sale_id=?", Long.class, sale.saleId()));
+        assertEquals(0, sales.returnableSale(sale.saleNumber()).stream()
+                .mapToInt(SaleReturnable::remainingQuantity).sum());
+        assertEquals(3, parts.findById(partId).quantity());
+        assertEquals(4, parts.findById(secondPartId).quantity());
+    }
+
 }
