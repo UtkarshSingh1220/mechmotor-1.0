@@ -150,6 +150,35 @@ class InvoiceServiceTest {
     }
 
     @Test
+    void largeInvoicePaginatesWithoutDroppingItemSnapshots() throws Exception {
+        java.util.List<com.mechmotor.domain.SaleLineDraft> lines = new java.util.ArrayList<>();
+        java.util.List<String> expectedSkus = new java.util.ArrayList<>();
+        for (int i = 1; i <= 60; i++) {
+            String sku = "PAGE-INV-" + String.format(java.util.Locale.ROOT, "%03d", i);
+            long partId = parts.create(new PartDraft(sku, null, null, "Pagination acceptance item " + i,
+                    "Brand", "Company", "Material", "Black", null, null, "1.00", "2.00", 1, 0));
+            lines.add(new com.mechmotor.domain.SaleLineDraft(partId, 1, 200));
+            expectedSkus.add(sku);
+        }
+        var sale = sales.checkout(new com.mechmotor.domain.CartSaleDraft(
+                lines, 0, "Pagination acceptance", "CASH", null));
+
+        Path output = tempDir.resolve("multi-page-invoice.pdf");
+        invoices.exportSaleInvoice(sale.saleNumber(), output);
+        try (PDDocument document = Loader.loadPDF(output.toFile())) {
+            assertTrue(document.getNumberOfPages() >= 2,
+                    "A 60-line invoice must paginate rather than compress or omit lines.");
+            String text = new PDFTextStripper().getText(document);
+            assertTrue(text.contains(sale.saleNumber()));
+            for (String sku : expectedSkus) {
+                assertTrue(text.contains(sku), "Invoice must include item snapshot " + sku);
+            }
+            assertTrue(text.contains("Page 1 | MechMotor 1.0"));
+            assertTrue(text.contains("Page " + document.getNumberOfPages() + " | MechMotor 1.0"));
+        }
+    }
+
+    @Test
     void refusesToOverwriteAnExistingInvoice() throws Exception {
         SaleReceipt sale = sales.checkout(new SaleDraft(brakePart, 1, 2500, 0,
                 null, "CASH", null));
