@@ -63,6 +63,12 @@ public final class DatabaseMigrationRunner implements ApplicationRunner {
                 }
                 version = migrationVersion;
             }
+            // Repair additive columns on already-versioned legacy databases as well.
+            // Some historical installations may carry a schema_version row while
+            // missing compatibility columns added by older startup-time schema.sql.
+            // Do this after ordered migrations so it cannot pre-empt a versioned DDL step.
+            ensureLegacyColumns(connection);
+            normalizeLegacyTimestamps(connection);
             verifyCurrentSchema(connection, version);
         }
     }
