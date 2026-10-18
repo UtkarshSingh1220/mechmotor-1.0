@@ -108,7 +108,8 @@ class InvoiceServiceTest {
             assertTrue(text.contains("12 Market Road, Gurugram"));
             assertTrue(text.contains("22AAAAA0000A1Z5"));
             assertTrue(text.contains("GST 18.00%"));
-            assertTrue(text.contains("no tax amount is calculated"));
+            assertTrue(text.contains("Tax classification: PROVISIONAL_LOCAL"));
+            assertTrue(text.contains("CGST: INR 2.25 | SGST: INR 2.25"));
         }
     }
 
