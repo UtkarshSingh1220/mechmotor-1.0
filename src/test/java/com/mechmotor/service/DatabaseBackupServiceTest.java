@@ -74,6 +74,66 @@ class DatabaseBackupServiceTest {
     }
 
     @Test
+    void backupRestorePreservesInventoryRelationshipsAndStockLedger() throws Exception {
+        try (Connection connection = dataSource.getConnection(); Statement statement = connection.createStatement()) {
+            statement.execute("INSERT INTO categories(id,name) VALUES (1,'Brakes')");
+            statement.execute("INSERT INTO suppliers(id,name,supplier_code) VALUES (1,'Legacy supplier','SUP-001')");
+            statement.execute("UPDATE parts SET category_id=1,supplier_id=1 WHERE id=1");
+            statement.execute("INSERT INTO inventory(part_id,quantity_on_hand,reserved_quantity,reorder_level) VALUES (1,12,2,3)");
+            statement.execute("""
+                INSERT INTO stock_movements(part_id,movement_type,quantity,reference,reason)
+                VALUES (1,'ADJUSTMENT',12,'RESTORE-ACCEPTANCE','Initial counted stock')
+                """);
+        }
+
+        Path backup = service.backupToDirectory(tempDir.resolve("relationship-export"));
+
+        try (Connection connection = dataSource.getConnection(); Statement statement = connection.createStatement()) {
+            statement.execute("UPDATE categories SET name='Changed category' WHERE id=1");
+            statement.execute("UPDATE suppliers SET name='Changed supplier' WHERE id=1");
+            statement.execute("UPDATE parts SET name='Changed part' WHERE id=1");
+            statement.execute("UPDATE inventory SET quantity_on_hand=1,reserved_quantity=0 WHERE part_id=1");
+            statement.execute("DELETE FROM stock_movements WHERE reference='RESTORE-ACCEPTANCE'");
+        }
+
+        Path safetyBackup = service.restoreFrom(backup);
+        assertTrue(Files.isRegularFile(safetyBackup), "Restore must keep a pre-restore recovery snapshot.");
+
+        try (Connection connection = dataSource.getConnection(); Statement statement = connection.createStatement()) {
+            try (var result = statement.executeQuery("""
+                    SELECT p.sku,p.name,p.category_id,p.supplier_id,c.name AS category_name,s.name AS supplier_name
+                    FROM parts p
+                    JOIN categories c ON c.id=p.category_id
+                    JOIN suppliers s ON s.id=p.supplier_id
+                    WHERE p.id=1
+                    """)) {
+                assertTrue(result.next());
+                assertEquals("BRAKE-001", result.getString("sku"));
+                assertEquals("Brake pad", result.getString("name"));
+                assertEquals(1, result.getInt("category_id"));
+                assertEquals(1, result.getInt("supplier_id"));
+                assertEquals("Brakes", result.getString("category_name"));
+                assertEquals("Legacy supplier", result.getString("supplier_name"));
+            }
+            try (var result = statement.executeQuery(
+                    "SELECT quantity_on_hand,reserved_quantity,reorder_level FROM inventory WHERE part_id=1")) {
+                assertTrue(result.next());
+                assertEquals(12, result.getInt("quantity_on_hand"));
+                assertEquals(2, result.getInt("reserved_quantity"));
+                assertEquals(3, result.getInt("reorder_level"));
+            }
+            try (var result = statement.executeQuery(
+                    "SELECT movement_type,quantity,reason FROM stock_movements WHERE reference='RESTORE-ACCEPTANCE'")) {
+                assertTrue(result.next());
+                assertEquals("ADJUSTMENT", result.getString("movement_type"));
+                assertEquals(12, result.getInt("quantity"));
+                assertEquals("Initial counted stock", result.getString("reason"));
+                assertFalse(result.next());
+            }
+        }
+    }
+
+    @Test
     void restoreMigratesOlderBackupByAddingNewFitmentTable() throws Exception {
         Path backup = service.backupToDirectory(tempDir.resolve("legacy-export"));
         try (Connection connection = java.sql.DriverManager.getConnection("jdbc:sqlite:" + backup);

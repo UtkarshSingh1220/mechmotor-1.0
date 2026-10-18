@@ -6,6 +6,7 @@ on:
     paths:
       - 'pom.xml'
       - 'src/**'
+      - 'tools/**'
       - 'README.md'
       - '.github/workflows/windows-package.yml'
   workflow_dispatch:
@@ -87,6 +88,16 @@ jobs:
           }
 
 
+      - name: Seed legacy user database before installer acceptance
+        shell: pwsh
+        run: java -cp "target/dist/*" tools/acceptance/WindowsDatabaseLifecycle.java seed
+
+      - name: Apply and verify legacy database migrations
+        shell: pwsh
+        run: |
+          java -cp "target/dist/*" tools/acceptance/WindowsDatabaseLifecycle.java migrate
+          java -cp "target/dist/*" tools/acceptance/WindowsDatabaseLifecycle.java verify
+
       - name: Validate MSI install, launch, and uninstall
         shell: pwsh
         run: |
@@ -120,6 +131,7 @@ jobs:
             throw "Installed MechMotor exited during the 10-second launch smoke test (exit code $($app.ExitCode))."
           }
           Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+          java -cp "target/dist/*" tools/acceptance/WindowsDatabaseLifecycle.java verify
 
           $uninstall = Start-Process -FilePath "msiexec.exe" -ArgumentList @("/x", "`"$msi`"", "/qn", "/norestart") -Wait -PassThru
           if ($uninstall.ExitCode -notin @(0, 3010)) {
@@ -128,6 +140,7 @@ jobs:
           if (Test-Path $launcher) {
             throw "MechMotor launcher remains after MSI uninstall: $launcher"
           }
+          java -cp "target/dist/*" tools/acceptance/WindowsDatabaseLifecycle.java verify
 
       - name: Validate EXE installer install, launch, and uninstall
         shell: pwsh
@@ -162,6 +175,7 @@ jobs:
             throw "EXE-installed MechMotor exited during the 10-second launch smoke test (exit code $($app.ExitCode))."
           }
           Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+          java -cp "target/dist/*" tools/acceptance/WindowsDatabaseLifecycle.java verify
 
           $entry = Get-ItemProperty $uninstallKeys -ErrorAction SilentlyContinue |
             Where-Object { $_.DisplayName -like "MechMotor*" } |
@@ -201,6 +215,7 @@ jobs:
           if (Test-Path $launcher) {
             throw "MechMotor launcher remains after EXE installer uninstall: $launcher"
           }
+          java -cp "target/dist/*" tools/acceptance/WindowsDatabaseLifecycle.java verify
 
       - name: Upload Windows packages
         uses: actions/upload-artifact@v4

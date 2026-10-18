@@ -147,6 +147,60 @@ class DatabaseMigrationRunnerTest {
         }
     }
 
+    @Test
+    void failedVersionedMigrationRollsBackAndCanBeRetriedAfterRepair() throws Exception {
+        Path file = tempDir.resolve("interrupted-upgrade.db");
+        DataSource source = dataSource(file);
+        try (Connection connection = source.getConnection(); Statement statement = connection.createStatement()) {
+            statement.execute("""
+                CREATE TABLE schema_version (
+                    version INTEGER PRIMARY KEY,
+                    applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """);
+            statement.execute("INSERT INTO schema_version(version) VALUES (1)");
+            statement.execute("""
+                CREATE TABLE parts (
+                    id INTEGER PRIMARY KEY,
+                    sku TEXT NOT NULL,
+                    name TEXT NOT NULL
+                )
+                """);
+            statement.execute("INSERT INTO parts(id,sku,name) VALUES (1,'RECOVERY-001','Recovery fixture')");
+            // V2 attempts to add this column. Its existing presence simulates a
+            // partially applied/externally modified legacy schema that must fail closed.
+            statement.execute("""
+                CREATE TABLE purchase_items (
+                    id INTEGER PRIMARY KEY,
+                    previous_purchase_price_paise INTEGER
+                )
+                """);
+        }
+
+        DatabaseMigrationRunner runner = new DatabaseMigrationRunner(source);
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> runner.run(new DefaultApplicationArguments(new String[0])));
+        assertTrue(failure.getMessage().contains("Database migration V2 failed"));
+
+        try (Connection connection = source.getConnection(); Statement statement = connection.createStatement()) {
+            try (ResultSet version = statement.executeQuery("SELECT MAX(version) FROM schema_version")) {
+                assertTrue(version.next());
+                assertEquals(1, version.getInt(1), "A failed migration must not advance the schema version.");
+            }
+            try (ResultSet part = statement.executeQuery("SELECT sku,name FROM parts WHERE id=1")) {
+                assertTrue(part.next(), "Pre-upgrade inventory must survive a failed migration.");
+                assertEquals("RECOVERY-001", part.getString("sku"));
+                assertEquals("Recovery fixture", part.getString("name"));
+            }
+            try (ResultSet cancellationTable = statement.executeQuery(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='purchase_cancellations'")) {
+                assertTrue(cancellationTable.next());
+                assertEquals(0, cancellationTable.getInt(1),
+                        "A failed migration must not leave its later DDL statements applied.");
+            }
+        }
+    }
+
     private DataSource dataSource(Path file) throws Exception {
         SQLiteConfig config = new SQLiteConfig();
         config.enforceForeignKeys(true);
