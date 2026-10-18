@@ -206,7 +206,7 @@ public class SalesService {
 
     private List<SaleReturnable> loadReturnableSale(String saleNumber) {
         List<RawReturnLine> rawLines = jdbc.query("""
-            SELECT s.id AS sale_id,s.sale_number,s.customer_name,s.subtotal_paise,s.discount_paise,
+            SELECT s.id AS sale_id,s.sale_number,s.customer_name,s.subtotal_paise,s.discount_paise,s.tax_amount_paise,
                    si.id AS sale_item_id,si.part_id,si.sku_snapshot,si.name_snapshot,
                    si.quantity AS sold_quantity,si.line_total_paise,
                    COALESCE(r.returned_quantity,0) AS returned_quantity,
@@ -220,8 +220,8 @@ public class SalesService {
             ORDER BY si.id
             """, (rs, row) -> new RawReturnLine(
                 rs.getLong("sale_id"), rs.getString("sale_number"), rs.getString("customer_name"),
-                rs.getLong("subtotal_paise"), rs.getLong("discount_paise"), rs.getLong("sale_item_id"),
-                rs.getLong("part_id"), rs.getString("sku_snapshot"), rs.getString("name_snapshot"),
+                rs.getLong("subtotal_paise"), rs.getLong("discount_paise"), rs.getLong("tax_amount_paise"),
+                rs.getLong("sale_item_id"), rs.getLong("part_id"), rs.getString("sku_snapshot"), rs.getString("name_snapshot"),
                 rs.getInt("sold_quantity"), rs.getLong("line_total_paise"),
                 rs.getInt("returned_quantity"), rs.getLong("refunded_paise")), saleNumber);
         if (rawLines.isEmpty()) throw new IllegalArgumentException("No posted sale found with that sale number.");
@@ -246,10 +246,33 @@ public class SalesService {
         }
         if (remainder != 0) throw new IllegalStateException("Could not allocate sale discount to returnable lines.");
 
+        long[] taxAllocations = new long[rawLines.size()];
+        long discountedBase = 0;
+        for (int i = 0; i < rawLines.size(); i++) {
+            discountedBase = Math.addExact(discountedBase, rawLines.get(i).lineTotalPaise() - discountAllocations[i]);
+        }
+        long allocatedTax = 0;
+        long saleTax = rawLines.get(0).taxAmountPaise();
+        for (int i = 0; i < rawLines.size(); i++) {
+            long lineBase = rawLines.get(i).lineTotalPaise() - discountAllocations[i];
+            long allocation = discountedBase == 0 ? 0 : BigInteger.valueOf(saleTax)
+                    .multiply(BigInteger.valueOf(lineBase)).divide(BigInteger.valueOf(discountedBase)).longValueExact();
+            taxAllocations[i] = allocation;
+            allocatedTax = Math.addExact(allocatedTax, allocation);
+        }
+        long taxRemainder = saleTax - allocatedTax;
+        for (int i = rawLines.size() - 1; i >= 0 && taxRemainder > 0; i--) {
+            if (rawLines.get(i).lineTotalPaise() - discountAllocations[i] > 0) {
+                taxAllocations[i] = Math.addExact(taxAllocations[i], taxRemainder);
+                taxRemainder = 0;
+            }
+        }
+        if (taxRemainder != 0) throw new IllegalStateException("Could not allocate sale tax to returnable lines.");
+
         List<SaleReturnable> result = new ArrayList<>(rawLines.size());
         for (int i = 0; i < rawLines.size(); i++) {
             RawReturnLine raw = rawLines.get(i);
-            long lineNet = raw.lineTotalPaise() - discountAllocations[i];
+            long lineNet = Math.addExact(raw.lineTotalPaise() - discountAllocations[i], taxAllocations[i]);
             if (lineNet < 0) throw new IllegalStateException("Sale discount allocation is invalid for " + raw.sku() + ".");
             if (raw.returnedQuantity() > raw.soldQuantity()) {
                 throw new IllegalStateException("Return history exceeds the original sold quantity for " + raw.sku() + ".");
@@ -271,7 +294,7 @@ public class SalesService {
     }
 
     private record RawReturnLine(long saleId, String saleNumber, String customerName,
-                                 long subtotalPaise, long discountPaise, long saleItemId, long partId,
+                                 long subtotalPaise, long discountPaise, long taxAmountPaise, long saleItemId, long partId,
                                  String sku, String partName, int soldQuantity, long lineTotalPaise,
                                  int returnedQuantity, long refundedPaise) { }
 
