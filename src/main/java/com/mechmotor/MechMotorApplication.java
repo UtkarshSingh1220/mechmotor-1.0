@@ -9,6 +9,7 @@ import com.mechmotor.service.LicenseStatus;
 import com.mechmotor.service.SalesService;
 import com.mechmotor.service.PurchasingService;
 import com.mechmotor.service.InvoiceService;
+import com.mechmotor.service.ShopProfileService;
 import com.mechmotor.service.OperationalReportsService;
 import com.mechmotor.domain.SupplierDetails;
 import com.mechmotor.domain.SupplierDraft;
@@ -52,6 +53,7 @@ public class MechMotorApplication extends Application {
     private SalesService salesService;
     private PurchasingService purchasingService;
     private InvoiceService invoiceService;
+    private ShopProfileService shopProfileService;
     private OperationalReportsService reportsService;
     private final List<LookupOption> noOptions = List.of();
     private List<LookupOption> categories = noOptions;
@@ -68,6 +70,7 @@ public class MechMotorApplication extends Application {
         salesService = context.getBean(SalesService.class);
         purchasingService = context.getBean(PurchasingService.class);
         invoiceService = context.getBean(InvoiceService.class);
+        shopProfileService = context.getBean(ShopProfileService.class);
         reportsService = context.getBean(OperationalReportsService.class);
         backupService = context.getBean(DatabaseBackupService.class);
         csvService = context.getBean(InventoryCsvService.class);
@@ -121,6 +124,7 @@ public class MechMotorApplication extends Application {
         Button voidSaleButton = new Button("Void sale / refund…");
         Button returnsButton = new Button("Returns / refunds");
         Button invoiceButton = new Button("Sales invoice PDF…");
+        Button shopSettingsButton = new Button("Shop profile / tax settings…");
         Button salesHistoryButton = new Button("Sales history");
         Button receiveStockButton = new Button("Receive stock");
         Button receiveMultiStockButton = new Button("Receive multi-item");
@@ -655,7 +659,8 @@ public class MechMotorApplication extends Application {
         GridPane.setHgrow(savedViewSelector, Priority.ALWAYS);
         GridPane.setHgrow(savedViewsMenu, Priority.ALWAYS);
         for (int i = 0; i < 6; i++) GridPane.setHgrow(filters.getChildren().get(i), Priority.ALWAYS);
-        FlowPane actions = new FlowPane(8, 8, addButton, editButton, deactivateButton, sellButton,
+        shopSettingsButton.setOnAction(e -> showShopProfileDialog(stage));
+        FlowPane actions = new FlowPane(8, 8, shopSettingsButton, addButton, editButton, deactivateButton, sellButton,
                 voidSaleButton, returnsButton, invoiceButton, salesHistoryButton, receiveStockButton, receiveMultiStockButton, purchaseHistoryButton, purchaseOrdersButton, supplierPaymentsButton, supplierReturnsButton, fitmentButton, reportsButton,
                 categoryMenu, supplierMenu, backupButton, restoreButton, csvMenu,
                 previousButton, nextButton, pageLabel);
@@ -2436,4 +2441,81 @@ public class MechMotorApplication extends Application {
 
     @FunctionalInterface private interface CheckedSupplier<T> { T get() throws Exception; }
     private record Lookups(List<LookupOption> categories, List<LookupOption> suppliers) { }
+
+    private void showShopProfileDialog(Stage owner) {
+        ShopProfileService.ShopProfile current;
+        try {
+            current = shopProfileService.load();
+        } catch (RuntimeException ex) {
+            showError("Could not load shop profile", ex);
+            return;
+        }
+        Dialog<ShopProfileService.ShopProfile> dialog = new Dialog<>();
+        dialog.initOwner(owner);
+        dialog.setTitle("Shop profile and tax defaults");
+        dialog.setHeaderText("These details appear on new invoice PDFs. Tax defaults do not change existing sale totals.");
+        ButtonType saveType = new ButtonType("Save settings", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(saveType, ButtonType.CANCEL);
+        TextField name = new TextField(current.shopName());
+        TextField address = new TextField(current.address());
+        TextField phone = new TextField(current.phone());
+        TextField email = new TextField(current.email());
+        TextField gstin = new TextField(current.gstin());
+        TextField stateCode = new TextField(current.stateCode());
+        TextField taxLabel = new TextField(current.taxLabel());
+        TextField taxRate = new TextField(current.formattedTaxRate().replace("%", ""));
+        CheckBox taxEnabled = new CheckBox("Show tax profile note on invoice");
+        taxEnabled.setSelected(current.taxEnabled());
+        name.setPromptText("Shop / legal business name");
+        address.setPromptText("Full postal address");
+        phone.setPromptText("Contact phone");
+        email.setPromptText("Contact email");
+        gstin.setPromptText("15-character GSTIN (optional)");
+        stateCode.setPromptText("2-digit state code");
+        taxLabel.setPromptText("GST");
+        taxRate.setPromptText("0.00");
+        GridPane grid = new GridPane();
+        grid.setHgap(10); grid.setVgap(9); grid.setPadding(new Insets(12));
+        grid.addRow(0, new Label("Shop name *"), name);
+        grid.addRow(1, new Label("Address"), address);
+        grid.addRow(2, new Label("Phone"), phone);
+        grid.addRow(3, new Label("Email"), email);
+        grid.addRow(4, new Label("GSTIN"), gstin);
+        grid.addRow(5, new Label("State code"), stateCode);
+        grid.addRow(6, new Label("Tax label"), taxLabel);
+        grid.addRow(7, new Label("Default tax rate (%)"), taxRate);
+        grid.add(taxEnabled, 1, 8);
+        grid.add(new Label("Tax rate is stored as a default only. This version does not calculate tax or change sale totals."), 0, 9, 2, 1);
+        GridPane.setHgrow(name, Priority.ALWAYS);
+        GridPane.setHgrow(address, Priority.ALWAYS);
+        GridPane.setHgrow(phone, Priority.ALWAYS);
+        GridPane.setHgrow(email, Priority.ALWAYS);
+        GridPane.setHgrow(gstin, Priority.ALWAYS);
+        GridPane.setHgrow(stateCode, Priority.ALWAYS);
+        GridPane.setHgrow(taxLabel, Priority.ALWAYS);
+        GridPane.setHgrow(taxRate, Priority.ALWAYS);
+        dialog.getDialogPane().setContent(grid);
+        dialog.getDialogPane().setPrefWidth(640);
+        dialog.setResultConverter(button -> {
+            if (button != saveType) return null;
+            try {
+                BigDecimal percent = new BigDecimal(taxRate.getText().strip());
+                int basisPoints = percent.multiply(new BigDecimal("100")).intValueExact();
+                return shopProfileService.save(new ShopProfileService.ShopProfile(name.getText(), address.getText(),
+                        phone.getText(), email.getText(), gstin.getText(), stateCode.getText(), taxLabel.getText(),
+                        basisPoints, taxEnabled.isSelected()));
+            } catch (RuntimeException ex) {
+                showError("Invalid shop profile", ex);
+                return null;
+            }
+        });
+        dialog.showAndWait().ifPresent(saved -> {
+            Alert info = new Alert(Alert.AlertType.INFORMATION,
+                    "Shop profile saved. New invoices will use the updated business details.", ButtonType.OK);
+            info.initOwner(owner);
+            info.setTitle("Settings saved");
+            info.setHeaderText("Shop profile updated");
+            info.show();
+        });
+    }
 }

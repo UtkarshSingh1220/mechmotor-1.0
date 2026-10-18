@@ -350,6 +350,17 @@ public final class DatabaseMigrationRunner implements ApplicationRunner {
                 }
             }
         }
+        if (version >= 8) {
+            if (!tableExists(connection, "shop_profile")) {
+                throw new IllegalStateException("Database is missing required table 'shop_profile'.");
+            }
+            for (String column : List.of("id", "shop_name", "address", "phone", "email", "gstin",
+                    "state_code", "tax_label", "default_tax_rate_bps", "tax_enabled", "updated_at")) {
+                if (!columnExists(connection, "shop_profile", column)) {
+                    throw new IllegalStateException("Database table 'shop_profile' is missing required column '" + column + "'.");
+                }
+            }
+        }
         if (version >= 6) {
             if (!tableExists(connection, "supplier_returns")
                     || !tableExists(connection, "supplier_return_items")) {
