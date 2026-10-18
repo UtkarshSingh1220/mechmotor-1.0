@@ -24,6 +24,7 @@ import com.mechmotor.domain.SupplierReturnableLine;
 import com.mechmotor.domain.SupplierReturnReceipt;
 import com.mechmotor.domain.SupplierReturnRow;
 import com.mechmotor.repository.PartRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.PreparedStatementCreator;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -49,6 +50,7 @@ public class PurchasingService {
     private final TransactionTemplate transactions;
     private final Clock clock;
 
+    @Autowired
     public PurchasingService(JdbcTemplate jdbc, PartRepository parts, PlatformTransactionManager transactionManager) {
         this(jdbc, parts, transactionManager, Clock.systemUTC());
     }
