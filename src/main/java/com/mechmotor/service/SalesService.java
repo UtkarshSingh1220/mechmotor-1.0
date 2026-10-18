@@ -286,6 +286,11 @@ public class SalesService {
     }
 
     public CartSaleReceipt checkout(CartSaleDraft draft) {
+        return checkout(draft, null);
+    }
+
+    /** Optional buyer state enables tax classification; absent state is explicitly provisional. */
+    public CartSaleReceipt checkout(CartSaleDraft draft, String buyerStateCode) {
         return transactions.execute(status -> {
             List<PartDetails> cartParts = new ArrayList<>(draft.lines().size());
             long subtotal = 0;
@@ -310,7 +315,10 @@ public class SalesService {
             if (draft.discountPaise() > subtotal) {
                 throw new IllegalArgumentException("Discount cannot exceed the sale subtotal.");
             }
-            long total = subtotal - draft.discountPaise();
+            ShopProfileService.ShopProfile taxProfile = new ShopProfileService(jdbc).load();
+            TaxCalculationService.TaxSnapshot tax = new TaxCalculationService().calculate(
+                    subtotal, draft.discountPaise(), taxProfile, buyerStateCode);
+            long total = tax.totalPaise();
             String saleNumber = "MM-" + LocalDate.now(clock).toString().replace("-", "")
                     + "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(java.util.Locale.ROOT);
 
@@ -318,14 +326,26 @@ public class SalesService {
             KeyHolder key = new GeneratedKeyHolder();
             jdbc.update((PreparedStatementCreator) connection -> {
                 PreparedStatement ps = connection.prepareStatement("""
-                    INSERT INTO sales(sale_number,customer_name,subtotal_paise,discount_paise,total_paise,status)
-                    VALUES (?,?,?,?,?,'POSTED')
+                    INSERT INTO sales(sale_number,customer_name,subtotal_paise,discount_paise,total_paise,status,
+                      taxable_base_paise,tax_rate_bps,tax_label_snapshot,tax_amount_paise,cgst_paise,sgst_paise,igst_paise,
+                      seller_state_code_snapshot,buyer_state_code_snapshot,tax_classification)
+                    VALUES (?,?,?,?,?,'POSTED',?,?,?,?,?,?,?,?,?,?)
                     """, Statement.RETURN_GENERATED_KEYS);
                 ps.setString(1, saleNumber);
                 ps.setString(2, draft.customerName());
                 ps.setLong(3, saleSubtotal);
                 ps.setLong(4, draft.discountPaise());
                 ps.setLong(5, total);
+                ps.setLong(6, tax.taxableBasePaise());
+                ps.setInt(7, tax.taxRateBps());
+                ps.setString(8, tax.taxLabel());
+                ps.setLong(9, tax.taxAmountPaise());
+                ps.setLong(10, tax.cgstPaise());
+                ps.setLong(11, tax.sgstPaise());
+                ps.setLong(12, tax.igstPaise());
+                ps.setString(13, tax.sellerStateCode());
+                ps.setString(14, tax.buyerStateCode());
+                ps.setString(15, tax.classification());
                 return ps;
             }, key);
             Number generated = key.getKey();
