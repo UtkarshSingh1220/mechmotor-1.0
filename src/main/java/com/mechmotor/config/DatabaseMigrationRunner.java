@@ -55,7 +55,7 @@ public final class DatabaseMigrationRunner implements ApplicationRunner {
                     throw new IllegalStateException("Database migration sequence is incomplete. Expected V"
                             + (version + 1) + " but found V" + migrationVersion + ".");
                 }
-                if (migrationVersion == 9 && hasColumn(connection, "sales", "taxable_base_paise")) {
+                if (migrationVersion == 9 && hasTaxSnapshotColumns(connection)) {
                     // The baseline schema may already contain additive fields for fresh databases.
                     recordVersion(connection, migrationVersion);
                 } else {
@@ -65,6 +65,15 @@ public final class DatabaseMigrationRunner implements ApplicationRunner {
             }
             verifyCurrentSchema(connection, version);
         }
+    }
+
+    private static boolean hasTaxSnapshotColumns(Connection connection) throws SQLException {
+        for (String column : List.of("taxable_base_paise", "tax_rate_bps", "tax_label_snapshot", "tax_amount_paise",
+                "cgst_paise", "sgst_paise", "igst_paise", "seller_state_code_snapshot",
+                "buyer_state_code_snapshot", "tax_classification")) {
+            if (!hasColumn(connection, "sales", column)) return false;
+        }
+        return true;
     }
 
     private static boolean hasColumn(Connection connection, String table, String column) throws SQLException {
