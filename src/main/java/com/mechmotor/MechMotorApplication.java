@@ -1955,7 +1955,7 @@ public class MechMotorApplication extends Application {
         form.add(new Label("Buyer state code (optional)"), 0, 8); form.add(buyerStateCode, 1, 8);
         form.add(new Label("Payment method"), 0, 9); form.add(paymentMethod, 1, 9);
         form.add(new Label("Payment reference"), 0, 10); form.add(reference, 1, 10);
-        summary.setText(summary.getText() + "\\nConfigured tax, if enabled, is added at checkout. Blank buyer state is classified provisionally.");
+        summary.setText(summary.getText() + "\nConfigured tax, if enabled, is added at checkout. Blank buyer state is classified provisionally.");
         form.add(summary, 0, 11, 2, 1);
         GridPane.setHgrow(cartList, Priority.ALWAYS);
         GridPane.setHgrow(unitPrice, Priority.ALWAYS);
