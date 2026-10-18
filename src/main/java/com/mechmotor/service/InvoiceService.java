@@ -125,7 +125,7 @@ public class InvoiceService {
                 lines.add(new InvoiceLine("Tax amount: " + money(sale.taxAmountPaise()), false, 10));
             }
             lines.add(new InvoiceLine("Tax classification: " + sale.taxClassification()
-                    + (sale.buyerStateCodeSnapshot() == null || sale.buyerStateCodeSnapshot().isBlank()
+                    + ("PROVISIONAL_LOCAL".equals(sale.taxClassification())
                        ? " (buyer state not supplied; provisional classification)" : ""), false, 8));
             lines.add(new InvoiceLine("Seller state: " + safeNullable(sale.sellerStateCodeSnapshot())
                     + " | Buyer state: " + safeNullable(sale.buyerStateCodeSnapshot()), false, 8));
