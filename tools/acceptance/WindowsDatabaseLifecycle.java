@@ -4,6 +4,10 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import org.springframework.boot.DefaultApplicationArguments;
+import org.sqlite.SQLiteConfig;
+import org.sqlite.SQLiteDataSource;
+import com.mechmotor.config.DatabaseMigrationRunner;
 
 /**
  * Windows CI acceptance helper for a legacy shop database.
@@ -21,6 +25,7 @@ public class WindowsDatabaseLifecycle {
     public static void main(String[] args) throws Exception {
         if (args.length != 1) throw new IllegalArgumentException("Expected seed or verify.");
         if ("seed".equalsIgnoreCase(args[0])) seed();
+        else if ("migrate".equalsIgnoreCase(args[0])) migrate();
         else if ("verify".equalsIgnoreCase(args[0])) verify();
         else throw new IllegalArgumentException("Unknown command: " + args[0]);
     }
@@ -55,6 +60,18 @@ public class WindowsDatabaseLifecycle {
             statement.execute("INSERT INTO stock_movements(id,part_id,quantity,reason) VALUES (71,61,-3,'Legacy stock correction')");
         }
         System.out.println("Seeded legacy database at " + file);
+    }
+
+
+    private static void migrate() throws Exception {
+        Path file = databasePath();
+        if (!Files.isRegularFile(file)) throw new IllegalStateException("Legacy fixture is missing: " + file);
+        SQLiteConfig config = new SQLiteConfig();
+        config.enforceForeignKeys(true);
+        SQLiteDataSource source = new SQLiteDataSource(config);
+        source.setUrl("jdbc:sqlite:" + file);
+        new DatabaseMigrationRunner(source).run(new DefaultApplicationArguments(new String[0]));
+        System.out.println("Applied MechMotor database migrations to " + file);
     }
 
     private static void verify() throws Exception {
