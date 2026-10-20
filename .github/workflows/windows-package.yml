@@ -37,10 +37,21 @@ jobs:
           mvn --batch-mode --no-transfer-progress dependency:copy-dependencies "-DincludeScope=runtime" "-DoutputDirectory=target/dist"
           jar --create --file target/dist/mechmotor.jar -C target/classes .
 
+      - name: Build trimmed Java runtime with JavaFX
+        shell: pwsh
+        run: |
+          $modulePath = "target/dist;$env:JAVA_HOME\jmods"
+          jlink --module-path $modulePath --add-modules java.se,javafx.controls,jdk.crypto.ec --strip-debug --no-man-pages --no-header-files --compress=2 --output target/runtime
+          if (-not (Test-Path "target/runtime/bin/java.exe")) {
+            throw "jlink did not produce target/runtime/bin/java.exe."
+          }
+          & "target/runtime/bin/java.exe" -version
+          if ($LASTEXITCODE -ne 0) { throw "The generated runtime cannot execute Java." }
+
       - name: Build Windows app image
         shell: pwsh
         run: |
-          jpackage --type app-image --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --module-path target/dist --add-modules javafx.controls --dest target/installer
+          jpackage --type app-image --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --runtime-image target/runtime --dest target/installer
           $launcher = "target/installer/MechMotor/MechMotor.exe"
           if (-not (Test-Path $launcher)) {
             throw "jpackage did not produce the expected MechMotor.exe launcher."
@@ -118,8 +129,8 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force target/packages/exe, target/packages/msi | Out-Null
-          jpackage --type exe --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --module-path target/dist --add-modules javafx.controls --dest target/packages/exe --win-menu --win-shortcut
-          jpackage --type msi --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --module-path target/dist --add-modules javafx.controls --dest target/packages/msi --win-menu --win-shortcut
+          jpackage --type exe --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --runtime-image target/runtime --dest target/packages/exe --win-menu --win-shortcut
+          jpackage --type msi --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --runtime-image target/runtime --dest target/packages/msi --win-menu --win-shortcut
           if (-not (Test-Path "target/packages/exe/MechMotor-1.0.0.exe")) {
             throw "jpackage did not produce the expected EXE installer."
           }
