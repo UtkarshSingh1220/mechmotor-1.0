@@ -40,8 +40,19 @@ jobs:
       - name: Build trimmed Java runtime with JavaFX
         shell: pwsh
         run: |
-          $modulePath = "target/dist;$env:JAVA_HOME\jmods"
-          jlink --module-path $modulePath --add-modules java.se,javafx.controls,jdk.crypto.ec --strip-debug --no-man-pages --no-header-files --compress=2 --output target/runtime
+          # Keep Spring/third-party automatic modules off jlink's module path.
+          # Only the JDK modules and the platform-specific JavaFX modules belong here.
+          $javafxJars = Get-ChildItem "target/dist" -Filter "javafx-*-win.jar" |
+            Where-Object { $_.Name -notmatch "sources|javadoc" } |
+            ForEach-Object { $_.FullName }
+          if (-not $javafxJars -or $javafxJars.Count -lt 3) {
+            Get-ChildItem "target/dist" -Filter "javafx*.jar" | Select-Object -ExpandProperty Name
+            throw "Expected platform-specific JavaFX module JARs were not copied to target/dist."
+          }
+          $modulePath = @("$env:JAVA_HOME\jmods") + $javafxJars
+          $modulePathArg = $modulePath -join ";"
+          jlink --module-path $modulePathArg --add-modules java.se,javafx.controls,jdk.crypto.ec --strip-debug --no-man-pages --no-header-files --compress=2 --output target/runtime
+          if ($LASTEXITCODE -ne 0) { throw "jlink failed to build the trimmed JavaFX runtime." }
           if (-not (Test-Path "target/runtime/bin/java.exe")) {
             throw "jlink did not produce target/runtime/bin/java.exe."
           }
