@@ -54,14 +54,47 @@ jobs:
           }
           Compress-Archive -Path target/installer/MechMotor -DestinationPath target/MechMotor-Windows-x64-app-image.zip -Force
 
+      - name: Verify packaged JVM and launcher configuration
+        shell: pwsh
+        run: |
+          $root = (Resolve-Path "target/installer/MechMotor").Path
+          $launcher = Join-Path $root "MechMotor.exe"
+          $runtimeJava = Join-Path $root "runtime/bin/java.exe"
+          $config = Join-Path $root "app/MechMotor.cfg"
+          $appJar = Join-Path $root "app/mechmotor.jar"
+          foreach ($required in @($launcher, $runtimeJava, $config, $appJar)) {
+            if (-not (Test-Path $required)) {
+              throw "Incomplete jpackage app image: required file missing: $required"
+            }
+          }
+          $cfgText = Get-Content -Raw $config
+          if ($cfgText -notmatch '(?m)^app\.mainclass=com\.mechmotor\.DesktopLauncher\s*$') {
+            throw "MechMotor.cfg does not declare the expected DesktopLauncher main class."
+          }
+          if ($cfgText -notmatch '(?m)^app\.classpath=') {
+            throw "MechMotor.cfg has no application classpath; JVM launch would be incomplete."
+          }
+          & $runtimeJava -version
+          if ($LASTEXITCODE -ne 0) { throw "The bundled Java runtime cannot execute java.exe." }
+          Write-Host "Validated launcher, bundled Java runtime, main class, and classpath."
+          Get-Content $config
+
       - name: Smoke-test packaged app launch
         shell: pwsh
         run: |
-          $process = Start-Process -FilePath "target/installer/MechMotor/MechMotor.exe" -PassThru
-          Start-Sleep -Seconds 12
+          $logDir = "target/launch-logs"
+          New-Item -ItemType Directory -Force $logDir | Out-Null
+          $stdout = Join-Path $logDir "app-image.stdout.log"
+          $stderr = Join-Path $logDir "app-image.stderr.log"
+          $process = Start-Process -FilePath "target/installer/MechMotor/MechMotor.exe" -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          Start-Sleep -Seconds 15
           $process.Refresh()
           if ($process.HasExited) {
-            throw "MechMotor exited during the 12-second packaged-launch smoke test (exit code $($process.ExitCode))."
+            Write-Host "Launcher stdout:"
+            if (Test-Path $stdout) { Get-Content $stdout }
+            Write-Host "Launcher stderr:"
+            if (Test-Path $stderr) { Get-Content $stderr }
+            throw "MechMotor exited during the 15-second packaged-launch smoke test (exit code $($process.ExitCode))."
           }
           Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
 
@@ -130,6 +163,17 @@ jobs:
           if (-not $launcher) {
             throw "MSI installation completed, but MechMotor.exe was not found in the installed location."
           }
+          $installRoot = Split-Path $launcher -Parent
+          $runtimeJava = Join-Path $installRoot "runtime/bin/java.exe"
+          $config = Join-Path $installRoot "app/MechMotor.cfg"
+          if (-not (Test-Path $runtimeJava) -or -not (Test-Path $config)) {
+            throw "MSI installation is missing its bundled Java runtime or MechMotor.cfg."
+          }
+          if ((Get-Content -Raw $config) -notmatch '(?m)^app\.mainclass=com\.mechmotor\.DesktopLauncher\s*$') {
+            throw "Installed MSI launcher configuration points to the wrong main class."
+          }
+          & $runtimeJava -version
+          if ($LASTEXITCODE -ne 0) { throw "Installed MSI bundled Java runtime failed its version check." }
 
           $app = Start-Process -FilePath $launcher -PassThru
           Start-Sleep -Seconds 10
@@ -174,6 +218,17 @@ jobs:
           if (-not $launcher) {
             throw "EXE installer completed, but MechMotor.exe was not found in the installed location."
           }
+          $installRoot = Split-Path $launcher -Parent
+          $runtimeJava = Join-Path $installRoot "runtime/bin/java.exe"
+          $config = Join-Path $installRoot "app/MechMotor.cfg"
+          if (-not (Test-Path $runtimeJava) -or -not (Test-Path $config)) {
+            throw "EXE installation is missing its bundled Java runtime or MechMotor.cfg."
+          }
+          if ((Get-Content -Raw $config) -notmatch '(?m)^app\.mainclass=com\.mechmotor\.DesktopLauncher\s*$') {
+            throw "Installed EXE launcher configuration points to the wrong main class."
+          }
+          & $runtimeJava -version
+          if ($LASTEXITCODE -ne 0) { throw "Installed EXE bundled Java runtime failed its version check." }
 
           $app = Start-Process -FilePath $launcher -PassThru
           Start-Sleep -Seconds 10
