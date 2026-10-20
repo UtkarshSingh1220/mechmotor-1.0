@@ -40,10 +40,17 @@ jobs:
       - name: Build Windows app image
         shell: pwsh
         run: |
-          jpackage --type app-image --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --dest target/installer
+          jpackage --type app-image --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --module-path target/dist --add-modules javafx.controls --dest target/installer
           $launcher = "target/installer/MechMotor/MechMotor.exe"
           if (-not (Test-Path $launcher)) {
             throw "jpackage did not produce the expected MechMotor.exe launcher."
+          }
+          $bundledJava = "target/installer/MechMotor/runtime/bin/java.exe"
+          if (-not (Test-Path $bundledJava)) {
+            throw "The app image is missing its bundled Java runtime: $bundledJava"
+          }
+          if (-not (Get-ChildItem "target/installer/MechMotor/app" -Filter "*.jar" -ErrorAction SilentlyContinue)) {
+            throw "The app image is missing packaged application/dependency JARs."
           }
           Compress-Archive -Path target/installer/MechMotor -DestinationPath target/MechMotor-Windows-x64-app-image.zip -Force
 
@@ -78,8 +85,8 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force target/packages/exe, target/packages/msi | Out-Null
-          jpackage --type exe --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --dest target/packages/exe --win-menu --win-shortcut
-          jpackage --type msi --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --dest target/packages/msi --win-menu --win-shortcut
+          jpackage --type exe --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --module-path target/dist --add-modules javafx.controls --dest target/packages/exe --win-menu --win-shortcut
+          jpackage --type msi --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --module-path target/dist --add-modules javafx.controls --dest target/packages/msi --win-menu --win-shortcut
           if (-not (Test-Path "target/packages/exe/MechMotor-1.0.0.exe")) {
             throw "jpackage did not produce the expected EXE installer."
           }
@@ -217,6 +224,21 @@ jobs:
           }
           java -cp "target/dist/*" tools/acceptance/WindowsDatabaseLifecycle.java verify
 
+      - name: Generate installer checksums
+        shell: pwsh
+        run: |
+          $files = @(
+            "target/packages/exe/MechMotor-1.0.0.exe",
+            "target/packages/msi/MechMotor-1.0.0.msi",
+            "target/MechMotor-Windows-x64-app-image.zip"
+          )
+          $lines = foreach ($file in $files) {
+            if (-not (Test-Path $file)) { throw "Missing package for checksum: $file" }
+            $hash = Get-FileHash -Algorithm SHA256 $file
+            "$($hash.Hash.ToLowerInvariant())  $file"
+          }
+          $lines | Set-Content -Encoding ascii target/SHA256SUMS.txt
+
       - name: Upload Windows packages
         uses: actions/upload-artifact@v4
         with:
@@ -225,5 +247,6 @@ jobs:
             target/MechMotor-Windows-x64-app-image.zip
             target/packages/exe/MechMotor-1.0.0.exe
             target/packages/msi/MechMotor-1.0.0.msi
+            target/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14
