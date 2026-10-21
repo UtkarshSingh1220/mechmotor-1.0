@@ -37,24 +37,86 @@ jobs:
           mvn --batch-mode --no-transfer-progress dependency:copy-dependencies "-DincludeScope=runtime" "-DoutputDirectory=target/dist"
           jar --create --file target/dist/mechmotor.jar -C target/classes .
 
+      - name: Build trimmed Java runtime with JavaFX
+        shell: pwsh
+        run: |
+          # Keep Spring/third-party automatic modules off jlink's module path.
+          # Only the JDK modules and the platform-specific JavaFX modules belong here.
+          $javafxJars = Get-ChildItem "target/dist" -Filter "javafx-*-win.jar" |
+            Where-Object { $_.Name -notmatch "sources|javadoc" } |
+            ForEach-Object { $_.FullName }
+          if (-not $javafxJars -or $javafxJars.Count -lt 3) {
+            Get-ChildItem "target/dist" -Filter "javafx*.jar" | Select-Object -ExpandProperty Name
+            throw "Expected platform-specific JavaFX module JARs were not copied to target/dist."
+          }
+          $modulePath = @("$env:JAVA_HOME\jmods") + $javafxJars
+          $modulePathArg = $modulePath -join ";"
+          jlink --module-path $modulePathArg --add-modules java.se,javafx.controls,jdk.crypto.ec --strip-debug --no-man-pages --no-header-files --compress=2 --output target/runtime
+          if ($LASTEXITCODE -ne 0) { throw "jlink failed to build the trimmed JavaFX runtime." }
+          if (-not (Test-Path "target/runtime/bin/java.exe")) {
+            throw "jlink did not produce target/runtime/bin/java.exe."
+          }
+          & "target/runtime/bin/java.exe" -version
+          if ($LASTEXITCODE -ne 0) { throw "The generated runtime cannot execute Java." }
+
       - name: Build Windows app image
         shell: pwsh
         run: |
-          jpackage --type app-image --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --dest target/installer
+          jpackage --type app-image --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls" --runtime-image target/runtime --dest target/installer
           $launcher = "target/installer/MechMotor/MechMotor.exe"
           if (-not (Test-Path $launcher)) {
             throw "jpackage did not produce the expected MechMotor.exe launcher."
           }
+          $bundledJava = "target/installer/MechMotor/runtime/bin/java.exe"
+          if (-not (Test-Path $bundledJava)) {
+            throw "The app image is missing its bundled Java runtime: $bundledJava"
+          }
+          if (-not (Get-ChildItem "target/installer/MechMotor/app" -Filter "*.jar" -ErrorAction SilentlyContinue)) {
+            throw "The app image is missing packaged application/dependency JARs."
+          }
           Compress-Archive -Path target/installer/MechMotor -DestinationPath target/MechMotor-Windows-x64-app-image.zip -Force
+
+      - name: Verify packaged JVM and launcher configuration
+        shell: pwsh
+        run: |
+          $root = (Resolve-Path "target/installer/MechMotor").Path
+          $launcher = Join-Path $root "MechMotor.exe"
+          $runtimeJava = Join-Path $root "runtime/bin/java.exe"
+          $config = Join-Path $root "app/MechMotor.cfg"
+          $appJar = Join-Path $root "app/mechmotor.jar"
+          foreach ($required in @($launcher, $runtimeJava, $config, $appJar)) {
+            if (-not (Test-Path $required)) {
+              throw "Incomplete jpackage app image: required file missing: $required"
+            }
+          }
+          $cfgText = Get-Content -Raw $config
+          if ($cfgText -notmatch '(?m)^app\.mainclass=com\.mechmotor\.DesktopLauncher\s*$') {
+            throw "MechMotor.cfg does not declare the expected DesktopLauncher main class."
+          }
+          if ($cfgText -notmatch '(?m)^app\.classpath=') {
+            throw "MechMotor.cfg has no application classpath; JVM launch would be incomplete."
+          }
+          & $runtimeJava -version
+          if ($LASTEXITCODE -ne 0) { throw "The bundled Java runtime cannot execute java.exe." }
+          Write-Host "Validated launcher, bundled Java runtime, main class, and classpath."
+          Get-Content $config
 
       - name: Smoke-test packaged app launch
         shell: pwsh
         run: |
-          $process = Start-Process -FilePath "target/installer/MechMotor/MechMotor.exe" -PassThru
-          Start-Sleep -Seconds 12
+          $logDir = "target/launch-logs"
+          New-Item -ItemType Directory -Force $logDir | Out-Null
+          $stdout = Join-Path $logDir "app-image.stdout.log"
+          $stderr = Join-Path $logDir "app-image.stderr.log"
+          $process = Start-Process -FilePath "target/installer/MechMotor/MechMotor.exe" -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          Start-Sleep -Seconds 15
           $process.Refresh()
           if ($process.HasExited) {
-            throw "MechMotor exited during the 12-second packaged-launch smoke test (exit code $($process.ExitCode))."
+            Write-Host "Launcher stdout:"
+            if (Test-Path $stdout) { Get-Content $stdout }
+            Write-Host "Launcher stderr:"
+            if (Test-Path $stderr) { Get-Content $stderr }
+            throw "MechMotor exited during the 15-second packaged-launch smoke test (exit code $($process.ExitCode))."
           }
           Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
 
@@ -78,8 +140,8 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force target/packages/exe, target/packages/msi | Out-Null
-          jpackage --type exe --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --dest target/packages/exe --win-menu --win-shortcut
-          jpackage --type msi --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --dest target/packages/msi --win-menu --win-shortcut
+          jpackage --type exe --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls" --runtime-image target/runtime --dest target/packages/exe --win-menu --win-shortcut
+          jpackage --type msi --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls" --runtime-image target/runtime --dest target/packages/msi --win-menu --win-shortcut
           if (-not (Test-Path "target/packages/exe/MechMotor-1.0.0.exe")) {
             throw "jpackage did not produce the expected EXE installer."
           }
@@ -123,6 +185,17 @@ jobs:
           if (-not $launcher) {
             throw "MSI installation completed, but MechMotor.exe was not found in the installed location."
           }
+          $installRoot = Split-Path $launcher -Parent
+          $runtimeJava = Join-Path $installRoot "runtime/bin/java.exe"
+          $config = Join-Path $installRoot "app/MechMotor.cfg"
+          if (-not (Test-Path $runtimeJava) -or -not (Test-Path $config)) {
+            throw "MSI installation is missing its bundled Java runtime or MechMotor.cfg."
+          }
+          if ((Get-Content -Raw $config) -notmatch '(?m)^app\.mainclass=com\.mechmotor\.DesktopLauncher\s*$') {
+            throw "Installed MSI launcher configuration points to the wrong main class."
+          }
+          & $runtimeJava -version
+          if ($LASTEXITCODE -ne 0) { throw "Installed MSI bundled Java runtime failed its version check." }
 
           $app = Start-Process -FilePath $launcher -PassThru
           Start-Sleep -Seconds 10
@@ -167,6 +240,17 @@ jobs:
           if (-not $launcher) {
             throw "EXE installer completed, but MechMotor.exe was not found in the installed location."
           }
+          $installRoot = Split-Path $launcher -Parent
+          $runtimeJava = Join-Path $installRoot "runtime/bin/java.exe"
+          $config = Join-Path $installRoot "app/MechMotor.cfg"
+          if (-not (Test-Path $runtimeJava) -or -not (Test-Path $config)) {
+            throw "EXE installation is missing its bundled Java runtime or MechMotor.cfg."
+          }
+          if ((Get-Content -Raw $config) -notmatch '(?m)^app\.mainclass=com\.mechmotor\.DesktopLauncher\s*$') {
+            throw "Installed EXE launcher configuration points to the wrong main class."
+          }
+          & $runtimeJava -version
+          if ($LASTEXITCODE -ne 0) { throw "Installed EXE bundled Java runtime failed its version check." }
 
           $app = Start-Process -FilePath $launcher -PassThru
           Start-Sleep -Seconds 10
@@ -217,6 +301,21 @@ jobs:
           }
           java -cp "target/dist/*" tools/acceptance/WindowsDatabaseLifecycle.java verify
 
+      - name: Generate installer checksums
+        shell: pwsh
+        run: |
+          $files = @(
+            "target/packages/exe/MechMotor-1.0.0.exe",
+            "target/packages/msi/MechMotor-1.0.0.msi",
+            "target/MechMotor-Windows-x64-app-image.zip"
+          )
+          $lines = foreach ($file in $files) {
+            if (-not (Test-Path $file)) { throw "Missing package for checksum: $file" }
+            $hash = Get-FileHash -Algorithm SHA256 $file
+            "$($hash.Hash.ToLowerInvariant())  $file"
+          }
+          $lines | Set-Content -Encoding ascii target/SHA256SUMS.txt
+
       - name: Upload Windows packages
         uses: actions/upload-artifact@v4
         with:
@@ -225,5 +324,6 @@ jobs:
             target/MechMotor-Windows-x64-app-image.zip
             target/packages/exe/MechMotor-1.0.0.exe
             target/packages/msi/MechMotor-1.0.0.msi
+            target/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14
