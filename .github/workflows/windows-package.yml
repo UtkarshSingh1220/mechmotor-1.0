@@ -148,8 +148,8 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force target/packages/exe, target/packages/msi | Out-Null
-          jpackage --type exe --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls" --runtime-image target/runtime --dest target/packages/exe --win-menu --win-shortcut
-          jpackage --type msi --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls" --runtime-image target/runtime --dest target/packages/msi --win-menu --win-shortcut
+          jpackage --type exe --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls" --runtime-image target/runtime --dest target/packages/exe --win-menu --win-shortcut --win-upgrade-uuid "5a89bc09-8542-4143-8aef-5db0148356e5"
+          jpackage --type msi --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls" --runtime-image target/runtime --dest target/packages/msi --win-menu --win-shortcut --win-upgrade-uuid "5a89bc09-8542-4143-8aef-5db0148356e5"
           if (-not (Test-Path "target/packages/exe/MechMotor-1.0.0.exe")) {
             throw "jpackage did not produce the expected EXE installer."
           }
