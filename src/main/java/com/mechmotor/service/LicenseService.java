@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
 public class LicenseService {
     private static final String TOKEN_PREFIX = "MM1";
     private static final String PAYLOAD_VERSION = "MECHMOTOR-LICENSE-V1";
-    private static final String PUBLIC_KEY_DER_BASE64 = "MCowBQYDK2VwAyEAn+/Vh3xLSucGnJbvryRM2U12QJnOP6Dg4CbibrAIKtc=";
+    private static final String PUBLIC_KEY_DER_BASE64 = "MCowBQYDK2VwAyEAhoa1AqUQFVFbYM0nqUXbb+hqxPz+8Xhh0bWpZIguPtA=";
     private static final Pattern LICENSE_ID = Pattern.compile("[A-Z0-9][A-Z0-9._-]{2,63}");
     private static final Set<String> ALLOWED_FEATURES =
             Set.of("INVENTORY", "CSV", "REPORTS", "SALES", "PURCHASING");
