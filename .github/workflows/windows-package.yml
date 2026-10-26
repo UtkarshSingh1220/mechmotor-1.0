@@ -9,10 +9,20 @@ on:
       - 'tools/**'
       - 'README.md'
       - '.github/workflows/windows-package.yml'
+  push:
+    branches: [main]
+    tags:
+      - 'v*'
+    paths:
+      - 'pom.xml'
+      - 'src/**'
+      - 'tools/**'
+      - 'README.md'
+      - '.github/workflows/windows-package.yml'
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   windows-package:
@@ -26,6 +36,14 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+
+      - name: Resolve application version
+        shell: pwsh
+        run: |
+          $version = mvn help:evaluate "-Dexpression=project.version" -q "-DforceStdout"
+          if (-not $version) { throw "Could not resolve Maven project version." }
+          "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Packaging MechMotor version $version"
 
       - name: Verify tests
         run: mvn --batch-mode --no-transfer-progress clean verify
@@ -62,7 +80,7 @@ jobs:
       - name: Build Windows app image
         shell: pwsh
         run: |
-          jpackage --type app-image --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls" --runtime-image target/runtime --dest target/installer
+          jpackage --type app-image --name MechMotor --app-version $env:APP_VERSION --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls" --runtime-image target/runtime --dest target/installer
           $launcher = "target/installer/MechMotor/MechMotor.exe"
           if (-not (Test-Path $launcher)) {
             throw "jpackage did not produce the expected MechMotor.exe launcher."
@@ -140,15 +158,49 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force target/packages/exe, target/packages/msi | Out-Null
-          jpackage --type exe --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls" --runtime-image target/runtime --dest target/packages/exe --win-menu --win-shortcut
-          jpackage --type msi --name MechMotor --app-version 1.0.0 --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls" --runtime-image target/runtime --dest target/packages/msi --win-menu --win-shortcut
-          if (-not (Test-Path "target/packages/exe/MechMotor-1.0.0.exe")) {
+          jpackage --type exe --name MechMotor --app-version $env:APP_VERSION --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls" --runtime-image target/runtime --dest target/packages/exe --win-menu --win-shortcut --win-upgrade-uuid "5a89bc09-8542-4143-8aef-5db0148356e5"
+          jpackage --type msi --name MechMotor --app-version $env:APP_VERSION --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls" --runtime-image target/runtime --dest target/packages/msi --win-menu --win-shortcut --win-upgrade-uuid "5a89bc09-8542-4143-8aef-5db0148356e5"
+          if (-not (Test-Path "target/packages/exe/MechMotor-$env:APP_VERSION.exe")) {
             throw "jpackage did not produce the expected EXE installer."
           }
-          if (-not (Test-Path "target/packages/msi/MechMotor-1.0.0.msi")) {
+          if (-not (Test-Path "target/packages/msi/MechMotor-$env:APP_VERSION.msi")) {
             throw "jpackage did not produce the expected MSI installer."
           }
 
+
+      - name: Sign Windows installers when certificate is configured
+        shell: pwsh
+        env:
+          WINDOWS_SIGNING_CERT_BASE64: ${{ secrets.WINDOWS_SIGNING_CERT_BASE64 }}
+          WINDOWS_SIGNING_CERT_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERT_BASE64) -or
+              [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERT_PASSWORD)) {
+            Write-Warning "Windows signing secrets are not configured; installers will remain unsigned."
+            exit 0
+          }
+
+          $certPath = Join-Path $env:RUNNER_TEMP "mechmotor-signing.pfx"
+          [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_SIGNING_CERT_BASE64))
+
+          $signTool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -Recurse -ErrorAction SilentlyContinue |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $signTool) { throw "signtool.exe was not found on the Windows runner." }
+
+          $packages = @(
+            "target/packages/exe/MechMotor-$env:APP_VERSION.exe",
+            "target/packages/msi/MechMotor-$env:APP_VERSION.msi"
+          )
+          foreach ($package in $packages) {
+            if (-not (Test-Path $package)) { throw "Package to sign was not found: $package" }
+            & $signTool.FullName sign /fd SHA256 /td SHA256 /tr "http://timestamp.digicert.com" /f $certPath /p $env:WINDOWS_SIGNING_CERT_PASSWORD $package
+            if ($LASTEXITCODE -ne 0) { throw "Code signing failed for $package" }
+            & $signTool.FullName verify /pa /v $package
+            if ($LASTEXITCODE -ne 0) { throw "Signature verification failed for $package" }
+          }
+
+          Remove-Item $certPath -Force -ErrorAction SilentlyContinue
 
       - name: Seed legacy user database before installer acceptance
         shell: pwsh
@@ -163,7 +215,7 @@ jobs:
       - name: Validate MSI install, launch, and uninstall
         shell: pwsh
         run: |
-          $msi = (Resolve-Path "target/packages/msi/MechMotor-1.0.0.msi").Path
+          $msi = (Resolve-Path "target/packages/msi/MechMotor-$env:APP_VERSION.msi").Path
           $install = Start-Process -FilePath "msiexec.exe" -ArgumentList @("/i", "`"$msi`"", "/qn", "/norestart") -Wait -PassThru
           if ($install.ExitCode -notin @(0, 3010)) {
             throw "MSI install failed with exit code $($install.ExitCode)."
@@ -218,7 +270,7 @@ jobs:
       - name: Validate EXE installer install, launch, and uninstall
         shell: pwsh
         run: |
-          $exe = (Resolve-Path "target/packages/exe/MechMotor-1.0.0.exe").Path
+          $exe = (Resolve-Path "target/packages/exe/MechMotor-$env:APP_VERSION.exe").Path
           $install = Start-Process -FilePath $exe -ArgumentList @("/quiet", "/norestart") -Wait -PassThru
           if ($install.ExitCode -notin @(0, 3010)) {
             throw "EXE installer failed with exit code $($install.ExitCode)."
@@ -305,8 +357,8 @@ jobs:
         shell: pwsh
         run: |
           $files = @(
-            "target/packages/exe/MechMotor-1.0.0.exe",
-            "target/packages/msi/MechMotor-1.0.0.msi",
+            "target/packages/exe/MechMotor-$env:APP_VERSION.exe",
+            "target/packages/msi/MechMotor-$env:APP_VERSION.msi",
             "target/MechMotor-Windows-x64-app-image.zip"
           )
           $lines = foreach ($file in $files) {
@@ -322,8 +374,20 @@ jobs:
           name: MechMotor-Windows-x64-installers
           path: |
             target/MechMotor-Windows-x64-app-image.zip
-            target/packages/exe/MechMotor-1.0.0.exe
-            target/packages/msi/MechMotor-1.0.0.msi
+            target/packages/exe/*.exe
+            target/packages/msi/*.msi
             target/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish versioned GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $expectedTag = "v$env:APP_VERSION"
+          if ("$env:GITHUB_REF_NAME" -ne $expectedTag) {
+            throw "Release tag $env:GITHUB_REF_NAME does not match Maven version $expectedTag."
+          }
+          gh release create "$env:GITHUB_REF_NAME" "target/packages/exe/MechMotor-$env:APP_VERSION.exe" "target/packages/msi/MechMotor-$env:APP_VERSION.msi" "target/SHA256SUMS.txt" --title "MechMotor $env:APP_VERSION" --generate-notes

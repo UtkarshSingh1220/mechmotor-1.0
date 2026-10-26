@@ -14,6 +14,8 @@ Preferred distribution:
 
 ## Current build
 
-The latest previously successful Windows packaging artifact is available from [GitHub Actions run 39136144558](https://github.com/UtkarshSingh1220/mechmotor-1.0/actions/runs/39136144558). It is a temporary workflow artifact, not a permanent release; check its expiration before relying on it.
+Do not use a hard-coded historical workflow run as the default download source. The Windows installer must be built from the latest `main` commit by the **Windows desktop package** workflow and must complete its packaged-launch, EXE install/launch/uninstall, MSI install/launch/uninstall, database-lifecycle, and checksum steps successfully.
+
+For test builds, use the newest successful workflow artifact whose head SHA matches the current `main` commit. For customer distribution, publish the approved `.exe`, `.msi`, and `SHA256SUMS.txt` as assets on a versioned GitHub Release.
 
 Do not publish an installer as production-ready until the relevant CI/package checks and release acceptance gates pass.

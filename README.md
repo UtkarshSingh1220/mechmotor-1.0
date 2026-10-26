@@ -464,35 +464,13 @@ The committed CI workflow runs `mvn --batch-mode --no-transfer-progress clean ve
 
 ## Windows EXE packaging
 
-The packaging work is being validated in stages using JDK `jpackage` on Windows. The GitHub Actions workflow `.github/workflows/windows-package.yml` now builds a thin classpath distribution and creates a Windows **app-image** containing the `MechMotor.exe` launcher. Its ZIP is published as a short-lived workflow artifact for inspection. This app-image is not yet an installer and does not by itself prove clean-machine launch or upgrade/uninstall behavior.
+The Windows packaging workflow builds a Java 21 runtime containing the required JavaFX modules, creates a Windows app-image, and produces versioned EXE and MSI installers with the bundled runtime. The workflow verifies the launcher configuration and classpath, smoke-tests the app-image, installs and launches both MSI and EXE packages on a hosted Windows runner, validates database migration/data retention checks, and publishes SHA-256 checksums with the workflow artifact.
 
-Planned release flow:
+The application version is resolved from `pom.xml`; package filenames and `jpackage --app-version` use that same version. A stable Windows upgrade UUID is used for EXE/MSI packages so later releases can participate in a consistent upgrade path.
 
-1. Run `mvn clean test package`.
-2. Inspect the actual Maven output and assemble a distribution with the launcher, application JAR, dependency JARs, JavaFX/native libraries and resources as required by the selected launch layout.
-3. Configure `jpackage --type exe` for that validated distribution.
-4. Confirm the correct main class/launcher configuration. Do not blindly pass a Spring Boot executable/fat JAR to `jpackage` without validating its launch layout.
-5. Resolve any required Windows installer tooling (WiX requirements depend on the JDK/packaging setup).
-6. Test on a clean Windows machine: install, launch offline, search inventory, verify the data path, upgrade and uninstall without deleting user data.
+For every change merged to `main` that affects the application or packaging, the Windows workflow runs automatically. Test installers must come from a successful workflow whose head SHA matches the current `main` commit. Approved customer installers should be published as assets on a versioned GitHub Release rather than referenced through a historical temporary Actions artifact.
 
-An illustrative command shape—not yet a validated release command—is:
-
-```powershell
-mvn clean test package
-
-# After creating and validating target\dist:
-jpackage `
-  --type exe `
-  --name "MechMotor" `
-  --app-version "1.0.0" `
-  --input "target\dist" `
-  --main-jar "mechmotor-launcher.jar" `
-  --dest "target\installer" `
-  --win-menu `
-  --win-shortcut
-```
-
-The launcher JAR and input layout in this example must be adapted to the actual build output before use.
+Hosted CI smoke tests are necessary but are not the final production acceptance gate. Before release, validate the installer on a physical supported Windows machine/account, including offline launch, Windows Defender/SmartScreen behavior, upgrade from a populated prior version, uninstall/reinstall, activation/data preservation, and backup/restore. Track that evidence in issue #51 and the production-readiness checklist.
 
 ## Implementation status and roadmap
 
