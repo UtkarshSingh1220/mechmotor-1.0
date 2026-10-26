@@ -9,6 +9,14 @@ on:
       - 'tools/**'
       - 'README.md'
       - '.github/workflows/windows-package.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'pom.xml'
+      - 'src/**'
+      - 'tools/**'
+      - 'README.md'
+      - '.github/workflows/windows-package.yml'
   workflow_dispatch:
 
 permissions:
