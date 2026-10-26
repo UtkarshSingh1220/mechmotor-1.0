@@ -11,6 +11,8 @@ on:
       - '.github/workflows/windows-package.yml'
   push:
     branches: [main]
+    tags:
+      - 'v*'
     paths:
       - 'pom.xml'
       - 'src/**'
@@ -20,7 +22,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   windows-package:
@@ -377,3 +379,15 @@ jobs:
             target/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish versioned GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $expectedTag = "v$env:APP_VERSION"
+          if ("$env:GITHUB_REF_NAME" -ne $expectedTag) {
+            throw "Release tag $env:GITHUB_REF_NAME does not match Maven version $expectedTag."
+          }
+          gh release create "$env:GITHUB_REF_NAME" "target/packages/exe/MechMotor-$env:APP_VERSION.exe" "target/packages/msi/MechMotor-$env:APP_VERSION.msi" "target/SHA256SUMS.txt" --title "MechMotor $env:APP_VERSION" --generate-notes
