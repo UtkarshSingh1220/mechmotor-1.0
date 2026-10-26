@@ -40,7 +40,7 @@ jobs:
       - name: Resolve application version
         shell: pwsh
         run: |
-          $version = mvn help:evaluate -Dexpression=project.version -q -DforceStdout
+          $version = mvn help:evaluate "-Dexpression=project.version" -q "-DforceStdout"
           if (-not $version) { throw "Could not resolve Maven project version." }
           "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "Packaging MechMotor version $version"
