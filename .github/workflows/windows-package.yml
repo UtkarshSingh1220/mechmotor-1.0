@@ -166,6 +166,40 @@ jobs:
           }
 
 
+      - name: Sign Windows installers when certificate is configured
+        shell: pwsh
+        env:
+          WINDOWS_SIGNING_CERT_BASE64: ${{ secrets.WINDOWS_SIGNING_CERT_BASE64 }}
+          WINDOWS_SIGNING_CERT_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERT_BASE64) -or
+              [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERT_PASSWORD)) {
+            Write-Warning "Windows signing secrets are not configured; installers will remain unsigned."
+            exit 0
+          }
+
+          $certPath = Join-Path $env:RUNNER_TEMP "mechmotor-signing.pfx"
+          [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_SIGNING_CERT_BASE64))
+
+          $signTool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -Recurse -ErrorAction SilentlyContinue |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $signTool) { throw "signtool.exe was not found on the Windows runner." }
+
+          $packages = @(
+            "target/packages/exe/MechMotor-$env:APP_VERSION.exe",
+            "target/packages/msi/MechMotor-$env:APP_VERSION.msi"
+          )
+          foreach ($package in $packages) {
+            if (-not (Test-Path $package)) { throw "Package to sign was not found: $package" }
+            & $signTool.FullName sign /fd SHA256 /td SHA256 /tr "http://timestamp.digicert.com" /f $certPath /p $env:WINDOWS_SIGNING_CERT_PASSWORD $package
+            if ($LASTEXITCODE -ne 0) { throw "Code signing failed for $package" }
+            & $signTool.FullName verify /pa /v $package
+            if ($LASTEXITCODE -ne 0) { throw "Signature verification failed for $package" }
+          }
+
+          Remove-Item $certPath -Force -ErrorAction SilentlyContinue
+
       - name: Seed legacy user database before installer acceptance
         shell: pwsh
         run: java -cp "target/dist/*" tools/acceptance/WindowsDatabaseLifecycle.java seed
