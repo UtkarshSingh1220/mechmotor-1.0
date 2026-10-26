@@ -374,8 +374,8 @@ jobs:
           name: MechMotor-Windows-x64-installers
           path: |
             target/MechMotor-Windows-x64-app-image.zip
-            target/packages/exe/MechMotor-$env:APP_VERSION.exe
-            target/packages/msi/MechMotor-$env:APP_VERSION.msi
+            target/packages/exe/*.exe
+            target/packages/msi/*.msi
             target/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14
