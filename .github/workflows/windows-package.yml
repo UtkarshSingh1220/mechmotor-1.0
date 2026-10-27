@@ -350,7 +350,7 @@ jobs:
           if (-not $uninstallText) {
             throw "MechMotor uninstall command was not registered."
           }
-          if ($uninstallText -match '(?i)msiexec(?:\.exe)?\s+.*?(/i|/package)\s*(\{[0-9A-F-]+\})') {
+          if ($uninstallText -match '(?i)msiexec(?:\.exe)?\s+.*?(/x|/i|/package)\s*(\{[0-9A-F-]+\})') {
             $productCode = $Matches[2]
             $uninstall = Start-Process -FilePath "msiexec.exe" -ArgumentList @("/x", $productCode, "/qn", "/norestart") -Wait -PassThru
           } else {
