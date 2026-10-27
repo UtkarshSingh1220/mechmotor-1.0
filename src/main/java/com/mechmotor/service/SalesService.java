@@ -13,6 +13,7 @@ import com.mechmotor.domain.SaleReturnable;
 import com.mechmotor.domain.SaleReturnReceipt;
 import com.mechmotor.domain.SaleHistoryRow;
 import com.mechmotor.repository.PartRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.PreparedStatementCreator;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -39,6 +40,7 @@ public class SalesService {
     private final TransactionTemplate transactions;
     private final Clock clock;
 
+    @Autowired
     public SalesService(JdbcTemplate jdbc, PartRepository parts, PlatformTransactionManager transactionManager) {
         this(jdbc, parts, transactionManager, Clock.systemUTC());
     }
