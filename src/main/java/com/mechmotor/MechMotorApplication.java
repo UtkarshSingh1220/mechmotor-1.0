@@ -74,9 +74,9 @@ public class MechMotorApplication extends Application {
         reportsService = context.getBean(OperationalReportsService.class);
         backupService = context.getBean(DatabaseBackupService.class);
         csvService = context.getBean(InventoryCsvService.class);
-        Label brand = new Label("MECHMOTOR 1.0");
+        Label brand = new Label("MECHMOTOR");
         brand.getStyleClass().add("brand");
-        Label subtitle = new Label("Vehicle parts • Inventory workspace");
+        Label subtitle = new Label("Vehicle parts • Simple offline workspace");
         Label licenseStatusLabel = new Label("License: checking…");
         licenseStatusLabel.getStyleClass().add("license-status");
         Button activationButton = new Button("Activation…");
@@ -92,13 +92,16 @@ public class MechMotorApplication extends Application {
         Label lowStockValue = new Label("—"); lowStockValue.getStyleClass().add("metric-value");
         Label outOfStockValue = new Label("—"); outOfStockValue.getStyleClass().add("metric-value");
         Label retailValue = new Label("—"); retailValue.getStyleClass().add("metric-value");
-        HBox dashboard = new HBox(12,
+        FlowPane dashboard = new FlowPane(12, 12,
                 metricCard("Active parts", activePartsValue),
                 metricCard("Units on hand", totalUnitsValue),
                 metricCard("Low-stock parts", lowStockValue),
                 metricCard("Out of stock", outOfStockValue),
                 metricCard("Retail value (est.)", retailValue));
-        dashboard.setPadding(new Insets(0, 20, 8, 20));
+        dashboard.setAlignment(Pos.CENTER_LEFT);
+        dashboard.setPrefWrapLength(1200);
+        dashboard.setPadding(new Insets(12, 16, 4, 16));
+        dashboard.getStyleClass().add("dashboard");
 
         TextField query = new TextField();
         query.setPromptText("Search SKU, barcode, brand, material, color, category, supplier or vehicle make/model/engine");
@@ -646,37 +649,99 @@ public class MechMotorApplication extends Application {
                     error -> showError("Could not load supplier", error));
         });
 
-        GridPane filters = new GridPane();
-        filters.setHgap(8); filters.setVgap(8); filters.setPadding(new Insets(12, 20, 12, 20));
-        filters.add(query, 0, 0, 4, 1); filters.add(searchButton, 4, 0); filters.add(clearButton, 5, 0);
-        filters.add(brandFilter, 0, 1); filters.add(materialFilter, 1, 1); filters.add(colorFilter, 2, 1);
-        filters.add(categoryFilter, 3, 1); filters.add(supplierFilter, 4, 1); filters.add(stockFilter, 5, 1);
-        filters.add(minQty, 0, 2); filters.add(maxQty, 1, 2); filters.add(minPrice, 2, 2);
-        filters.add(maxPrice, 3, 2); filters.add(new Label("Sort:"), 4, 2); filters.add(sort, 5, 2);
-        filters.add(new Label("Saved view:"), 0, 3);
-        filters.add(savedViewSelector, 1, 3, 2, 1);
-        filters.add(savedViewsMenu, 3, 3, 3, 1);
-        GridPane.setHgrow(savedViewSelector, Priority.ALWAYS);
-        GridPane.setHgrow(savedViewsMenu, Priority.ALWAYS);
-        for (int i = 0; i < 6; i++) GridPane.setHgrow(filters.getChildren().get(i), Priority.ALWAYS);
+        HBox searchRow = new HBox(8, query, searchButton, clearButton);
+        searchRow.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(query, Priority.ALWAYS);
+
+        FlowPane filterFields = new FlowPane(8, 8,
+                brandFilter, materialFilter, colorFilter, categoryFilter, supplierFilter, stockFilter,
+                minQty, maxQty, minPrice, maxPrice, new Label("Sort:"), sort);
+        filterFields.setAlignment(Pos.CENTER_LEFT);
+        filterFields.setPrefWrapLength(1180);
+
+        HBox savedViewsRow = new HBox(8, new Label("Saved view:"), savedViewSelector, savedViewsMenu);
+        savedViewsRow.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(savedViewSelector, Priority.ALWAYS);
+
+        VBox filters = new VBox(10, searchRow, filterFields, savedViewsRow);
+        filters.setPadding(new Insets(12, 16, 12, 16));
+        filters.getStyleClass().add("control-panel");
+
         shopSettingsButton.setOnAction(e -> showShopProfileDialog(stage));
-        FlowPane actions = new FlowPane(8, 8, shopSettingsButton, addButton, editButton, deactivateButton, sellButton,
-                voidSaleButton, returnsButton, invoiceButton, salesHistoryButton, receiveStockButton, receiveMultiStockButton, purchaseHistoryButton, purchaseOrdersButton, supplierPaymentsButton, supplierReturnsButton, fitmentButton, reportsButton,
+
+        addButton.getStyleClass().add("primary-action");
+        sellButton.getStyleClass().add("primary-action");
+        receiveStockButton.getStyleClass().add("primary-action");
+        searchButton.getStyleClass().add("primary-action");
+        activationButton.getStyleClass().add("outline-action");
+
+        HBox primaryActions = new HBox(8, addButton, editButton, sellButton, receiveStockButton,
+                salesHistoryButton, reportsButton);
+        primaryActions.setAlignment(Pos.CENTER_LEFT);
+        primaryActions.setPadding(new Insets(8, 16, 4, 16));
+        primaryActions.getStyleClass().add("quick-actions");
+
+        FlowPane secondaryActions = new FlowPane(8, 8,
+                deactivateButton, voidSaleButton, returnsButton, invoiceButton,
+                receiveMultiStockButton, purchaseHistoryButton, purchaseOrdersButton,
+                supplierPaymentsButton, supplierReturnsButton, fitmentButton,
                 categoryMenu, supplierMenu, backupButton, restoreButton, csvMenu,
-                previousButton, nextButton, pageLabel);
-        actions.setAlignment(Pos.CENTER_LEFT);
-        actions.setPrefWrapLength(1320);
-        actions.setPadding(new Insets(8, 20, 8, 20));
-        header.setPadding(new Insets(20)); header.getStyleClass().add("header");
-        VBox root = new VBox(0, header, dashboard, filters, actions, table, status);
-        VBox.setVgrow(table, Priority.ALWAYS);
-        status.setPadding(new Insets(12, 20, 12, 20));
-        Scene scene = new Scene(root, 1380, 820);
+                shopSettingsButton, previousButton, nextButton, pageLabel);
+        secondaryActions.setAlignment(Pos.CENTER_LEFT);
+        secondaryActions.setPrefWrapLength(1180);
+        secondaryActions.setPadding(new Insets(10));
+        secondaryActions.getStyleClass().add("secondary-actions");
+
+        TitledPane moreActions = new TitledPane("More actions", secondaryActions);
+        moreActions.setExpanded(false);
+        moreActions.setAnimated(false);
+        moreActions.setCollapsible(true);
+        moreActions.setPadding(new Insets(0, 16, 8, 16));
+
+        VBox topControls = new VBox(6, dashboard, filters, primaryActions, moreActions);
+        topControls.getStyleClass().add("top-controls");
+
+        ScrollPane controlsScroll = new ScrollPane(topControls);
+        controlsScroll.setFitToWidth(true);
+        controlsScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        controlsScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        controlsScroll.setPannable(true);
+        controlsScroll.getStyleClass().add("controls-scroll");
+
+        header.setPadding(new Insets(14, 16, 14, 16));
+        header.getStyleClass().add("header");
+
+        table.setMinHeight(220);
+        table.getStyleClass().add("inventory-table");
+        status.setPadding(new Insets(10, 16, 10, 16));
+
+        BorderPane workspace = new BorderPane();
+        workspace.setTop(controlsScroll);
+        workspace.setCenter(table);
+        workspace.setBottom(status);
+
+        BorderPane appContent = new BorderPane();
+        appContent.setTop(header);
+        appContent.setCenter(workspace);
+        appContent.getStyleClass().add("app-content");
+
+        StackPane root = new StackPane(appContent);
+        root.setPadding(new Insets(4));
+        root.getStyleClass().add("app-shell");
+
+        Scene scene = new Scene(root, 1280, 760);
+        controlsScroll.maxHeightProperty().bind(scene.heightProperty().multiply(0.48));
         var css = getClass().getResource("/styles/app.css");
         if (css != null) scene.getStylesheets().add(css.toExternalForm());
-        stage.setTitle("MechMotor 1.0 — Vehicle Parts Shop");
-        stage.setMinWidth(1000); stage.setMinHeight(650); stage.setScene(scene);
+
+        stage.setTitle("MechMotor — Vehicle Parts Shop");
+        stage.setMinWidth(900);
+        stage.setMinHeight(600);
+        stage.setResizable(true);
+        stage.setScene(scene);
         stage.show();
+        stage.setMaximized(true);
+
         LicenseStatus currentLicense = licenseService.status();
         updateLicenseLabel(currentLicense, licenseStatusLabel);
         if (!currentLicense.active() && !showActivationDialog(stage, true, licenseStatusLabel)) {

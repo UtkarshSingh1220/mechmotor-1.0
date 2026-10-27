@@ -8,6 +8,7 @@ on:
       - 'src/**'
       - 'tools/**'
       - 'README.md'
+      - 'installer/**'
       - '.github/workflows/windows-package.yml'
   push:
     branches: [main]
@@ -18,6 +19,7 @@ on:
       - 'src/**'
       - 'tools/**'
       - 'README.md'
+      - 'installer/**'
       - '.github/workflows/windows-package.yml'
   workflow_dispatch:
 
@@ -180,8 +182,8 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force target/packages/exe, target/packages/msi | Out-Null
-          jpackage --type exe --name MechMotor --app-version $env:APP_VERSION --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls" --runtime-image target/runtime --dest target/packages/exe --win-menu --win-shortcut --win-upgrade-uuid "5a89bc09-8542-4143-8aef-5db0148356e5"
-          jpackage --type msi --name MechMotor --app-version $env:APP_VERSION --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls" --runtime-image target/runtime --dest target/packages/msi --win-menu --win-shortcut --win-upgrade-uuid "5a89bc09-8542-4143-8aef-5db0148356e5"
+          jpackage --type exe --name MechMotor --app-version $env:APP_VERSION --vendor "MechMotor" --description "Offline vehicle parts shop management" --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls" --runtime-image target/runtime --dest target/packages/exe --license-file installer/MechMotor-EULA.txt --win-menu --win-shortcut --win-dir-chooser --win-shortcut-prompt --win-upgrade-uuid "5a89bc09-8542-4143-8aef-5db0148356e5"
+          jpackage --type msi --name MechMotor --app-version $env:APP_VERSION --vendor "MechMotor" --description "Offline vehicle parts shop management" --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls" --runtime-image target/runtime --dest target/packages/msi --license-file installer/MechMotor-EULA.txt --win-menu --win-shortcut --win-dir-chooser --win-shortcut-prompt --win-upgrade-uuid "5a89bc09-8542-4143-8aef-5db0148356e5"
           if (-not (Test-Path "target/packages/exe/MechMotor-$env:APP_VERSION.exe")) {
             throw "jpackage did not produce the expected EXE installer."
           }
@@ -198,7 +200,10 @@ jobs:
         run: |
           if ([string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERT_BASE64) -or
               [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERT_PASSWORD)) {
-            Write-Warning "Windows signing secrets are not configured; installers will remain unsigned."
+            if ($env:GITHUB_REF -like "refs/tags/v*") {
+              throw "Release builds must be Authenticode-signed. Configure WINDOWS_SIGNING_CERT_BASE64 and WINDOWS_SIGNING_CERT_PASSWORD before publishing a release."
+            }
+            Write-Warning "Signing certificate is not configured. This CI artifact is for testing only and may trigger Windows SmartScreen."
             exit 0
           }
 
@@ -345,7 +350,7 @@ jobs:
           if (-not $uninstallText) {
             throw "MechMotor uninstall command was not registered."
           }
-          if ($uninstallText -match '(?i)msiexec(?:\.exe)?\s+.*?(/i|/package)\s*(\{[0-9A-F-]+\})') {
+          if ($uninstallText -match '(?i)msiexec(?:\.exe)?\s+.*?(/x|/i|/package)\s*(\{[0-9A-F-]+\})') {
             $productCode = $Matches[2]
             $uninstall = Start-Process -FilePath "msiexec.exe" -ArgumentList @("/x", $productCode, "/qn", "/norestart") -Wait -PassThru
           } else {
