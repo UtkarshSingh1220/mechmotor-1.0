@@ -1,0 +1,35 @@
+MECHMOTOR SOFTWARE LICENSE AGREEMENT
+
+IMPORTANT: PLEASE READ BEFORE INSTALLING.
+
+By selecting "I accept", continuing the installation, or using MechMotor, you agree to this Software License Agreement.
+
+1. LICENSE
+MechMotor grants the licensed customer a non-transferable right to install and use the software for the customer's vehicle-parts business, subject to a valid activation license.
+
+2. ACTIVATION
+Some or all application features require a valid MechMotor activation token. Activation tokens may include an expiry date and enabled feature set. Activation material may not be altered, forged, resold, or redistributed.
+
+3. OWNERSHIP
+The MechMotor application, source code, branding, and related intellectual property remain the property of their respective owner. Customer business data created in the application remains the customer's data.
+
+4. BACKUPS AND BUSINESS DATA
+MechMotor is an offline-first desktop application. The customer is responsible for maintaining appropriate database backups and verifying restored data before relying on it for business operations.
+
+5. RESTRICTIONS
+You may not intentionally bypass activation controls, reverse engineer the software except where applicable law expressly permits it, redistribute private license-issuer keys, or distribute modified installers as official MechMotor releases without authorization.
+
+6. UPDATES
+Updates may change application behavior, database schema, security controls, or activation requirements. Back up business data before applying an update.
+
+7. DISCLAIMER
+The software is provided without a guarantee that it will be uninterrupted or error-free. To the maximum extent permitted by applicable law, the software owner is not liable for indirect, incidental, or consequential losses arising from use of the software.
+
+8. TERMINATION
+This license ends if these terms are materially violated. On termination, use of the software must stop, while customer-owned business data may be retained subject to applicable law.
+
+9. ACCEPTANCE
+If you do not accept these terms, cancel the installation and do not install or use MechMotor.
+
+MechMotor
+Version 1.0.4
