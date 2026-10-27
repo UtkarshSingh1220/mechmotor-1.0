@@ -77,6 +77,28 @@ jobs:
           & "target/runtime/bin/java.exe" -version
           if ($LASTEXITCODE -ne 0) { throw "The generated runtime cannot execute Java." }
 
+      - name: Smoke-test Java application startup directly
+        shell: pwsh
+        run: |
+          $logDir = "target/launch-logs"
+          New-Item -ItemType Directory -Force $logDir | Out-Null
+          $stdout = Join-Path $logDir "direct-java.stdout.log"
+          $stderr = Join-Path $logDir "direct-java.stderr.log"
+          $runtimeJava = (Resolve-Path "target/runtime/bin/java.exe").Path
+
+          $process = Start-Process -FilePath $runtimeJava -ArgumentList @("--add-modules=javafx.controls", "-cp", "target/dist/*", "com.mechmotor.DesktopLauncher") -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+
+          Start-Sleep -Seconds 15
+          $process.Refresh()
+          if ($process.HasExited) {
+            Write-Host "Direct JVM stdout:"
+            if (Test-Path $stdout) { Get-Content $stdout }
+            Write-Host "Direct JVM stderr:"
+            if (Test-Path $stderr) { Get-Content $stderr }
+            throw "MechMotor JVM application exited during startup smoke test (exit code $($process.ExitCode))."
+          }
+
+          Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
       - name: Build Windows app image
         shell: pwsh
         run: |
