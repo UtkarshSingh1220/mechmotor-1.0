@@ -38,7 +38,7 @@ public class GmailReportService {
         String challenge=Base64.getUrlEncoder().withoutPadding()
                 .encodeToString(MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.US_ASCII)));
         String state=Base64.getUrlEncoder().withoutPadding().encodeToString(nonce);
-        try(ServerSocket server=new ServerSocket(0,1,InetAddress.getLoopbackAddress())) {
+        try(ServerSocket server=new ServerSocket(0,1,InetAddress.getByName("127.0.0.1"))) {
             server.setSoTimeout(180000);
             int port=server.getLocalPort();
             String redirect="http://127.0.0.1:"+port+"/oauth/callback";
