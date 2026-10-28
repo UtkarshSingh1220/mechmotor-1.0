@@ -104,7 +104,7 @@ jobs:
           }
           $modulePath = @("$env:JAVA_HOME\jmods") + $javafxJars
           $modulePathArg = $modulePath -join ";"
-          jlink --module-path $modulePathArg --add-modules java.se,javafx.controls,jdk.crypto.ec --strip-debug --no-man-pages --no-header-files --compress=2 --output target/runtime
+          jlink --module-path $modulePathArg --add-modules java.se,javafx.controls,jdk.crypto.ec,jdk.httpserver --strip-debug --no-man-pages --no-header-files --compress=2 --output target/runtime
           if ($LASTEXITCODE -ne 0) { throw "jlink failed to build the trimmed JavaFX runtime." }
           if (-not (Test-Path "target/runtime/bin/java.exe")) {
             throw "jlink did not produce target/runtime/bin/java.exe."
@@ -121,7 +121,7 @@ jobs:
           $stderr = Join-Path $logDir "direct-java.stderr.log"
           $runtimeJava = (Resolve-Path "target/runtime/bin/java.exe").Path
 
-          $process = Start-Process -FilePath $runtimeJava -ArgumentList @("--add-modules=javafx.controls", "-cp", "target/dist/*", "com.mechmotor.DesktopLauncher") -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          $process = Start-Process -FilePath $runtimeJava -ArgumentList @("--add-modules=javafx.controls,jdk.httpserver", "-cp", "target/dist/*", "com.mechmotor.DesktopLauncher") -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
 
           Start-Sleep -Seconds 15
           $process.Refresh()
@@ -137,7 +137,7 @@ jobs:
       - name: Build Windows app image
         shell: pwsh
         run: |
-          jpackage --type app-image --name MechMotor --icon installer/mechmotor.ico --app-version $env:APP_VERSION --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls" --runtime-image target/runtime --dest target/installer
+          jpackage --type app-image --name MechMotor --icon installer/mechmotor.ico --app-version $env:APP_VERSION --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls,jdk.httpserver" --runtime-image target/runtime --dest target/installer
           $launcher = "target/installer/MechMotor/MechMotor.exe"
           if (-not (Test-Path $launcher)) {
             throw "jpackage did not produce the expected MechMotor.exe launcher."
@@ -215,8 +215,8 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force target/packages/exe, target/packages/msi | Out-Null
-          jpackage --type exe --name MechMotor --icon installer/mechmotor.ico --app-version $env:APP_VERSION --vendor "MechMotor" --description "Offline vehicle parts shop management" --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls" --runtime-image target/runtime --dest target/packages/exe --license-file installer/MechMotor-EULA.txt --win-menu --win-shortcut --win-dir-chooser --win-shortcut-prompt --win-upgrade-uuid "5a89bc09-8542-4143-8aef-5db0148356e5"
-          jpackage --type msi --name MechMotor --icon installer/mechmotor.ico --app-version $env:APP_VERSION --vendor "MechMotor" --description "Offline vehicle parts shop management" --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls" --runtime-image target/runtime --dest target/packages/msi --license-file installer/MechMotor-EULA.txt --win-menu --win-shortcut --win-dir-chooser --win-shortcut-prompt --win-upgrade-uuid "5a89bc09-8542-4143-8aef-5db0148356e5"
+          jpackage --type exe --name MechMotor --icon installer/mechmotor.ico --app-version $env:APP_VERSION --vendor "MechMotor" --description "Offline vehicle parts shop management" --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls,jdk.httpserver" --runtime-image target/runtime --dest target/packages/exe --license-file installer/MechMotor-EULA.txt --win-menu --win-shortcut --win-dir-chooser --win-shortcut-prompt --win-upgrade-uuid "5a89bc09-8542-4143-8aef-5db0148356e5"
+          jpackage --type msi --name MechMotor --icon installer/mechmotor.ico --app-version $env:APP_VERSION --vendor "MechMotor" --description "Offline vehicle parts shop management" --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls,jdk.httpserver" --runtime-image target/runtime --dest target/packages/msi --license-file installer/MechMotor-EULA.txt --win-menu --win-shortcut --win-dir-chooser --win-shortcut-prompt --win-upgrade-uuid "5a89bc09-8542-4143-8aef-5db0148356e5"
           if (-not (Test-Path "target/packages/exe/MechMotor-$env:APP_VERSION.exe")) {
             throw "jpackage did not produce the expected EXE installer."
           }
