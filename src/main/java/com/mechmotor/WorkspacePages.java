@@ -125,7 +125,7 @@ public final class WorkspacePages {
                     "Returns / Refunds", "returns");
         } else if ("Reports".equals(page)) {
             tabRow(surface, List.of("Overview", "Inventory Reports", "Order Reports", "Supplier Reports"),
-                    actions, "Generate Report", "reports");
+                    actions, "Generate Report", "emailReports");
             TableView<String> grid = new TableView<>();
             grid.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
             grid.getColumns().add(column("Report Type", x -> x));
@@ -136,11 +136,11 @@ public final class WorkspacePages {
                     + "Reports are generated on demand; no fictitious history is shown.", "detail-muted");
             caption.setWrapText(true);
             surface.getChildren().add(caption);
-            rowActions(surface, actions, "Generate Report", "reports",
+            rowActions(surface, actions, "Generate Report & Send Email", "emailReports",
                     "Export Inventory CSV", "export", "Backup Database", "backup");
         } else if ("Settings".equals(page)) {
-            tabRow(surface, List.of("General", "Licensing", "Security & Backup"), actions,
-                    "Shop Profile", "shopProfile");
+            tabRow(surface, List.of("General", "Users & Roles", "Notifications", "Security"), actions,
+                    "Manage Users", "users");
             GridPane settings = new GridPane();
             settings.setHgap(24);
             settings.setVgap(18);
@@ -149,13 +149,19 @@ public final class WorkspacePages {
             settings.addRow(1, label("Currency: INR (₹)", "detail-name"),
                     label("Activation controls licensed features", "detail-muted"));
             settings.addRow(2, label("Time zone: Asia/Kolkata", "detail-name"),
-                    label("Account roles and 2FA are not implemented", "detail-muted"));
+                    label("Directory roles do not grant sign-in access", "detail-muted"));
             settings.addRow(3, action("Edit Shop Profile / Tax", actions.get("shopProfile")),
                     action("View Activation", actions.get("activation")));
             settings.addRow(4, label("Security & Backup", "details-heading"),
                     label("Data Management", "details-heading"));
             settings.addRow(5, action("Backup Database", actions.get("backup")),
                     action("Restore Backup", actions.get("restore")));
+            settings.addRow(6, label("Email & Google Account", "details-heading"),
+                    label("User Directory", "details-heading"));
+            settings.addRow(7, action("Connect Gmail / Set Default Email", actions.get("gmail")),
+                    action("Add / Update / Deactivate Users", actions.get("users")));
+            settings.addRow(8, action("Generate & Email Reports", actions.get("emailReports")),
+                    label("Google OAuth required to send report emails", "detail-muted"));
             surface.getChildren().add(settings);
         }
         VBox quick = new VBox(10);
@@ -166,11 +172,12 @@ public final class WorkspacePages {
                 "Inventory", "inventory");
         else if ("Suppliers".equals(page)) rowActions(quick, actions, "Add Supplier", "addSupplier",
                 "Purchase Orders", "purchaseOrders");
-        else if ("Reports".equals(page)) rowActions(quick, actions, "View Reports", "reports",
+        else if ("Reports".equals(page)) rowActions(quick, actions, "Generate / Email Report", "emailReports",
                 "Export CSV", "export");
         else if ("Orders".equals(page)) rowActions(quick, actions, "New Purchase Order", "purchaseOrders",
                 "View Sales", "salesHistory");
-        else rowActions(quick, actions, "Shop Settings", "shopProfile",
+        else rowActions(quick, actions, "Manage Users", "users",
+                "Connect Gmail", "gmail", "Shop Settings", "shopProfile",
                 "Back Up Now", "backup");
         root.getChildren().add(quick);
         return root;
