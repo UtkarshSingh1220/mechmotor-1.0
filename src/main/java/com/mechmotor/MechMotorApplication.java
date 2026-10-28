@@ -54,6 +54,11 @@ public class MechMotorApplication extends Application {
         thread.setDaemon(true);
         return thread;
     });
+    private final ExecutorService gmailExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread thread = new Thread(r, "mechmotor-gmail");
+        thread.setDaemon(true);
+        return thread;
+    });
     private InventoryService inventory;
     private DatabaseBackupService backupService;
     private InventoryCsvService csvService;
@@ -929,8 +934,8 @@ public class MechMotorApplication extends Application {
         pageActions.put("shopProfile", () -> shopSettingsButton.fire());
         pageActions.put("activation", () -> activationButton.fire());
         pageActions.put("users", () -> WorkspaceAdministration.users(stage,userService,databaseExecutor));
-        pageActions.put("gmail", () -> WorkspaceAdministration.gmailSettings(stage,userService,gmailService,databaseExecutor));
-        pageActions.put("emailReports", () -> WorkspaceAdministration.reports(stage,reportsService,userService,gmailService,databaseExecutor));
+        pageActions.put("gmail", () -> WorkspaceAdministration.gmailSettings(stage,userService,gmailService,gmailExecutor));
+        pageActions.put("emailReports", () -> WorkspaceAdministration.reports(stage,reportsService,userService,gmailService,gmailExecutor));
 
 
         java.util.function.Consumer<String> navigate = destination -> {
@@ -2778,6 +2783,7 @@ public class MechMotorApplication extends Application {
 
     @Override public void stop() {
         databaseExecutor.shutdownNow();
+        gmailExecutor.shutdownNow();
         if (context != null) context.close();
         Platform.exit();
     }
