@@ -32,4 +32,4 @@ This license ends if these terms are materially violated. On termination, use of
 If you do not accept these terms, cancel the installation and do not install or use MechMotor.
 
 MechMotor
-Version 1.0.4
+Version 1.0.5
