@@ -1,7 +1,7 @@
 name: Java CI
 on:
   push:
-    branches: [main]
+    branches: [main, branding/mechmotor-custom-icon]
   pull_request:
     branches: [main]
   workflow_dispatch:
