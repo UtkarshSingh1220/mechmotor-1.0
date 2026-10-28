@@ -11,6 +11,8 @@ import com.mechmotor.service.PurchasingService;
 import com.mechmotor.service.InvoiceService;
 import com.mechmotor.service.ShopProfileService;
 import com.mechmotor.service.OperationalReportsService;
+import com.mechmotor.service.WorkspaceUserService;
+import com.mechmotor.service.GmailReportService;
 import com.mechmotor.domain.SupplierDetails;
 import com.mechmotor.domain.SupplierDraft;
 import javafx.application.Application;
@@ -61,6 +63,8 @@ public class MechMotorApplication extends Application {
     private InvoiceService invoiceService;
     private ShopProfileService shopProfileService;
     private OperationalReportsService reportsService;
+    private WorkspaceUserService userService;
+    private GmailReportService gmailService;
     private final List<LookupOption> noOptions = List.of();
     private List<LookupOption> categories = noOptions;
     private List<LookupOption> suppliers = noOptions;
@@ -89,6 +93,8 @@ public class MechMotorApplication extends Application {
         invoiceService = context.getBean(InvoiceService.class);
         shopProfileService = context.getBean(ShopProfileService.class);
         reportsService = context.getBean(OperationalReportsService.class);
+        userService = context.getBean(WorkspaceUserService.class);
+        gmailService = context.getBean(GmailReportService.class);
         backupService = context.getBean(DatabaseBackupService.class);
         csvService = context.getBean(InventoryCsvService.class);
         Label brand = new Label("MECHMOTOR");
@@ -922,6 +928,10 @@ public class MechMotorApplication extends Application {
         pageActions.put("restore", () -> restoreButton.fire());
         pageActions.put("shopProfile", () -> shopSettingsButton.fire());
         pageActions.put("activation", () -> activationButton.fire());
+        pageActions.put("users", () -> WorkspaceAdministration.users(stage,userService,databaseExecutor));
+        pageActions.put("gmail", () -> WorkspaceAdministration.gmailSettings(stage,userService,gmailService,databaseExecutor));
+        pageActions.put("emailReports", () -> WorkspaceAdministration.reports(stage,reportsService,userService,gmailService,databaseExecutor));
+
 
         java.util.function.Consumer<String> navigate = destination -> {
             for (Button button : List.of(navDashboard, navInventory, navOrders, navSuppliers,
