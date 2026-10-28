@@ -835,7 +835,7 @@ public class MechMotorApplication extends Application {
             detailCategory.setText("Category: " + selected.category());
             detailBrand.setText("Brand: " + selected.brand());
             detailQty.setText("Stock Quantity: " + selected.quantity());
-            detailPrice.setText("Unit Price: ₹" + rupees(selected.sellingPrice()));
+            detailPrice.setText("Unit Price: ₹" + rupees(selected.sellingPricePaise()));
             detailSupplier.setText("Supplier: " + selected.supplier());
         });
 
@@ -903,6 +903,7 @@ public class MechMotorApplication extends Application {
         ScrollPane mainScroll = new ScrollPane(mainPage);
         mainScroll.setFitToWidth(true);
         mainScroll.getStyleClass().add("main-scroll");
+        navDashboard.setOnAction(e -> mainScroll.setVvalue(0));
         BorderPane center = new BorderPane();
         center.setTop(topBar);
         center.setCenter(mainScroll);
