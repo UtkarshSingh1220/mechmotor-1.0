@@ -103,7 +103,7 @@ public class WindowsDatabaseLifecycle {
                 require("ADJUSTMENT".equals(row.getString("movement_type")), "Legacy movement type was not normalized.");
             }
             try (ResultSet row = statement.executeQuery("SELECT MAX(version) FROM schema_version")) {
-                if (!row.next() || row.getInt(1) != 9) throw new IllegalStateException("Database did not reach schema version 9.");
+                if (!row.next() || row.getInt(1) != 10) throw new IllegalStateException("Database did not reach schema version 10.");
             }
             try (ResultSet row = statement.executeQuery("PRAGMA foreign_key_check")) {
                 if (row.next()) throw new IllegalStateException("Upgrade left a broken foreign-key relationship.");

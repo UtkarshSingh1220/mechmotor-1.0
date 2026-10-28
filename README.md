@@ -509,3 +509,46 @@ Never commit API keys, OAuth tokens, license issuer private keys, production act
 ## Operational reports
 
 Choose **Operational reports…** in the inventory workspace to export a date-bounded CSV for sales, supplier receipts, or stock-ledger movements. Dates are inclusive, the maximum range is 366 days, exports run off the JavaFX Application Thread, and existing destination files are not overwritten. Report exports require the CSV license feature. These exports are operational records, not tax/accounting-certified statements; recorded payment amounts do not confirm external settlement.
+
+
+## User directory and Gmail report delivery (experimental branch)
+
+The desktop **Settings → Manage Users** screen supports creating, editing and deactivating
+user directory records (name, email, role label). Deactivation is a soft delete and retains
+the row for audit/history. These directory roles **do not implement login or enforce permissions**:
+the app remains a single-PC desktop application. No user passwords are collected or stored.
+
+**Settings → Connect Gmail / Set Default Email** configures the default report recipient
+in the local SQLite `app_preferences` table. To authorize outbound Gmail from MechMotor:
+
+1. In Google Cloud Console, configure the OAuth consent screen with the Gmail send
+   permission `https://www.googleapis.com/auth/gmail.send`. Add allowed test users if the
+   app is still in testing.
+2. Create an OAuth client of type **Desktop app** (not Web Application).
+3. Set the `MECHMOTOR_GOOGLE_CLIENT_ID` environment variable for the MechMotor process
+   to that client's public client ID. Do not store OAuth client secrets in the repository.
+4. Restart the desktop application, open Settings, and click **Connect Google Account**.
+   Sign in and authorize in the browser. Authorization uses loopback redirect, random state,
+   and PKCE. Access tokens are held only in memory and are not saved to disk; connect
+   again after restarting or when the access token expires. An internet connection is
+   required. The configured account is the sender; the default email is a recipient.
+
+The **Reports → Generate Report** button writes an operational CSV file to a chosen location
+without overwriting an existing file. **Send Mail** generates a new CSV and attaches it to
+a Gmail API message. The recipient textbox and checkbox behave as follows:
+
+| Recipient field | Send to both checked | Email destination |
+|---|---|---|
+| Empty | Either | Configured default recipient |
+| Filled | No | Entered recipient only |
+| Filled | Yes | Entered recipient plus default (deduplicated) |
+
+When a required default is missing, the application blocks sending with a validation error.
+The app confirms recipients before sending, runs export/network operations outside the
+JavaFX thread, and deletes the temporary attachment after the attempt. Gmail sends can
+fail due to connectivity, consent-screen, API configuration, account policy or quota. Gmail
+authorization is **not** an application login or an RBAC system. There is no automatic
+email scheduler, durable outbound queue, send retry or multi-user security model yet.
+
+This branch requires Windows UI testing, Google OAuth consent testing and Maven test/packaging
+verification before being merged or advertised as production ready.
