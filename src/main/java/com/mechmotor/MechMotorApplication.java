@@ -40,6 +40,7 @@ import org.springframework.context.ConfigurableApplicationContext;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -903,7 +904,73 @@ public class MechMotorApplication extends Application {
         ScrollPane mainScroll = new ScrollPane(mainPage);
         mainScroll.setFitToWidth(true);
         mainScroll.getStyleClass().add("main-scroll");
-        navDashboard.setOnAction(e -> mainScroll.setVvalue(0));
+        Map<String, Runnable> pageActions = new java.util.HashMap<>();
+        pageActions.put("inventory", () -> { mainScroll.setContent(mainPage); mainScroll.setVvalue(0); });
+        pageActions.put("addSupplier", () -> addSupplierItem.fire());
+        pageActions.put("editSupplier", () -> editSupplierItem.fire());
+        pageActions.put("payments", () -> supplierPaymentsButton.fire());
+        pageActions.put("addCategory", () -> addCategoryItem.fire());
+        pageActions.put("renameCategory", () -> renameCategoryItem.fire());
+        pageActions.put("deactivateCategory", () -> deactivateCategoryItem.fire());
+        pageActions.put("purchaseOrders", () -> purchaseOrdersButton.fire());
+        pageActions.put("salesHistory", () -> salesHistoryButton.fire());
+        pageActions.put("receiveStock", () -> receiveMultiStockButton.fire());
+        pageActions.put("returns", () -> returnsButton.fire());
+        pageActions.put("reports", () -> reportsButton.fire());
+        pageActions.put("export", () -> exportCsvItem.fire());
+        pageActions.put("backup", () -> backupButton.fire());
+        pageActions.put("restore", () -> restoreButton.fire());
+        pageActions.put("shopProfile", () -> shopSettingsButton.fire());
+        pageActions.put("activation", () -> activationButton.fire());
+
+        java.util.function.Consumer<String> navigate = destination -> {
+            for (Button button : List.of(navDashboard, navInventory, navOrders, navSuppliers,
+                    navCategories, navReports, navSettings))
+                button.getStyleClass().remove("nav-selected");
+            Button current = switch (destination) {
+                case "Inventory" -> navInventory;
+                case "Orders" -> navOrders;
+                case "Suppliers" -> navSuppliers;
+                case "Categories" -> navCategories;
+                case "Reports" -> navReports;
+                case "Settings" -> navSettings;
+                default -> navDashboard;
+            };
+            current.getStyleClass().add("nav-selected");
+            if ("Dashboard".equals(destination) || "Inventory".equals(destination)) {
+                mainScroll.setContent(mainPage);
+                mainScroll.setVvalue(0);
+                if ("Inventory".equals(destination)) table.requestFocus();
+                return;
+            }
+            if ("Suppliers".equals(destination)) {
+                runBackground(() -> inventory.supplierDetails(),
+                    data -> {
+                        mainScroll.setContent(WorkspacePages.create(destination, categories, data, pageActions));
+                        mainScroll.setVvalue(0);
+                    },
+                    error -> showError("Could not load suppliers", error));
+            } else if ("Categories".equals(destination)) {
+                runBackground(() -> inventory.categories(),
+                    data -> {
+                        categories = data;
+                        mainScroll.setContent(WorkspacePages.create(destination, data, List.of(), pageActions));
+                        mainScroll.setVvalue(0);
+                    },
+                    error -> showError("Could not load categories", error));
+            } else {
+                mainScroll.setContent(WorkspacePages.create(destination, categories, List.of(), pageActions));
+                mainScroll.setVvalue(0);
+            }
+        };
+        navDashboard.setOnAction(e -> navigate.accept("Dashboard"));
+        navInventory.setOnAction(e -> navigate.accept("Inventory"));
+        navOrders.setOnAction(e -> navigate.accept("Orders"));
+        navSuppliers.setOnAction(e -> navigate.accept("Suppliers"));
+        navCategories.setOnAction(e -> navigate.accept("Categories"));
+        navReports.setOnAction(e -> navigate.accept("Reports"));
+        navSettings.setOnAction(e -> navigate.accept("Settings"));
+
         BorderPane center = new BorderPane();
         center.setTop(topBar);
         center.setCenter(mainScroll);
