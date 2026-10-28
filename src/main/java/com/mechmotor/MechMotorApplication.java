@@ -25,9 +25,6 @@ import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.Node;
 import javafx.scene.image.Image;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
@@ -80,17 +77,11 @@ public class MechMotorApplication extends Application {
     }
 
     @Override public void start(Stage stage) {
-        // Use the same MechMotor brand image for the JavaFX window and taskbar.
-        try (InputStream logo = MechMotorApplication.class.getResourceAsStream("/icons/mechmotor.png.b64")) {
-            if (logo == null) {
-                throw new IllegalStateException("MechMotor logo resource is missing");
-            }
-            byte[] png = Base64.getMimeDecoder().decode(
-                    new String(logo.readAllBytes(), StandardCharsets.US_ASCII));
-            stage.getIcons().add(new Image(new java.io.ByteArrayInputStream(png)));
-        } catch (java.io.IOException e) {
-            throw new IllegalStateException("Unable to load MechMotor logo", e);
+        var iconUrl = getClass().getResource("/icons/mechmotor.png");
+        if (iconUrl == null) {
+            throw new IllegalStateException("MechMotor application icon is missing from the runtime.");
         }
+        stage.getIcons().add(new Image(iconUrl.toExternalForm()));
         inventory = context.getBean(InventoryService.class);
         licenseService = context.getBean(LicenseService.class);
         salesService = context.getBean(SalesService.class);
