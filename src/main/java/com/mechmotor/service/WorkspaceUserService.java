@@ -39,6 +39,11 @@ public class WorkspaceUserService {
         if (jdbc.update("UPDATE app_users SET active=0,updated_at=CURRENT_TIMESTAMP WHERE id=? AND active=1",id)!=1)
             throw new IllegalArgumentException("Active user not found.");
     }
+    @Transactional
+    public void delete(long id) {
+        if (jdbc.update("DELETE FROM app_users WHERE id=?",id)!=1)
+            throw new IllegalArgumentException("User not found.");
+    }
     public String defaultRecipient() {
         return jdbc.query("SELECT value FROM app_preferences WHERE key='default_report_email'",
                 (rs,n)->rs.getString(1)).stream().findFirst().orElse("");
