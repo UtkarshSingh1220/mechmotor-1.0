@@ -178,12 +178,16 @@ public final class WorkspaceAdministration {
             if(confirmation.showAndWait().filter(ButtonType.OK::equals).isEmpty()) return;
             send.setDisable(true);status.setText("Generating and sending report...");
             background(executor,()->{
-                Path temp=Files.createTempFile("mechmotor-email-report-",".csv");
+                Path tempFolder=Files.createTempDirectory("mechmotor-email-report-");
+                Path csv=tempFolder.resolve("report.csv");
                 try {
-                    reports.export(type.getValue(),temp,from.getValue(),to.getValue());
-                    gmail.sendReport(targets,temp,type.getValue().name());
+                    reports.export(type.getValue(),csv,from.getValue(),to.getValue());
+                    gmail.sendReport(targets,csv,type.getValue().name());
                     return true;
-                }finally {Files.deleteIfExists(temp);}
+                }finally {
+                    Files.deleteIfExists(csv);
+                    Files.deleteIfExists(tempFolder);
+                }
             },ok->{send.setDisable(false);status.setText("Report sent to "+String.join(", ",targets));},
             error->{send.setDisable(false);status.setText("Send failed.");failure(owner,error);});
         });
