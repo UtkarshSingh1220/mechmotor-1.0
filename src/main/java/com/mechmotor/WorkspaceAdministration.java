@@ -128,18 +128,22 @@ public final class WorkspaceAdministration {
         ComboBox<OperationalReportsService.ReportType> type=new ComboBox<>(
                 FXCollections.observableArrayList(OperationalReportsService.ReportType.values()));
         type.setValue(OperationalReportsService.ReportType.SALES);
-        DatePicker from=new DatePicker(LocalDate.now().minusDays(30));
+        DatePicker from=new DatePicker(LocalDate.now());
         DatePicker to=new DatePicker(LocalDate.now());
+        CheckBox today=new CheckBox("Today (default)");
+        today.setSelected(true);
+        from.disableProperty().bind(today.selectedProperty());
+        to.disableProperty().bind(today.selectedProperty());
         TextField recipient=new TextField();
         recipient.setPromptText("Optional recipient email (otherwise use default)");
         CheckBox both=new CheckBox("Send to both entered email and default email");
         Label defaultLabel=new Label("Default recipient: loading...");
         Label connected=new Label(gmail.connected()?"Gmail connected":"Gmail not connected - connect in Settings");
         Label status=new Label("");
-        Button generate=new Button("Generate Report");
-        Button send=new Button("Send Mail");
+        Button generate=new Button("Generate & Download");
+        Button send=new Button("Generate & Send Mail");
         VBox layout=new VBox(12,new Label("Report type"),type,
-                new HBox(12,new Label("From"),from,new Label("To"),to),
+                new HBox(12,today,new Label("From"),from,new Label("To"),to),
                 new Separator(),new Label("Send report by Gmail"),connected,
                 defaultLabel,new Label("Recipient email"),recipient,both,
                 new HBox(12,generate,send),status);
@@ -151,7 +155,10 @@ public final class WorkspaceAdministration {
             defaultLabel.setText("Default recipient: "+(email.isBlank()?"Not configured":email));
         },error->failure(owner,error));
         generate.setOnAction(e->{
-            if(!validDates(owner,from.getValue(),to.getValue())) return;
+            LocalDate reportStart=today.isSelected()?LocalDate.now():from.getValue();
+            LocalDate reportEnd=today.isSelected()?LocalDate.now():to.getValue();
+            if(!validDates(owner,reportStart,reportEnd)) return;
+            if(both.isSelected() && !gmail.connected()) { failure(owner,new IllegalStateException("Connect Gmail in Settings to use both recipients."));return; }
             FileChooser chooser=new FileChooser();
             chooser.setTitle("Save MechMotor CSV report");
             chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("CSV","*.csv"));
@@ -159,13 +166,24 @@ public final class WorkspaceAdministration {
             var file=chooser.showSaveDialog(owner);
             if(file==null) return;
             Path destination=file.toPath();
+            OperationalReportsService.ReportType selectedType=type.getValue();
+            List<String> copyTargets;
+            try { copyTargets=both.isSelected()?recipients(defaultEmail[0],recipient.getText(),true):List.of(); }
+            catch(Exception exception){failure(owner,exception);return;}
             generate.setDisable(true);status.setText("Generating report...");
-            background(executor,()->reports.export(type.getValue(),destination,from.getValue(),to.getValue()),
-                    count->{generate.setDisable(false);status.setText("Generated "+count+" rows: "+destination.getFileName());},
+            background(executor,()->{
+                long count=reports.export(selectedType,destination,reportStart,reportEnd);
+                if(!copyTargets.isEmpty()) gmail.sendReport(copyTargets,destination,selectedType.name());
+                return count;
+            },count->{generate.setDisable(false);status.setText("Generated "+count+" rows: "+destination.getFileName()
+                    +(copyTargets.isEmpty()?"":" and sent to "+String.join(", ",copyTargets)));},
                     error->{generate.setDisable(false);failure(owner,error);status.setText("Generation failed.");});
         });
         send.setOnAction(e->{
-            if(!validDates(owner,from.getValue(),to.getValue()))return;
+            LocalDate reportStart=today.isSelected()?LocalDate.now():from.getValue();
+            LocalDate reportEnd=today.isSelected()?LocalDate.now():to.getValue();
+            if(!validDates(owner,reportStart,reportEnd))return;
+            OperationalReportsService.ReportType selectedType=type.getValue();
             List<String> targets;
             try {
                 targets=recipients(defaultEmail[0],recipient.getText(),both.isSelected());
@@ -181,8 +199,8 @@ public final class WorkspaceAdministration {
                 Path tempFolder=Files.createTempDirectory("mechmotor-email-report-");
                 Path csv=tempFolder.resolve("report.csv");
                 try {
-                    reports.export(type.getValue(),csv,from.getValue(),to.getValue());
-                    gmail.sendReport(targets,csv,type.getValue().name());
+                    reports.export(selectedType,csv,reportStart,reportEnd);
+                    gmail.sendReport(targets,csv,selectedType.name());
                     return true;
                 }finally {
                     Files.deleteIfExists(csv);
