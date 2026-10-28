@@ -21,6 +21,7 @@ import javafx.event.ActionEvent;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
+import javafx.scene.image.Image;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
@@ -734,6 +735,11 @@ public class MechMotorApplication extends Application {
         var css = getClass().getResource("/styles/app.css");
         if (css != null) scene.getStylesheets().add(css.toExternalForm());
 
+        // The icon bundled in the JAR is displayed on the Windows taskbar and title bar.
+        var iconResource = getClass().getResource("/icons/mechmotor-taskbar.png");
+        if (iconResource != null) {
+            stage.getIcons().add(new Image(iconResource.toExternalForm()));
+        }
         stage.setTitle("MechMotor — Vehicle Parts Shop");
         stage.setMinWidth(900);
         stage.setMinHeight(600);
