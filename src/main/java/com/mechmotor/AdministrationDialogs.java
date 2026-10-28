@@ -212,24 +212,28 @@ public final class AdministrationDialogs {
                 destination = chosen.toPath();
             }
             final Path saveTo = destination;
+            final String givenEmail = specific.getText();
+            final boolean sendBoth = both.isSelected();
+            final OperationalReportsService.ReportType reportType = type.getValue();
             generate.setDisable(true);send.setDisable(true);
             status.setText(emailOnly ? "Generating and sending report..." : "Generating report...");
             async(() -> {
-                Path file = saveTo == null ? Files.createTempFile("mechmotor-report-",".csv") : saveTo;
-                boolean temp = saveTo == null;
+                Path tempFolder = saveTo == null ? Files.createTempDirectory("mechmotor-report-") : null;
+                Path file = tempFolder == null ? saveTo : tempFolder.resolve("mechmotor-report.csv");
+                boolean temp = tempFolder != null;
                 try {
-                    long rows = reports.export(type.getValue(),file,start,end);
-                    boolean mustSend = emailOnly || both.isSelected();
+                    long rows = reports.export(reportType,file,start,end);
+                    boolean mustSend = emailOnly || sendBoth;
                     if (mustSend) {
-                        List<String> recipients = preferences.recipients(specific.getText(),both.isSelected());
-                        sender.send(file, recipients,"MechMotor " + type.getValue().name() +
+                        List<String> recipients = preferences.recipients(givenEmail,sendBoth);
+                        sender.send(file, recipients,"MechMotor " + reportType.name() +
                                 " report: " + start + " to " + end);
                         return "Generated " + rows + " rows and Gmail accepted the report for "
                                 + String.join(", ",recipients) +
                                 (saveTo == null ? "." : ". Download: " + file);
                     }
                     return "Generated " + rows + " rows. Saved: " + file;
-                } finally { if (temp) Files.deleteIfExists(file); }
+                } finally { if (temp) { Files.deleteIfExists(file); Files.deleteIfExists(tempFolder); } }
             }, message -> {
                 generate.setDisable(false);send.setDisable(false);
                 status.setText(message);
