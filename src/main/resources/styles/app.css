@@ -258,3 +258,32 @@
 .inventory-table .table-row-cell:odd { -fx-background-color: #f8fbff; }
 .inventory-table .table-row-cell:selected { -fx-background-color: #d5e9ff; }
 .advanced-controls > .title { -fx-background-color: white; -fx-background-radius: 10; -fx-padding: 12px; }
+
+
+/* Secondary application pages: use the common screenshot reference visual language. */
+.workspace-page { -fx-background-color: #f3f7fe; }
+.workspace-surface {
+    -fx-background-color: white; -fx-background-radius: 12px; -fx-border-radius: 12px;
+    -fx-border-color: #e0eaf9;
+}
+.workspace-surface .table-view {
+    -fx-min-height: 335px; -fx-pref-height: 395px;
+    -fx-background-color: white; -fx-border-color: #e1ecf9;
+}
+.workspace-surface .table-view .column-header-background,
+.workspace-surface .table-view .column-header {
+    -fx-background-color: #edf5ff;
+}
+.workspace-surface .table-row-cell:odd { -fx-background-color: #ffffff; }
+.workspace-surface .table-row-cell:even { -fx-background-color: #f7faff; }
+.workspace-surface .table-row-cell:selected { -fx-background-color: #dbeeff; }
+.page-tab, .page-tab-selected {
+    -fx-font-size: 13px; -fx-font-weight: bold; -fx-padding: 10px 8px;
+}
+.page-tab { -fx-text-fill: #27456e; }
+.page-tab-selected {
+    -fx-text-fill: #075fee; -fx-border-color: transparent transparent #0767ff transparent;
+    -fx-border-width: 0 0 3px 0;
+}
+.workspace-surface .primary-action { -fx-background-color: #076bff; -fx-text-fill: white; }
+.workspace-surface .detail-muted { -fx-text-fill: #617ba4; }
