@@ -214,3 +214,19 @@ CREATE TABLE IF NOT EXISTS shop_profile (
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 INSERT OR IGNORE INTO shop_profile(id) VALUES (1);
+
+-- Local directory entries do not grant authentication or application roles.
+CREATE TABLE IF NOT EXISTS workspace_users (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ full_name TEXT NOT NULL,
+ email TEXT NOT NULL COLLATE NOCASE UNIQUE,
+ role TEXT NOT NULL CHECK(role IN ('ADMIN','STAFF','VIEWER')),
+ active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)),
+ created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS report_preferences (
+ id INTEGER PRIMARY KEY CHECK(id=1),
+ default_recipient TEXT NOT NULL DEFAULT '',
+ updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+INSERT OR IGNORE INTO report_preferences(id) VALUES(1);
