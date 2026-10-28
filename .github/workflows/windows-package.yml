@@ -47,39 +47,6 @@ jobs:
           "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "Packaging MechMotor version $version"
 
-      - name: Prepare MechMotor Windows icon
-        shell: pwsh
-        run: |
-          # Decode the offline brand asset and wrap PNG in a Windows ICO container.
-          $encoded = (Get-Content -Raw "src/main/resources/icons/mechmotor.png.b64").Trim()
-          $png = [Convert]::FromBase64String($encoded)
-          $width = [int]$png[16] * 16777216 + [int]$png[17] * 65536 + [int]$png[18] * 256 + [int]$png[19]
-          $height = [int]$png[20] * 16777216 + [int]$png[21] * 65536 + [int]$png[22] * 256 + [int]$png[23]
-          if ($width -lt 1 -or $width -gt 256 -or $height -lt 1 -or $height -gt 256) {
-            throw "Icon dimensions must be within 1 to 256 pixels."
-          }
-          New-Item -ItemType Directory -Force installer | Out-Null
-          $stream = [IO.File]::Create("installer/mechmotor.ico")
-          try {
-            $writer = [IO.BinaryWriter]::new($stream)
-            $writer.Write([uint16]0)           # reserved
-            $writer.Write([uint16]1)           # icon
-            $writer.Write([uint16]1)           # image count
-            $writer.Write([byte]($width % 256))
-            $writer.Write([byte]($height % 256))
-            $writer.Write([byte]0)             # palette
-            $writer.Write([byte]0)             # reserved
-            $writer.Write([uint16]1)           # planes
-            $writer.Write([uint16]32)          # bit depth
-            $writer.Write([uint32]$png.Length)
-            $writer.Write([uint32]22)          # image offset
-            $writer.Write($png)
-            $writer.Flush()
-          } finally {
-            $stream.Dispose()
-          }
-          if (-not (Test-Path installer/mechmotor.ico)) { throw "Icon generation failed." }
-
       - name: Verify tests
         run: mvn --batch-mode --no-transfer-progress clean verify
 
@@ -104,7 +71,7 @@ jobs:
           }
           $modulePath = @("$env:JAVA_HOME\jmods") + $javafxJars
           $modulePathArg = $modulePath -join ";"
-          jlink --module-path $modulePathArg --add-modules java.se,javafx.controls,jdk.crypto.ec,jdk.httpserver --strip-debug --no-man-pages --no-header-files --compress=2 --output target/runtime
+          jlink --module-path $modulePathArg --add-modules java.se,javafx.controls,jdk.crypto.ec --strip-debug --no-man-pages --no-header-files --compress=2 --output target/runtime
           if ($LASTEXITCODE -ne 0) { throw "jlink failed to build the trimmed JavaFX runtime." }
           if (-not (Test-Path "target/runtime/bin/java.exe")) {
             throw "jlink did not produce target/runtime/bin/java.exe."
@@ -121,7 +88,7 @@ jobs:
           $stderr = Join-Path $logDir "direct-java.stderr.log"
           $runtimeJava = (Resolve-Path "target/runtime/bin/java.exe").Path
 
-          $process = Start-Process -FilePath $runtimeJava -ArgumentList @("--add-modules=javafx.controls,jdk.httpserver", "-cp", "target/dist/*", "com.mechmotor.DesktopLauncher") -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          $process = Start-Process -FilePath $runtimeJava -ArgumentList @("--add-modules=javafx.controls", "-cp", "target/dist/*", "com.mechmotor.DesktopLauncher") -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
 
           Start-Sleep -Seconds 15
           $process.Refresh()
@@ -134,10 +101,22 @@ jobs:
           }
 
           Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+      - name: Generate branded Windows icon
+        shell: pwsh
+        run: |
+          & ./tools/icons/Generate-WindowsIcon.ps1 -SourcePng "src/main/resources/icons/mechmotor.png" -OutputIco "target/mechmotor.ico"
+          if (-not (Test-Path "target/mechmotor.ico")) {
+            throw "Required MechMotor Windows icon was not generated."
+          }
+          $iconHeader = [System.IO.File]::ReadAllBytes("target/mechmotor.ico")
+          if ($iconHeader.Length -lt 22 -or $iconHeader[2] -ne 1 -or $iconHeader[4] -lt 6) {
+            throw "Generated MechMotor ICO is invalid or missing multiple sizes."
+          }
+
       - name: Build Windows app image
         shell: pwsh
         run: |
-          jpackage --type app-image --name MechMotor --icon installer/mechmotor.ico --app-version $env:APP_VERSION --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls,jdk.httpserver" --runtime-image target/runtime --dest target/installer
+          jpackage --type app-image --name MechMotor --icon target/mechmotor.ico --app-version $env:APP_VERSION --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls" --runtime-image target/runtime --dest target/installer
           $launcher = "target/installer/MechMotor/MechMotor.exe"
           if (-not (Test-Path $launcher)) {
             throw "jpackage did not produce the expected MechMotor.exe launcher."
@@ -215,8 +194,8 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force target/packages/exe, target/packages/msi | Out-Null
-          jpackage --type exe --name MechMotor --icon installer/mechmotor.ico --app-version $env:APP_VERSION --vendor "MechMotor" --description "Offline vehicle parts shop management" --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls,jdk.httpserver" --runtime-image target/runtime --dest target/packages/exe --license-file installer/MechMotor-EULA.txt --win-menu --win-shortcut --win-dir-chooser --win-shortcut-prompt --win-upgrade-uuid "5a89bc09-8542-4143-8aef-5db0148356e5"
-          jpackage --type msi --name MechMotor --icon installer/mechmotor.ico --app-version $env:APP_VERSION --vendor "MechMotor" --description "Offline vehicle parts shop management" --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls,jdk.httpserver" --runtime-image target/runtime --dest target/packages/msi --license-file installer/MechMotor-EULA.txt --win-menu --win-shortcut --win-dir-chooser --win-shortcut-prompt --win-upgrade-uuid "5a89bc09-8542-4143-8aef-5db0148356e5"
+          jpackage --type exe --name MechMotor --icon target/mechmotor.ico --app-version $env:APP_VERSION --vendor "MechMotor" --description "Offline vehicle parts shop management" --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls" --runtime-image target/runtime --dest target/packages/exe --license-file installer/MechMotor-EULA.txt --win-menu --win-shortcut --win-dir-chooser --win-shortcut-prompt --win-upgrade-uuid "5a89bc09-8542-4143-8aef-5db0148356e5"
+          jpackage --type msi --name MechMotor --icon target/mechmotor.ico --app-version $env:APP_VERSION --vendor "MechMotor" --description "Offline vehicle parts shop management" --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls" --runtime-image target/runtime --dest target/packages/msi --license-file installer/MechMotor-EULA.txt --win-menu --win-shortcut --win-dir-chooser --win-shortcut-prompt --win-upgrade-uuid "5a89bc09-8542-4143-8aef-5db0148356e5"
           if (-not (Test-Path "target/packages/exe/MechMotor-$env:APP_VERSION.exe")) {
             throw "jpackage did not produce the expected EXE installer."
           }
