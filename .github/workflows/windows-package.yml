@@ -101,10 +101,22 @@ jobs:
           }
 
           Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+      - name: Generate branded Windows icon
+        shell: pwsh
+        run: |
+          & ./tools/icons/Generate-WindowsIcon.ps1 -SourcePng "src/main/resources/icons/mechmotor.png" -OutputIco "target/mechmotor.ico"
+          if (-not (Test-Path "target/mechmotor.ico")) {
+            throw "Required MechMotor Windows icon was not generated."
+          }
+          $iconHeader = [System.IO.File]::ReadAllBytes("target/mechmotor.ico")
+          if ($iconHeader.Length -lt 22 -or $iconHeader[2] -ne 1 -or $iconHeader[4] -lt 6) {
+            throw "Generated MechMotor ICO is invalid or missing multiple sizes."
+          }
+
       - name: Build Windows app image
         shell: pwsh
         run: |
-          jpackage --type app-image --name MechMotor --app-version $env:APP_VERSION --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls" --runtime-image target/runtime --dest target/installer
+          jpackage --type app-image --name MechMotor --icon target/mechmotor.ico --app-version $env:APP_VERSION --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls" --runtime-image target/runtime --dest target/installer
           $launcher = "target/installer/MechMotor/MechMotor.exe"
           if (-not (Test-Path $launcher)) {
             throw "jpackage did not produce the expected MechMotor.exe launcher."
@@ -182,8 +194,8 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force target/packages/exe, target/packages/msi | Out-Null
-          jpackage --type exe --name MechMotor --app-version $env:APP_VERSION --vendor "MechMotor" --description "Offline vehicle parts shop management" --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls" --runtime-image target/runtime --dest target/packages/exe --license-file installer/MechMotor-EULA.txt --win-menu --win-shortcut --win-dir-chooser --win-shortcut-prompt --win-upgrade-uuid "5a89bc09-8542-4143-8aef-5db0148356e5"
-          jpackage --type msi --name MechMotor --app-version $env:APP_VERSION --vendor "MechMotor" --description "Offline vehicle parts shop management" --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls" --runtime-image target/runtime --dest target/packages/msi --license-file installer/MechMotor-EULA.txt --win-menu --win-shortcut --win-dir-chooser --win-shortcut-prompt --win-upgrade-uuid "5a89bc09-8542-4143-8aef-5db0148356e5"
+          jpackage --type exe --name MechMotor --icon target/mechmotor.ico --app-version $env:APP_VERSION --vendor "MechMotor" --description "Offline vehicle parts shop management" --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls" --runtime-image target/runtime --dest target/packages/exe --license-file installer/MechMotor-EULA.txt --win-menu --win-shortcut --win-dir-chooser --win-shortcut-prompt --win-upgrade-uuid "5a89bc09-8542-4143-8aef-5db0148356e5"
+          jpackage --type msi --name MechMotor --icon target/mechmotor.ico --app-version $env:APP_VERSION --vendor "MechMotor" --description "Offline vehicle parts shop management" --input target/dist --main-jar mechmotor.jar --main-class com.mechmotor.DesktopLauncher --java-options "--add-modules=javafx.controls" --runtime-image target/runtime --dest target/packages/msi --license-file installer/MechMotor-EULA.txt --win-menu --win-shortcut --win-dir-chooser --win-shortcut-prompt --win-upgrade-uuid "5a89bc09-8542-4143-8aef-5db0148356e5"
           if (-not (Test-Path "target/packages/exe/MechMotor-$env:APP_VERSION.exe")) {
             throw "jpackage did not produce the expected EXE installer."
           }

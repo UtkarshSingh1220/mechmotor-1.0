@@ -21,6 +21,7 @@ import javafx.event.ActionEvent;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
+import javafx.scene.image.Image;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
@@ -734,6 +735,11 @@ public class MechMotorApplication extends Application {
         var css = getClass().getResource("/styles/app.css");
         if (css != null) scene.getStylesheets().add(css.toExternalForm());
 
+        var iconUrl = getClass().getResource("/icons/mechmotor.png");
+        if (iconUrl == null) {
+            throw new IllegalStateException("MechMotor application icon is missing from the runtime.");
+        }
+        stage.getIcons().add(new Image(iconUrl.toExternalForm()));
         stage.setTitle("MechMotor — Vehicle Parts Shop");
         stage.setMinWidth(900);
         stage.setMinHeight(600);
