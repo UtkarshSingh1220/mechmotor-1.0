@@ -102,9 +102,6 @@ public class MechMotorApplication extends Application {
         gmailService = context.getBean(GmailReportService.class);
         backupService = context.getBean(DatabaseBackupService.class);
         csvService = context.getBean(InventoryCsvService.class);
-        WorkspaceAdministrationService workspaceAdministration =
-                context.getBean(WorkspaceAdministrationService.class);
-        GmailReportSender gmailReportSender = context.getBean(GmailReportSender.class);
         Label brand = new Label("MECHMOTOR");
         brand.getStyleClass().add("brand");
         Label subtitle = new Label("Vehicle parts • Simple offline workspace");
@@ -936,11 +933,6 @@ public class MechMotorApplication extends Application {
         pageActions.put("restore", () -> restoreButton.fire());
         pageActions.put("shopProfile", () -> shopSettingsButton.fire());
         pageActions.put("activation", () -> activationButton.fire());
-        pageActions.put("users", () -> AdministrationDialogs.showUsers(stage, workspaceAdministration));
-        pageActions.put("gmail", () -> AdministrationDialogs.showGmail(
-                stage, workspaceAdministration, gmailReportSender));
-        pageActions.put("emailReports", () -> AdministrationDialogs.showReports(
-                stage, workspaceAdministration, gmailReportSender, reportsService));
         pageActions.put("users", () -> WorkspaceAdministration.users(stage,userService,databaseExecutor));
         pageActions.put("gmail", () -> WorkspaceAdministration.gmailSettings(stage,userService,gmailService,gmailExecutor));
         pageActions.put("emailReports", () -> WorkspaceAdministration.reports(stage,reportsService,userService,gmailService,gmailExecutor));
