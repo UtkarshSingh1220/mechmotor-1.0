@@ -184,3 +184,77 @@
 .license-inactive {
     -fx-text-fill: #ffd180;
 }
+
+
+/* MechMotor screenshot-inspired desktop dashboard (JavaFX). */
+.app-shell { -fx-background-color: #0481ee; }
+.app-content { -fx-background-color: #f4f8ff; -fx-border-color: #4eacff; -fx-border-radius: 14; -fx-background-radius: 14; }
+.dashboard-sidebar {
+    -fx-background-color: linear-gradient(to bottom, #0461d8, #043f9a 70%, #002f7d);
+    -fx-background-radius: 12 0 0 12;
+}
+.sidebar-logo { -fx-font-size: 23px; -fx-font-weight: bold; -fx-text-fill: white; }
+.sidebar-subtitle { -fx-font-size: 12px; -fx-text-fill: #c5e3ff; }
+.sidebar-navigation {
+    -fx-alignment: CENTER_LEFT; -fx-font-size: 15px; -fx-text-fill: #f4f8ff;
+    -fx-background-color: transparent; -fx-border-color: transparent;
+    -fx-padding: 15px 18px; -fx-background-radius: 10px;
+}
+.sidebar-navigation:hover, .sidebar-navigation.nav-selected {
+    -fx-text-fill: #0059dc; -fx-background-color: #deeeff; -fx-border-color: transparent;
+}
+.sidebar-profile {
+    -fx-background-color: #06469e; -fx-text-fill: white; -fx-padding: 17px 12px;
+    -fx-background-radius: 12px; -fx-font-weight: bold;
+}
+.dashboard-center { -fx-background-color: #f4f8ff; }
+.dashboard-topbar {
+    -fx-background-color: white; -fx-border-color: transparent transparent #deebff transparent;
+    -fx-min-height: 66px;
+}
+.dashboard-topbar .global-search {
+    -fx-background-radius: 24px; -fx-border-radius: 24px; -fx-border-color: #c8dcf9;
+    -fx-max-width: 590px; -fx-pref-height: 41px;
+}
+.account-label { -fx-text-fill: #172d59; -fx-font-weight: bold; }
+.main-scroll, .main-scroll > .viewport { -fx-background-color: #f4f8ff; -fx-border-color: transparent; }
+.dashboard-body { -fx-background-color: #f4f8ff; }
+.welcome-banner {
+    -fx-background-color: linear-gradient(to right, #edf6ff, #c8e3ff);
+    -fx-background-radius: 12px; -fx-border-radius: 12px; -fx-border-color: #dfebfb;
+    -fx-min-height: 86px;
+}
+.welcome-title { -fx-font-size: 27px; -fx-font-weight: bold; -fx-text-fill: #071d4b; }
+.welcome-subtitle { -fx-font-size: 13px; -fx-text-fill: #39598a; }
+.today-pill { -fx-background-color: #ffffffb0; -fx-padding: 12px; -fx-background-radius: 10px; -fx-text-fill: #17386d; }
+.dashboard-metrics {
+    -fx-background-color: transparent; -fx-padding: 2px 0 2px 0;
+    -fx-hgap: 12px; -fx-vgap: 12px;
+}
+.metric-card {
+    -fx-background-color: white; -fx-background-radius: 13px; -fx-border-radius: 13px;
+    -fx-border-color: #e3eeff; -fx-min-width: 200px; -fx-pref-width: 245px;
+    -fx-padding: 16px; -fx-effect: dropshadow(gaussian, #b7cdf344, 9, 0, 0, 2);
+}
+.metric-value { -fx-font-size: 26px; -fx-text-fill: #081a4a; }
+.table-panel, .details-panel, .bottom-card {
+    -fx-background-color: white; -fx-background-radius: 13px; -fx-border-radius: 13px;
+    -fx-border-color: #e4ebf8;
+}
+.table-panel { -fx-min-width: 500px; }
+.inventory-heading { -fx-background-color: white; -fx-background-radius: 13px 13px 0 0; }
+.section-title { -fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #095adb; }
+.details-heading { -fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #101d3c; }
+.detail-name { -fx-font-size: 17px; -fx-font-weight: bold; -fx-text-fill: #11224c; }
+.detail-muted { -fx-font-size: 12px; -fx-text-fill: #6581aa; }
+.details-panel .label { -fx-wrap-text: true; }
+.bottom-card { -fx-min-width: 230px; -fx-pref-width: 330px; }
+.bottom-card > .label:first-child { -fx-font-weight: bold; -fx-text-fill: #0e224e; }
+.bottom-quick-actions .button { -fx-background-color: #e5f0ff; -fx-text-fill: #0657c6; -fx-padding: 14px 8px; }
+.inventory-table { -fx-border-color: #e6ecf7; -fx-background-color: white; }
+.inventory-table .column-header, .inventory-table .column-header-background, .inventory-table .filler {
+    -fx-background-color: #eff6ff;
+}
+.inventory-table .table-row-cell:odd { -fx-background-color: #f8fbff; }
+.inventory-table .table-row-cell:selected { -fx-background-color: #d5e9ff; }
+.advanced-controls > .title { -fx-background-color: white; -fx-background-radius: 10; -fx-padding: 12px; }
