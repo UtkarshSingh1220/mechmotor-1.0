@@ -21,6 +21,7 @@ import javafx.event.ActionEvent;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
+import javafx.scene.Node;
 import javafx.scene.image.Image;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -713,39 +714,208 @@ public class MechMotorApplication extends Application {
         moreActions.setCollapsible(true);
         moreActions.setPadding(new Insets(0, 16, 8, 16));
 
-        VBox topControls = new VBox(6, dashboard, filters, primaryActions, moreActions);
+        // Screenshot-inspired dashboard composition; all figures and rows remain backed
+        // by the existing services rather than the illustrative screenshot values.
+        dashboard.getStyleClass().add("dashboard-metrics");
+        VBox topControls = new VBox(10, dashboard, filters, primaryActions, moreActions);
         topControls.getStyleClass().add("top-controls");
 
         ScrollPane controlsScroll = new ScrollPane(topControls);
         controlsScroll.setFitToWidth(true);
         controlsScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         controlsScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
-        controlsScroll.setPannable(true);
         controlsScroll.getStyleClass().add("controls-scroll");
 
-        header.setPadding(new Insets(14, 16, 14, 16));
+        header.setPadding(new Insets(12, 18, 12, 18));
         header.getStyleClass().add("header");
-
-        table.setMinHeight(220);
+        table.setMinHeight(260);
         table.getStyleClass().add("inventory-table");
-        status.setPadding(new Insets(10, 16, 10, 16));
+        status.setPadding(new Insets(8, 16, 8, 16));
 
-        BorderPane workspace = new BorderPane();
-        workspace.setTop(controlsScroll);
-        workspace.setCenter(table);
-        workspace.setBottom(status);
+        Label greeting = new Label("Hello! 👋");
+        greeting.getStyleClass().add("welcome-title");
+        Label greetingDescription = new Label("Manage your inventory, orders and suppliers in one place.");
+        greetingDescription.getStyleClass().add("welcome-subtitle");
+        VBox greetingWords = new VBox(3, greeting, greetingDescription);
+        Label today = new Label(java.time.LocalDate.now()
+                .format(java.time.format.DateTimeFormatter.ofPattern("EEEE, dd MMM yyyy")));
+        today.getStyleClass().add("today-pill");
+        BorderPane welcome = new BorderPane();
+        welcome.setLeft(greetingWords);
+        welcome.setRight(today);
+        welcome.setPadding(new Insets(16, 20, 16, 20));
+        welcome.getStyleClass().add("welcome-banner");
 
-        BorderPane appContent = new BorderPane();
-        appContent.setTop(header);
-        appContent.setCenter(workspace);
-        appContent.getStyleClass().add("app-content");
+        TextField globalSearch = new TextField();
+        globalSearch.setPromptText("⌕  Search items, orders, suppliers...");
+        globalSearch.getStyleClass().add("global-search");
+        globalSearch.setOnAction(e -> {
+            query.setText(globalSearch.getText());
+            searchButton.fire();
+        });
+        HBox.setHgrow(globalSearch, Priority.ALWAYS);
+        Label account = new Label("●  MechMotor  |  Inventory Management");
+        account.getStyleClass().add("account-label");
+        HBox topBar = new HBox(16, globalSearch, account, activationButton);
+        topBar.setPadding(new Insets(12, 20, 12, 20));
+        topBar.setAlignment(Pos.CENTER_LEFT);
+        topBar.getStyleClass().add("dashboard-topbar");
+        activationButton.getStyleClass().remove("outline-action");
 
-        StackPane root = new StackPane(appContent);
+        Button navDashboard = dashboardNav("⌂", "Dashboard", null);
+        Button navInventory = dashboardNav("▣", "Inventory", () -> table.requestFocus());
+        Button navOrders = dashboardNav("▤", "Orders", () -> salesHistoryButton.fire());
+        Button navSuppliers = dashboardNav("♟", "Suppliers", () -> supplierMenu.show());
+        Button navCategories = dashboardNav("▦", "Categories", () -> categoryMenu.show());
+        Button navReports = dashboardNav("▥", "Reports", () -> reportsButton.fire());
+        Button navSettings = dashboardNav("⚙", "Settings", () -> shopSettingsButton.fire());
+        navDashboard.getStyleClass().add("nav-selected");
+        VBox navigation = new VBox(8, navDashboard, navInventory, navOrders,
+                navSuppliers, navCategories, navReports, navSettings);
+        VBox.setVgrow(navigation, Priority.ALWAYS);
+
+        Label sideLogo = new Label("⚙  MechMotor");
+        sideLogo.getStyleClass().add("sidebar-logo");
+        Label sideSubheading = new Label("Inventory Management");
+        sideSubheading.getStyleClass().add("sidebar-subtitle");
+        VBox sideBrand = new VBox(2, sideLogo, sideSubheading);
+        sideBrand.setPadding(new Insets(12, 8, 26, 8));
+        Label profile = new Label("●  MechMotor Workspace");
+        profile.getStyleClass().add("sidebar-profile");
+        VBox sidebar = new VBox(12, sideBrand, navigation, profile);
+        sidebar.setPrefWidth(244);
+        sidebar.setMinWidth(205);
+        sidebar.setPadding(new Insets(22, 12, 20, 12));
+        sidebar.getStyleClass().add("dashboard-sidebar");
+
+        Label detailsTitle = new Label("Item Details");
+        detailsTitle.getStyleClass().add("details-heading");
+        Label detailName = new Label("Select an inventory item");
+        detailName.setWrapText(true);
+        detailName.getStyleClass().add("detail-name");
+        Label detailSku = new Label("Choose a row to see its details.");
+        detailSku.getStyleClass().add("detail-muted");
+        Label detailCategory = new Label("");
+        Label detailBrand = new Label("");
+        Label detailQty = new Label("");
+        Label detailPrice = new Label("");
+        Label detailSupplier = new Label("");
+        VBox detailFields = new VBox(13, detailName, detailSku,
+                detailCategory, detailBrand, detailQty, detailPrice, detailSupplier);
+        Button detailEdit = new Button("✎  Edit Item");
+        detailEdit.getStyleClass().add("primary-action");
+        detailEdit.setMaxWidth(Double.MAX_VALUE);
+        detailEdit.setOnAction(e -> editButton.fire());
+        Button detailPurchase = new Button("Create Purchase Order");
+        detailPurchase.setMaxWidth(Double.MAX_VALUE);
+        detailPurchase.setOnAction(e -> purchaseOrdersButton.fire());
+        Button detailSale = new Button("Create Sales Order");
+        detailSale.setMaxWidth(Double.MAX_VALUE);
+        detailSale.setOnAction(e -> sellButton.fire());
+        VBox detailActions = new VBox(8, detailEdit, detailPurchase, detailSale);
+        VBox itemDetails = new VBox(22, detailsTitle, detailFields, detailActions);
+        itemDetails.setPadding(new Insets(20));
+        itemDetails.setPrefWidth(283);
+        itemDetails.setMinWidth(235);
+        itemDetails.getStyleClass().add("details-panel");
+
+        table.getSelectionModel().selectedItemProperty().addListener((obs, previous, selected) -> {
+            if (selected == null) {
+                detailName.setText("Select an inventory item");
+                detailSku.setText("Choose a row to see its details.");
+                detailCategory.setText("");
+                detailBrand.setText("");
+                detailQty.setText("");
+                detailPrice.setText("");
+                detailSupplier.setText("");
+                return;
+            }
+            detailName.setText(selected.name());
+            detailSku.setText(selected.sku());
+            detailCategory.setText("Category: " + selected.category());
+            detailBrand.setText("Brand: " + selected.brand());
+            detailQty.setText("Stock Quantity: " + selected.quantity());
+            detailPrice.setText("Unit Price: ₹" + rupees(selected.sellingPrice()));
+            detailSupplier.setText("Supplier: " + selected.supplier());
+        });
+
+        Label inventoryTitle = new Label("▦  Inventory");
+        inventoryTitle.getStyleClass().add("section-title");
+        Button inventoryAdd = new Button("+  Add Item");
+        inventoryAdd.getStyleClass().add("primary-action");
+        inventoryAdd.setOnAction(e -> addButton.fire());
+        Button inventoryExport = new Button("⇩  Export");
+        inventoryExport.setOnAction(e -> exportCsvItem.fire());
+        HBox inventoryHeading = new HBox(12, inventoryTitle, new Region(), inventoryAdd, inventoryExport);
+        HBox.setHgrow(inventoryHeading.getChildren().get(1), Priority.ALWAYS);
+        inventoryHeading.setAlignment(Pos.CENTER_LEFT);
+        inventoryHeading.setPadding(new Insets(12, 14, 12, 14));
+        inventoryHeading.getStyleClass().add("inventory-heading");
+
+        BorderPane tablePanel = new BorderPane();
+        tablePanel.setTop(inventoryHeading);
+        tablePanel.setCenter(table);
+        tablePanel.setBottom(status);
+        tablePanel.getStyleClass().add("table-panel");
+        HBox inventorySection = new HBox(12, tablePanel, itemDetails);
+        HBox.setHgrow(tablePanel, Priority.ALWAYS);
+        VBox.setVgrow(inventorySection, Priority.ALWAYS);
+
+        Button quickAdd = new Button("✚  Add Item");
+        quickAdd.setOnAction(e -> addButton.fire());
+        Button quickPurchase = new Button("🛒  New Purchase Order");
+        quickPurchase.setOnAction(e -> purchaseOrdersButton.fire());
+        Button quickSale = new Button("▤  New Sales Order");
+        quickSale.setOnAction(e -> sellButton.fire());
+        Button quickReport = new Button("▥  View Reports");
+        quickReport.setOnAction(e -> reportsButton.fire());
+        HBox quickButtons = new HBox(12, quickAdd, quickPurchase, quickSale, quickReport);
+        for (Node item : quickButtons.getChildren()) {
+            ((Button) item).setMaxWidth(Double.MAX_VALUE);
+            HBox.setHgrow(item, Priority.ALWAYS);
+        }
+        quickButtons.getStyleClass().add("bottom-quick-actions");
+        VBox quickActionsPanel = new VBox(8, new Label("Quick Actions"), quickButtons);
+        quickActionsPanel.getStyleClass().add("bottom-card");
+        quickActionsPanel.setPadding(new Insets(12));
+
+        VBox categoryPanel = new VBox(8, new Label("Stock by Category"),
+                new Label("Use Categories to explore and manage stock groups."), categoryMenu);
+        categoryPanel.getStyleClass().add("bottom-card");
+        categoryPanel.setPadding(new Insets(12));
+        VBox stockPanel = new VBox(8, new Label("Stock Overview"),
+                new Label("Current stock and low-stock totals are shown above."),
+                new Label("Operational reports provide detailed stock movement history."));
+        stockPanel.getStyleClass().add("bottom-card");
+        stockPanel.setPadding(new Insets(12));
+        HBox lowerCards = new HBox(12, categoryPanel, stockPanel, quickActionsPanel);
+        for (Node card : lowerCards.getChildren()) HBox.setHgrow(card, Priority.ALWAYS);
+
+        // Keep advanced inventory filters and all existing workflows accessible.
+        TitledPane advanced = new TitledPane("Advanced filters and actions", controlsScroll);
+        advanced.setExpanded(false);
+        advanced.setAnimated(false);
+        advanced.getStyleClass().add("advanced-controls");
+        VBox mainPage = new VBox(12, welcome, dashboard, inventorySection, lowerCards, advanced);
+        mainPage.setPadding(new Insets(10, 16, 16, 16));
+        mainPage.getStyleClass().add("dashboard-body");
+        VBox.setVgrow(inventorySection, Priority.ALWAYS);
+        ScrollPane mainScroll = new ScrollPane(mainPage);
+        mainScroll.setFitToWidth(true);
+        mainScroll.getStyleClass().add("main-scroll");
+        BorderPane center = new BorderPane();
+        center.setTop(topBar);
+        center.setCenter(mainScroll);
+        center.getStyleClass().add("dashboard-center");
+
+        BorderPane shell = new BorderPane();
+        shell.setLeft(sidebar);
+        shell.setCenter(center);
+        shell.getStyleClass().add("app-content");
+        StackPane root = new StackPane(shell);
         root.setPadding(new Insets(4));
         root.getStyleClass().add("app-shell");
-
-        Scene scene = new Scene(root, 1280, 760);
-        controlsScroll.maxHeightProperty().bind(scene.heightProperty().multiply(0.48));
+        Scene scene = new Scene(root, 1600, 900);
         var css = getClass().getResource("/styles/app.css");
         if (css != null) scene.getStylesheets().add(css.toExternalForm());
 
@@ -773,6 +943,14 @@ public class MechMotorApplication extends Application {
         }, error -> { status.setText("Could not load categories and suppliers."); showError("Database initialization failed", error); });
     }
 
+
+    private static Button dashboardNav(String symbol, String name, Runnable action) {
+        Button button = new Button(symbol + "    " + name);
+        button.getStyleClass().add("sidebar-navigation");
+        button.setMaxWidth(Double.MAX_VALUE);
+        if (action != null) button.setOnAction(e -> action.run());
+        return button;
+    }
 
     private void showReturnsDialog(Stage owner, Label status, Runnable refreshInventory) {
         Dialog<ButtonType> dialog = new Dialog<>();
