@@ -29,10 +29,10 @@ public final class WorkspaceAdministration {
                 column("Email",WorkspaceUserService.User::email),
                 column("Role",WorkspaceUserService.User::role),
                 column("Status",u->u.active()?"Active":"Inactive"));
-        Button add=new Button("+ Add User"),edit=new Button("Edit User"),remove=new Button("Deactivate User");
+        Button add=new Button("+ Add User"),edit=new Button("Edit User"),remove=new Button("Deactivate User"),delete=new Button("Delete User Permanently");
         Label info=new Label("Local user directory only. Roles do not grant login permissions.");
         info.setWrapText(true);
-        VBox root=new VBox(12,info,table,new HBox(10,add,edit,remove));
+        VBox root=new VBox(12,info,table,new HBox(10,add,edit,remove,delete));
         root.setPadding(new Insets(16));
         dialog.getDialogPane().setContent(root);
         Runnable refresh=()->background(executor,service::list,data->table.setItems(FXCollections.observableArrayList(data)),error->failure(owner,error));
@@ -49,6 +49,17 @@ public final class WorkspaceAdministration {
             confirm.initOwner(owner);
             if(confirm.showAndWait().filter(ButtonType.OK::equals).isEmpty()) return;
             background(executor,()->{service.deactivate(selection.id());return true;},
+                    ignored->refresh.run(),error->failure(owner,error));
+        });
+        delete.setOnAction(e->{
+            var selected=table.getSelectionModel().getSelectedItem();
+            if(selected==null) return;
+            Alert confirm=new Alert(Alert.AlertType.CONFIRMATION,
+                    "Permanently delete "+selected.email()+" from the local user directory? This cannot be undone.",
+                    ButtonType.CANCEL,ButtonType.OK);
+            confirm.initOwner(owner);
+            if(confirm.showAndWait().filter(ButtonType.OK::equals).isEmpty()) return;
+            background(executor,()->{service.delete(selected.id());return true;},
                     ignored->refresh.run(),error->failure(owner,error));
         });
         refresh.run();
