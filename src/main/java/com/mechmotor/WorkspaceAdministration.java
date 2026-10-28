@@ -241,8 +241,11 @@ public final class WorkspaceAdministration {
         }
         return destinations.stream().distinct().toList();
     }
+    public static boolean validReportDates(LocalDate from, LocalDate to) {
+        return from != null && to != null && !to.isBefore(from) && !from.plusDays(366).isBefore(to);
+    }
     private static boolean validDates(Window owner,LocalDate from,LocalDate to) {
-        if(from==null || to==null || to.isBefore(from) || from.plusDays(366).isBefore(to)) {
+        if(!validReportDates(from,to)) {
             failure(owner,new IllegalArgumentException("Select a valid date range up to 366 days."));
             return false;
         }return true;
