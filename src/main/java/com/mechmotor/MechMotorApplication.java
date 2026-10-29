@@ -185,15 +185,70 @@ public class MechMotorApplication extends Application {
         TableView<Part> table = new TableView<>();
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
         table.setPlaceholder(new Label("No parts found. Change the filters or add a part."));
-        addColumn(table, "SKU", "sku");
-        addColumn(table, "Part name", "name");
-        addColumn(table, "Brand / Company", "brand");
-        addColumn(table, "Material", "material");
-        addColumn(table, "Color", "color");
+        TableColumn<Part, String> numberCol = new TableColumn<>("#");
+        numberCol.setPrefWidth(35);
+        numberCol.setCellFactory(col -> new TableCell<>() {
+            @Override protected void updateItem(String value, boolean empty) {
+                super.updateItem(value, empty);
+                setText(empty ? null : Integer.toString(getIndex() + 1));
+            }
+        });
+        table.getColumns().add(numberCol);
+        addColumn(table, "Item Code", "sku");
+        addColumn(table, "Item Name", "name");
         addColumn(table, "Category", "category");
-        addColumn(table, "Supplier", "supplier");
-        addColumn(table, "Qty", "quantity");
-        addColumn(table, "Selling price", "sellingPrice");
+        addColumn(table, "Stock Qty", "quantity");
+        addColumn(table, "Unit Price (₹)", "sellingPrice");
+        TableColumn<Part, String> statusColumn = new TableColumn<>("Status");
+        statusColumn.setPrefWidth(112);
+        statusColumn.setCellValueFactory(cell -> {
+            Part part = cell.getValue();
+            String state = part.quantity() <= 0 ? "Out of Stock"
+                    : part.quantity() <= part.reorderLevel() ? "Low Stock" : "In Stock";
+            return new javafx.beans.property.SimpleStringProperty(state);
+        });
+        statusColumn.setCellFactory(col -> new TableCell<>() {
+            private final Label badge = new Label();
+            @Override protected void updateItem(String state, boolean empty) {
+                super.updateItem(state, empty);
+                if (empty || state == null) { setGraphic(null); return; }
+                badge.setText(state);
+                badge.getStyleClass().setAll("inventory-status-badge",
+                        "In Stock".equals(state) ? "stock-good"
+                                : "Low Stock".equals(state) ? "stock-warning" : "stock-danger");
+                setGraphic(badge);
+                setText(null);
+            }
+        });
+        table.getColumns().add(statusColumn);
+        TableColumn<Part, Void> actionsColumn = new TableColumn<>("Actions");
+        actionsColumn.setPrefWidth(105);
+        actionsColumn.setCellFactory(col -> new TableCell<>() {
+            private final Button view = new Button("◉");
+            private final Button edit = new Button("✎");
+            private final HBox buttons = new HBox(5, edit, view);
+            {
+                view.setTooltip(new Tooltip("View item details"));
+                edit.setTooltip(new Tooltip("Edit item"));
+                buttons.getStyleClass().add("inventory-row-actions");
+                view.setOnAction(event -> {
+                    Part item = getTableRow().getItem();
+                    if (item != null) table.getSelectionModel().select(item);
+                });
+                edit.setOnAction(event -> {
+                    Part item = getTableRow().getItem();
+                    if (item != null) {
+                        table.getSelectionModel().select(item);
+                        editButton.fire();
+                    }
+                });
+            }
+            @Override protected void updateItem(Void item, boolean empty) {
+                super.updateItem(item, empty);
+                setGraphic(empty ? null : buttons);
+            }
+        });
+        table.getColumns().add(actionsColumn);
 
         int[] page = {0};
         InventoryFilter[] activeFilter = {InventoryFilter.defaults(null)};
