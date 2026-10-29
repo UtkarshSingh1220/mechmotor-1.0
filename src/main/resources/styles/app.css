@@ -329,3 +329,18 @@
     -fx-pref-height: 44px; -fx-font-size: 13px; }
 .premium-activation-dialog .button-bar .button { -fx-min-width: 120px; }
 .premium-activation-dialog .activation-submit { -fx-min-width: 225px; -fx-pref-height: 44px; }
+
+
+.settings-feature-card {
+    -fx-background-color: #fff; -fx-background-radius: 11px; -fx-border-radius: 11px;
+    -fx-border-color: #dbe8fb; -fx-padding: 21px; -fx-min-height: 200px;
+}
+.settings-feature-card .button {
+    -fx-background-color: #edf5ff; -fx-text-fill: #085dde; -fx-border-color: #d1e5ff;
+    -fx-border-radius: 7px; -fx-background-radius: 7px; -fx-padding: 10px 14px;
+}
+.report-download { -fx-background-color: #0870ff; -fx-text-fill: white; }
+.report-send { -fx-background-color: #04a965; -fx-text-fill: white; }
+.report-both { -fx-background-color: #7137e6; -fx-text-fill: white; }
+.workspace-surface .report-send { -fx-background-color: #08a45c; }
+.workspace-surface .report-both { -fx-background-color: #703de4; }
