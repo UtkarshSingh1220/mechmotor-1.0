@@ -383,3 +383,52 @@
     -fx-background-color: #fff; -fx-border-color: #e2ecfb; -fx-border-radius: 10px;
     -fx-background-radius: 10px; -fx-padding: 15px; -fx-min-width: 190px;
 }
+
+
+/* Approved dashboard layout: responsive four-card strip and compact inventory workspace. */
+.dashboard-kpi-row { -fx-padding: 2px 0 3px 0; -fx-alignment: center-left; }
+.dashboard-kpi-row .metric-card {
+    -fx-min-width: 135px; -fx-pref-width: 240px; -fx-max-width: 100000px;
+    -fx-min-height: 90px; -fx-pref-height: 99px;
+    -fx-background-radius: 12px; -fx-border-radius: 12px;
+    -fx-background-color: white; -fx-border-color: #e7effb;
+    -fx-effect: dropshadow(gaussian, rgba(28,96,184,0.10), 10, 0, 0, 2);
+}
+.dashboard-kpi-row .metric-value { -fx-font-size: 25px; -fx-font-weight: bold; -fx-text-fill: #071d4b; }
+.welcome-banner { -fx-min-height: 89px; -fx-pref-height: 93px;
+    -fx-background-color: linear-gradient(to right, #deefff 0%, #cee4ff 53%, #90c3ff 100%); }
+.inventory-heading { -fx-min-height: 56px; -fx-background-color: white; }
+.dashboard-section-tab {
+    -fx-background-color: transparent; -fx-text-fill: #263d64;
+    -fx-font-size: 12px; -fx-font-weight: bold; -fx-padding: 10px 5px;
+    -fx-border-width: 0 0 3px 0; -fx-border-color: transparent;
+}
+.dashboard-section-tab:hover { -fx-text-fill: #076bff; }
+.dashboard-section-tab.dashboard-tab-selected { -fx-text-fill: #076bff; -fx-border-color: #076bff; }
+.inventory-filter-row { -fx-background-color: white; }
+.inventory-inline-search { -fx-background-radius: 7px; -fx-border-radius: 7px;
+    -fx-pref-height: 36px; -fx-border-color: #cdddf6; }
+.table-panel .table-view { -fx-pref-height: 380px; -fx-min-height: 275px; }
+.details-panel { -fx-min-width: 255px; -fx-pref-width: 290px; }
+.bottom-card .chart { -fx-padding: 0; }
+.bottom-card .chart-content { -fx-padding: 0; }
+.bottom-card .chart-pie-label { -fx-font-size: 10px; }
+.settings-tab-bar { -fx-border-color: transparent transparent #e3edfa transparent; }
+.settings-tab {
+    -fx-background-color: transparent; -fx-text-fill: #2e466b;
+    -fx-font-size: 13px; -fx-font-weight: bold; -fx-padding: 12px 10px;
+    -fx-border-width: 0 0 3px 0; -fx-border-color: transparent;
+}
+.settings-tab:hover { -fx-text-fill: #0665ed; }
+.settings-tab.settings-tab-selected { -fx-text-fill: #0665ed; -fx-border-color: #0665ed; }
+.settings-tab-content { -fx-padding: 12px 2px; }
+.settings-tab-content .settings-feature-card { -fx-min-height: 172px; }
+
+
+.inventory-status-badge { -fx-padding: 4px 9px; -fx-background-radius: 6px; -fx-font-weight: bold; -fx-font-size: 11px; }
+.inventory-status-badge.stock-good { -fx-text-fill: #06834a; -fx-background-color: #d9f5e7; }
+.inventory-status-badge.stock-warning { -fx-text-fill: #ba7500; -fx-background-color: #fff0cc; }
+.inventory-status-badge.stock-danger { -fx-text-fill: #d02938; -fx-background-color: #ffe2e6; }
+.inventory-row-actions .button { -fx-background-color: #f3f8ff; -fx-text-fill: #16458f;
+    -fx-border-color: #d7e5f9; -fx-border-radius: 5px; -fx-background-radius: 5px;
+    -fx-padding: 3px 8px; -fx-font-size: 13px; }
