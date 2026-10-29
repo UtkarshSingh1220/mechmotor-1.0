@@ -299,3 +299,18 @@ There is **no published server REST/gRPC API**. The relevant contracts are inter
 ![LLD-05 · ER Diagram](diagrams/LLD-05-entity-relationship.svg)
 
 [Open image](diagrams/LLD-05-entity-relationship.svg) · [Editable Mermaid source](LLD.md)
+
+
+## JavaFX Settings navigation (premium desktop UI)
+
+The `WorkspacePages.create("Settings", ...)` screen implements five selectable `ToggleButton` tabs in one `ToggleGroup`: **General**, **Email & Reports**, **Users & Roles**, **Notifications**, **Security**. Selecting a tab replaces only the tab content, updates the selected style, and preserves the application shell. The tab group guards against clearing the current selection. Buttons on the card panels dispatch through the existing application action map.
+
+| Tab | Backed by | Intentionally unsupported |
+|---|---|---|
+| General | `ShopProfileService`, `LicenseService` (status/expiry only) | Showing or revealing stored activation key |
+| Email & Reports | `GmailReportService`, `WorkspaceUserService.defaultRecipient`, `OperationalReportsService` | Background unattended email scheduling |
+| Users & Roles | `WorkspaceUserService` directory operations | Enforced user authentication and authorization |
+| Notifications | Existing dashboard low-stock summary and manual reporting guidance | Automatic email/push notifications |
+| Security | `DatabaseBackupService` backup and restore | Configurable timeout or two-factor login |
+
+**Acceptance:** all five tabs respond to mouse and keyboard activation; one tab stays visibly selected; switching tabs does not reset the database, force activation, or invoke a network call; every action opens its supported service dialog; the Settings screen remains legible at 100% and 125% Windows scaling. This is a UI routing change only and does not introduce role-based authentication or scheduled notifications.
