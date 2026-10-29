@@ -91,6 +91,16 @@ class LicenseServiceTest {
         assertThrows(IllegalArgumentException.class, () -> service.activate(reportsOnly));
     }
 
+    @Test
+    void embeddedOwnerVerificationKeyIsValidEd25519PublicKey() throws Exception {
+        var field = LicenseService.class.getDeclaredField("OWNER_PUBLIC_KEY_DER_BASE64");
+        field.setAccessible(true);
+        byte[] der = Base64.getDecoder().decode((String)field.get(null));
+        assertTrue(java.util.Set.of("Ed25519", "EdDSA").contains(
+                java.security.KeyFactory.getInstance("Ed25519")
+                        .generatePublic(new java.security.spec.X509EncodedKeySpec(der)).getAlgorithm()));
+    }
+
     private String token(String id, String customer, LocalDate issued, LocalDate expiry, String features) throws Exception {
         String payload = String.join("\n", "MECHMOTOR-LICENSE-V1", id, customer,
                 Long.toString(issued.toEpochDay()), Long.toString(expiry.toEpochDay()), features);
