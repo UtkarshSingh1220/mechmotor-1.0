@@ -180,3 +180,34 @@ flowchart TB
 - Validate visual layout, Settings tab click behavior, accessibility and high-DPI scaling against approved screenshots.
 - Benchmark representative shop inventory sizes; do not claim measured p95 or throughput without evidence.
 - Exercise restore drills and verify Windows package signing separately from activation signing.
+
+
+---
+
+## HLD diagram image gallery (SVG)
+
+The source-editable Mermaid diagrams above are the maintained specification. These SVG images are companion illustrations for README previews and offline viewing.
+
+### HLD-01 · System Architecture
+
+![HLD-01 · System Architecture](diagrams/HLD-01-system-architecture.svg)
+
+[Open image](diagrams/HLD-01-system-architecture.svg) · [Editable Mermaid source](HLD.md)
+
+### HLD-02 · High-Level Data Flow (DFD)
+
+![HLD-02 · High-Level Data Flow (DFD)](diagrams/HLD-02-high-level-dfd.svg)
+
+[Open image](diagrams/HLD-02-high-level-dfd.svg) · [Editable Mermaid source](HLD.md)
+
+### HLD-03 · Component Diagram
+
+![HLD-03 · Component Diagram](diagrams/HLD-03-component-diagram.svg)
+
+[Open image](diagrams/HLD-03-component-diagram.svg) · [Editable Mermaid source](HLD.md)
+
+### HLD-04 · Deployment Diagram
+
+![HLD-04 · Deployment Diagram](diagrams/HLD-04-deployment-diagram.svg)
+
+[Open image](diagrams/HLD-04-deployment-diagram.svg) · [Editable Mermaid source](HLD.md)

@@ -7,6 +7,28 @@ MechMotor is designed as a lightweight desktop application for a single shop PC.
 
 > **Project status (2026-10-18):** Implemented workflows include inventory CRUD/search/filters, category hierarchy and vehicle fitment, saved views, CSV import/export, inventory metrics, signed Ed25519 activation and service-level feature gating, multi-item sales with discount/tax snapshots, voids/partial returns, purchase orders with partial receiving, supplier payments/returns, PDF invoices, operational CSV reports, and database backup/restore. PR #53 added a safeguard that rejects supplier returns which would create an untracked supplier credit; supplier-credit carry-forward/settlement is not implemented. The Windows workflow builds and smoke-tests EXE/MSI installers on hosted runners, but physical Windows acceptance, representative-shop reconciliation, restore drills and performance/release review remain outstanding. **Do not use this as the sole live-shop system until the release gate in [issue #51](https://github.com/UtkarshSingh1220/mechmotor-1.0/issues/51) is closed.**
 
+## Architecture design diagrams and requirements
+
+Full **functional requirements** (FR-01 through FR-12), **non-functional requirements** (NFR-01 through NFR-12), and the eight requested diagram types (nine diagrams total) are maintained under [Architechture Design](Architechture%20Design/README.md):
+
+| Level | Diagram type | Image | Editable design |
+|---|---|---|---|
+| HLD | System Architecture | [SVG](Architechture%20Design/diagrams/HLD-01-system-architecture.svg) | [HLD](Architechture%20Design/HLD.md) |
+| HLD | High-Level DFD | [SVG](Architechture%20Design/diagrams/HLD-02-high-level-dfd.svg) | [HLD](Architechture%20Design/HLD.md) |
+| HLD | Component Diagram | [SVG](Architechture%20Design/diagrams/HLD-03-component-diagram.svg) | [HLD](Architechture%20Design/HLD.md) |
+| HLD | Deployment Diagram | [SVG](Architechture%20Design/diagrams/HLD-04-deployment-diagram.svg) | [HLD](Architechture%20Design/HLD.md) |
+| LLD | Class Diagram | [SVG](Architechture%20Design/diagrams/LLD-01-class-diagram.svg) | [LLD](Architechture%20Design/LLD.md) |
+| LLD | Purchase Sequence | [SVG](Architechture%20Design/diagrams/LLD-02-purchasing-sequence.svg) | [LLD](Architechture%20Design/LLD.md) |
+| LLD | Gmail Report Sequence | [SVG](Architechture%20Design/diagrams/LLD-03-gmail-report-sequence.svg) | [LLD](Architechture%20Design/LLD.md) |
+| LLD | License State Machine | [SVG](Architechture%20Design/diagrams/LLD-04-license-state-machine.svg) | [LLD](Architechture%20Design/LLD.md) |
+| LLD | ER Diagram | [SVG](Architechture%20Design/diagrams/LLD-05-entity-relationship.svg) | [LLD](Architechture%20Design/LLD.md) |
+
+[View requirement/status matrices](Architechture%20Design/REQUIREMENTS.md) · [Architecture documentation index](Architechture%20Design/README.md)
+
+![Current high-level MechMotor system architecture](Architechture%20Design/diagrams/HLD-01-system-architecture.svg)
+
+**Deployment scope:** Offline-first Windows desktop, in-process JavaFX + Spring Boot services, Spring JDBC + SQLite, local reports/backups, optional Google OAuth/Gmail. No internal HTTP/gRPC service, Kubernetes, message queue, CDN or load balancer is currently used.
+
 ## Activation and licensing
 
 MechMotor validates signed Ed25519 activation tokens before loading inventory. The application contains only the public verification key; the signing private key must remain outside this repository and be protected offline.

@@ -264,3 +264,38 @@ There is **no published server REST/gRPC API**. The relevant contracts are inter
 - Confirm application never reveals stored license key on dashboard or Settings.
 - Confirm migrations preserve existing shop records and backup restore integrity.
 - Run `mvn --batch-mode clean verify`; Windows EXE/MSI installation tests; and manual DPI/accessibility/visual checks.
+
+
+---
+
+## LLD diagram image gallery (SVG)
+
+### LLD-01 · Class Diagram
+
+![LLD-01 · Class Diagram](diagrams/LLD-01-class-diagram.svg)
+
+[Open image](diagrams/LLD-01-class-diagram.svg) · [Editable Mermaid source](LLD.md)
+
+### LLD-02 · Purchase Sequence
+
+![LLD-02 · Purchase Sequence](diagrams/LLD-02-purchasing-sequence.svg)
+
+[Open image](diagrams/LLD-02-purchasing-sequence.svg) · [Editable Mermaid source](LLD.md)
+
+### LLD-03 · Gmail Reporting Sequence
+
+![LLD-03 · Gmail Reporting Sequence](diagrams/LLD-03-gmail-report-sequence.svg)
+
+[Open image](diagrams/LLD-03-gmail-report-sequence.svg) · [Editable Mermaid source](LLD.md)
+
+### LLD-04 · License State Machine
+
+![LLD-04 · License State Machine](diagrams/LLD-04-license-state-machine.svg)
+
+[Open image](diagrams/LLD-04-license-state-machine.svg) · [Editable Mermaid source](LLD.md)
+
+### LLD-05 · ER Diagram
+
+![LLD-05 · ER Diagram](diagrams/LLD-05-entity-relationship.svg)
+
+[Open image](diagrams/LLD-05-entity-relationship.svg) · [Editable Mermaid source](LLD.md)

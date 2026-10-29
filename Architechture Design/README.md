@@ -12,7 +12,7 @@ This folder contains **source-aligned** High-Level Design, Low-Level Design, fun
 | [HLD.md](HLD.md) | HLD-01 System Architecture, HLD-02 High-Level Data Flow (DFD), HLD-03 Component Diagram, HLD-04 Deployment/Infrastructure |
 | [LLD.md](LLD.md) | LLD-01 Class, LLD-02 Purchase Sequence, LLD-03 Gmail/Reports Sequence, LLD-04 License State Machine, LLD-05 Entity Relationship (ER) |
 
-There are **nine Mermaid diagrams across the HLD and LLD** (the requested eight types, with two sequence diagrams). GitHub renders Mermaid inside Markdown automatically. All diagrams are source-editable.
+There are **nine editable Mermaid diagrams and nine standalone SVG images** (the eight requested types, with two sequence diagrams). The Markdown diagrams are authoritative; after edits, regenerate their corresponding SVG assets and confirm that both remain aligned.
 
 ## Architecture overview
 
@@ -44,3 +44,23 @@ flowchart LR
 - Existing design and readiness notes: `docs/`
 
 This is documentation only; it adds no new backend API, role-enforcement feature, scheduled job or deployment environment.
+
+
+## SVG image gallery
+
+### HLD visuals
+
+- [HLD-01 · System Architecture](diagrams/HLD-01-system-architecture.svg)
+- [HLD-02 · High-Level Data Flow (DFD)](diagrams/HLD-02-high-level-dfd.svg)
+- [HLD-03 · Component Diagram](diagrams/HLD-03-component-diagram.svg)
+- [HLD-04 · Deployment Diagram](diagrams/HLD-04-deployment-diagram.svg)
+
+### LLD visuals
+
+- [LLD-01 · Class Diagram](diagrams/LLD-01-class-diagram.svg)
+- [LLD-02 · Purchase Sequence](diagrams/LLD-02-purchasing-sequence.svg)
+- [LLD-03 · Gmail Reporting Sequence](diagrams/LLD-03-gmail-report-sequence.svg)
+- [LLD-04 · License State Machine](diagrams/LLD-04-license-state-machine.svg)
+- [LLD-05 · ER Diagram](diagrams/LLD-05-entity-relationship.svg)
+
+The SVG files are viewable without a Mermaid renderer. Keep each SVG synchronized with its Mermaid definition during architecture review.

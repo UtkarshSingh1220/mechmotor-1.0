@@ -41,3 +41,70 @@
 When adding a module: assign a functional requirement ID; identify a non-functional guardrail; update the corresponding HLD/LLD diagram and SQLite schema/migration details; add tests; update implementation status. Avoid claiming planned distributed components or scheduling infrastructure as deployed.
 
 **Reference files:** `pom.xml`, `src/main/resources/application.properties`, `src/main/resources/schema.sql`, `src/main/resources/db/migration/V*.sql`, `src/main/java/com/mechmotor`, `docs/HLD.md`, and `docs/LLD.md`.
+
+
+---
+
+## Requirements-to-diagram image reference
+
+All visualizations are illustrative views of the implementation; IDs in the matrices above are the requirement traceability record.
+
+### Functional requirements — visual architecture and workflows
+
+### HLD-01 · System Architecture
+
+![HLD-01 · System Architecture](diagrams/HLD-01-system-architecture.svg)
+
+[Open image](diagrams/HLD-01-system-architecture.svg) · [Editable Mermaid source](HLD.md)
+
+### HLD-02 · High-Level Data Flow (DFD)
+
+![HLD-02 · High-Level Data Flow (DFD)](diagrams/HLD-02-high-level-dfd.svg)
+
+[Open image](diagrams/HLD-02-high-level-dfd.svg) · [Editable Mermaid source](HLD.md)
+
+### LLD-02 · Purchase Sequence
+
+![LLD-02 · Purchase Sequence](diagrams/LLD-02-purchasing-sequence.svg)
+
+[Open image](diagrams/LLD-02-purchasing-sequence.svg) · [Editable Mermaid source](LLD.md)
+
+### LLD-03 · Gmail Reporting Sequence
+
+![LLD-03 · Gmail Reporting Sequence](diagrams/LLD-03-gmail-report-sequence.svg)
+
+[Open image](diagrams/LLD-03-gmail-report-sequence.svg) · [Editable Mermaid source](LLD.md)
+
+### LLD-04 · License State Machine
+
+![LLD-04 · License State Machine](diagrams/LLD-04-license-state-machine.svg)
+
+[Open image](diagrams/LLD-04-license-state-machine.svg) · [Editable Mermaid source](LLD.md)
+
+### LLD-05 · ER Diagram
+
+![LLD-05 · ER Diagram](diagrams/LLD-05-entity-relationship.svg)
+
+[Open image](diagrams/LLD-05-entity-relationship.svg) · [Editable Mermaid source](LLD.md)
+
+### Non-functional requirements — deployment, boundaries, dependencies and recoverability
+
+### HLD-03 · Component Diagram
+
+![HLD-03 · Component Diagram](diagrams/HLD-03-component-diagram.svg)
+
+[Open image](diagrams/HLD-03-component-diagram.svg) · [Editable Mermaid source](HLD.md)
+
+### HLD-04 · Deployment Diagram
+
+![HLD-04 · Deployment Diagram](diagrams/HLD-04-deployment-diagram.svg)
+
+[Open image](diagrams/HLD-04-deployment-diagram.svg) · [Editable Mermaid source](HLD.md)
+
+### LLD-01 · Class Diagram
+
+![LLD-01 · Class Diagram](diagrams/LLD-01-class-diagram.svg)
+
+[Open image](diagrams/LLD-01-class-diagram.svg) · [Editable Mermaid source](LLD.md)
+
+> Quality claims such as performance, high availability, cloud scaling or Gmail delivery success require measured evidence. This offline desktop application does not presently use REST/gRPC between services, a message broker, a CDN, a load balancer or Kubernetes.
