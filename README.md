@@ -37,7 +37,7 @@ Full **functional requirements** (FR-01 through FR-12), **non-functional require
 | FR-04–06 | Purchase orders/receiving, sales/returns, stock movement audit | Implemented with stated financial restrictions |
 | FR-07–08 | Date-range reports, CSV/PDF, Gmail OAuth and recipient selection | Implemented; live Gmail authorization required |
 | FR-09–10 | Local user directory, shop profile, backup/restore | Implemented; directory roles do not enforce login |
-| FR-11 | Desktop navigation and consistent functional dialogs | Partial; some Settings tabs are still static |
+| FR-11 | Desktop navigation and consistent functional dialogs | Settings has five working tabs; other page-level navigation needs review |
 | FR-12 | Unattended scheduled Gmail reports / delivery history | Planned, not implemented |
 
 **Non-functional requirements at a glance** ([NFR-01–12 evidence and diagram mappings](Architechture%20Design/REQUIREMENTS.md)):
