@@ -344,3 +344,16 @@
 .report-both { -fx-background-color: #7137e6; -fx-text-fill: white; }
 .workspace-surface .report-send { -fx-background-color: #08a45c; }
 .workspace-surface .report-both { -fx-background-color: #703de4; }
+
+
+.activation-layout {
+    -fx-background-color: linear-gradient(to right, #cfe8ff, #ecf7ff);
+    -fx-padding: 16px; -fx-alignment: center; -fx-background-radius: 13px;
+}
+.activation-brand-pane {
+    -fx-min-height: 360px; -fx-background-color: linear-gradient(to bottom right, #d5ebff, #96cbff);
+    -fx-background-radius: 12px; -fx-padding: 24px;
+}
+.activation-brand { -fx-text-fill: #0743ad; -fx-font-size: 32px; -fx-font-weight: 900; }
+.activation-brand-subtitle { -fx-text-fill: #294e83; -fx-font-size: 13px; }
+.activation-layout .activation-content { -fx-min-width: 420px; -fx-min-height: 360px; }
