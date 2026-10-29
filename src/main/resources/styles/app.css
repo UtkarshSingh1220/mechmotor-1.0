@@ -423,3 +423,12 @@
 .settings-tab.settings-tab-selected { -fx-text-fill: #0665ed; -fx-border-color: #0665ed; }
 .settings-tab-content { -fx-padding: 12px 2px; }
 .settings-tab-content .settings-feature-card { -fx-min-height: 172px; }
+
+
+.inventory-status-badge { -fx-padding: 4px 9px; -fx-background-radius: 6px; -fx-font-weight: bold; -fx-font-size: 11px; }
+.inventory-status-badge.stock-good { -fx-text-fill: #06834a; -fx-background-color: #d9f5e7; }
+.inventory-status-badge.stock-warning { -fx-text-fill: #ba7500; -fx-background-color: #fff0cc; }
+.inventory-status-badge.stock-danger { -fx-text-fill: #d02938; -fx-background-color: #ffe2e6; }
+.inventory-row-actions .button { -fx-background-color: #f3f8ff; -fx-text-fill: #16458f;
+    -fx-border-color: #d7e5f9; -fx-border-radius: 5px; -fx-background-radius: 5px;
+    -fx-padding: 3px 8px; -fx-font-size: 13px; }
