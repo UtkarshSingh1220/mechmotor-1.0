@@ -27,6 +27,8 @@ public class LicenseService {
     private static final String TOKEN_PREFIX = "MM1";
     private static final String PAYLOAD_VERSION = "MECHMOTOR-LICENSE-V1";
     private static final String PUBLIC_KEY_DER_BASE64 = "MCowBQYDK2VwAyEAhoa1AqUQFVFbYM0nqUXbb+hqxPz+8Xhh0bWpZIguPtA=";
+    // Secondary owner signing key; previous customer activations remain valid.
+    private static final String OWNER_PUBLIC_KEY_DER_BASE64 = "MCowBQYDK2VwAyEAt37M3vk6cNbqffnJdHTIZW4Nx8JRPFtTSsppyL2AypI=";
     private static final Pattern LICENSE_ID = Pattern.compile("[A-Z0-9][A-Z0-9._-]{2,63}");
     private static final Set<String> ALLOWED_FEATURES =
             Set.of("INVENTORY", "CSV", "REPORTS", "SALES", "PURCHASING");
@@ -34,6 +36,7 @@ public class LicenseService {
     private final Clock clock;
     private final Path activationFile;
     private final PublicKey verificationKey;
+    private final PublicKey secondaryVerificationKey;
 
     public LicenseService() {
         this(Clock.systemUTC(), defaultActivationFile(), loadEmbeddedPublicKey());
@@ -43,6 +46,7 @@ public class LicenseService {
         this.clock = clock;
         this.activationFile = activationFile.toAbsolutePath().normalize();
         this.verificationKey = verificationKey;
+        this.secondaryVerificationKey = loadOwnerPublicKey();
     }
 
     public LicenseStatus status() {
@@ -117,15 +121,8 @@ public class LicenseService {
             throw new IllegalArgumentException("Activation key encoding is invalid.", ex);
         }
         try {
-            Signature verifier = Signature.getInstance("Ed25519");
-            verifier.initVerify(verificationKey);
-            verifier.update(payloadBytes);
-            boolean valid;
-            try {
-                valid = verifier.verify(signatureBytes);
-            } catch (java.security.SignatureException ex) {
-                throw new IllegalArgumentException("Activation key signature is not valid.", ex);
-            }
+            boolean valid = verifySignature(verificationKey, payloadBytes, signatureBytes)
+                    || verifySignature(secondaryVerificationKey, payloadBytes, signatureBytes);
             if (!valid) throw new IllegalArgumentException("Activation key signature is not valid.");
         } catch (IllegalArgumentException ex) {
             throw ex;
@@ -172,6 +169,26 @@ public class LicenseService {
         }
         return new LicenseStatus(true, "Activation is valid.", licenseId, customer, expiresOn,
                 Set.copyOf(features), token, path);
+    }
+
+    private static boolean verifySignature(PublicKey key, byte[] payload, byte[] signature) throws Exception {
+        Signature verifier = Signature.getInstance("Ed25519");
+        verifier.initVerify(key);
+        verifier.update(payload);
+        try {
+            return verifier.verify(signature);
+        } catch (java.security.SignatureException invalid) {
+            return false;
+        }
+    }
+
+    private static PublicKey loadOwnerPublicKey() {
+        try {
+            byte[] der = Base64.getDecoder().decode(OWNER_PUBLIC_KEY_DER_BASE64);
+            return KeyFactory.getInstance("Ed25519").generatePublic(new X509EncodedKeySpec(der));
+        } catch (Exception ex) {
+            throw new IllegalStateException("Owner activation verification key is invalid.", ex);
+        }
     }
 
     private static PublicKey loadEmbeddedPublicKey() {
