@@ -357,3 +357,29 @@
 .activation-brand { -fx-text-fill: #0743ad; -fx-font-size: 32px; -fx-font-weight: 900; }
 .activation-brand-subtitle { -fx-text-fill: #294e83; -fx-font-size: 13px; }
 .activation-layout .activation-content { -fx-min-width: 420px; -fx-min-height: 360px; }
+
+
+/* Consistent Premium Modern dialog surfaces: Users, Gmail, Reporting. */
+.premium-admin-dialog { -fx-background-color: #f0f6ff; }
+.premium-admin-dialog > .button-bar > .container {
+    -fx-background-color: #f0f6ff; -fx-padding: 10px 20px 14px 20px;
+}
+.admin-content { -fx-background-color: white; -fx-background-radius: 12px; }
+.admin-heading { -fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #0f2d68; }
+.premium-admin-dialog .text-field,
+.premium-admin-dialog .combo-box-base,
+.premium-admin-dialog .date-picker {
+    -fx-background-radius: 7px; -fx-border-radius: 7px;
+    -fx-border-color: #c9dbf4; -fx-pref-height: 36px;
+}
+.premium-admin-dialog .table-view .column-header,
+.premium-admin-dialog .table-view .column-header-background { -fx-background-color: #edf5ff; }
+.premium-admin-dialog .table-row-cell:odd { -fx-background-color: #f8fbff; }
+.premium-admin-dialog .admin-primary { -fx-background-color: #086bfa; -fx-text-fill: white; -fx-font-weight: bold; }
+.premium-admin-dialog .admin-success { -fx-background-color: #04a868; -fx-text-fill: white; -fx-font-weight: bold; }
+.premium-admin-dialog .admin-purple { -fx-background-color: #7038e8; -fx-text-fill: white; -fx-font-weight: bold; }
+.premium-admin-dialog .admin-destructive { -fx-background-color: #fff1f1; -fx-text-fill: #c3212d; -fx-border-color: #fac5c5; }
+.report-control-card {
+    -fx-background-color: #fff; -fx-border-color: #e2ecfb; -fx-border-radius: 10px;
+    -fx-background-radius: 10px; -fx-padding: 15px; -fx-min-width: 190px;
+}
