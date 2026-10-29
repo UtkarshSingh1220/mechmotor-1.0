@@ -124,45 +124,84 @@ public final class WorkspacePages {
                     "Sales History", "salesHistory", "Receive Stock", "receiveStock",
                     "Returns / Refunds", "returns");
         } else if ("Reports".equals(page)) {
-            tabRow(surface, List.of("Overview", "Inventory Reports", "Order Reports", "Supplier Reports"),
-                    actions, "Generate Report", "emailReports");
+            tabRow(surface, List.of("Inventory Reports", "Order Reports",
+                    "Supplier Reports", "Sales Reports"), actions,
+                    "Generate Report", "emailReports");
+
+            Label reportTitle = label("Generate, Download or Email Reports", "details-heading");
+            Label reportHelp = label(
+                    "Select the report, date range and destination in the report window. "
+                    + "Today is selected by default. Gmail connection is required before sending.",
+                    "detail-muted");
+            reportHelp.setWrapText(true);
+            Button openGenerator = action("⬇  Generate & Download", actions.get("emailReports"));
+            Button openSender = action("✉  Send Report", actions.get("emailReports"));
+            Button bothSender = action("✉  Generate & Send Both", actions.get("emailReports"));
+            openGenerator.getStyleClass().add("report-download");
+            openSender.getStyleClass().add("report-send");
+            bothSender.getStyleClass().add("report-both");
+            HBox reportButtons = new HBox(11, openGenerator, openSender, bothSender);
+            reportButtons.setAlignment(Pos.CENTER_LEFT);
+            surface.getChildren().addAll(reportTitle, reportHelp, reportButtons);
+
+            Label recentTitle = label("Available Report Types", "details-heading");
             TableView<String> grid = new TableView<>();
             grid.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_ALL_COLUMNS);
             grid.getColumns().add(column("Report Type", x -> x));
             grid.setItems(FXCollections.observableArrayList(
                     "Sales", "Purchases", "Stock Movements", "Supplier Payables"));
-            surface.getChildren().add(grid);
-            Label caption = label("Choose Generate Report to select type, date range and CSV destination. "
-                    + "Reports are generated on demand; no fictitious history is shown.", "detail-muted");
-            caption.setWrapText(true);
-            surface.getChildren().add(caption);
-            rowActions(surface, actions, "Generate Report & Send Email", "emailReports",
-                    "Export Inventory CSV", "export", "Backup Database", "backup");
+            grid.setPrefHeight(230);
+            surface.getChildren().addAll(recentTitle, grid);
         } else if ("Settings".equals(page)) {
-            tabRow(surface, List.of("General", "Users & Roles", "Notifications", "Security"), actions,
+            tabRow(surface, List.of("General", "Email & Reports",
+                    "Users & Roles", "Notifications", "Security"), actions,
                     "Manage Users", "users");
-            GridPane settings = new GridPane();
-            settings.setHgap(24);
-            settings.setVgap(18);
-            settings.addRow(0, label("General Settings", "details-heading"),
-                    label("Users & Access", "details-heading"));
-            settings.addRow(1, label("Currency: INR (₹)", "detail-name"),
-                    label("Activation controls licensed features", "detail-muted"));
-            settings.addRow(2, label("Time zone: Asia/Kolkata", "detail-name"),
-                    label("Directory roles do not grant sign-in access", "detail-muted"));
-            settings.addRow(3, action("Edit Shop Profile / Tax", actions.get("shopProfile")),
-                    action("View Activation", actions.get("activation")));
-            settings.addRow(4, label("Security & Backup", "details-heading"),
-                    label("Data Management", "details-heading"));
-            settings.addRow(5, action("Backup Database", actions.get("backup")),
-                    action("Restore Backup", actions.get("restore")));
-            settings.addRow(6, label("Email & Google Account", "details-heading"),
-                    label("User Directory", "details-heading"));
-            settings.addRow(7, action("Connect Gmail / Set Default Email", actions.get("gmail")),
-                    action("Add / Update / Deactivate Users", actions.get("users")));
-            settings.addRow(8, action("Generate & Email Reports", actions.get("emailReports")),
-                    label("Google OAuth required to send report emails", "detail-muted"));
-            surface.getChildren().add(settings);
+
+            Label settingsTitle = label("Settings & Preferences", "details-heading");
+            Label settingsDescription = label(
+                    "Manage your account, email configuration and application settings.", "detail-muted");
+            surface.getChildren().addAll(settingsTitle, settingsDescription);
+
+            GridPane sections = new GridPane();
+            sections.setHgap(14);
+            sections.setVgap(14);
+            ColumnConstraints halfLeft = new ColumnConstraints();
+            halfLeft.setPercentWidth(50);
+            ColumnConstraints halfRight = new ColumnConstraints();
+            halfRight.setPercentWidth(50);
+            sections.getColumnConstraints().addAll(halfLeft, halfRight);
+
+            VBox gmailCard = new VBox(13,
+                label("Google Account (Gmail)", "details-heading"),
+                label("Connect Google to send your generated reports.", "detail-muted"),
+                action("Connect / Disconnect Gmail", actions.get("gmail")),
+                label("Default Report Recipient", "details-heading"),
+                label("Set or update the default email from Gmail settings.", "detail-muted"),
+                action("Set Default Email", actions.get("gmail")));
+            gmailCard.getStyleClass().add("settings-feature-card");
+            VBox usersCard = new VBox(13,
+                label("Users & Roles", "details-heading"),
+                label("Manage saved user directory entries.", "detail-muted"),
+                action("Add / Update / Delete User", actions.get("users")),
+                label("Access note", "details-heading"),
+                label("Directory roles are not yet enforced sign-in permissions.", "detail-muted"));
+            usersCard.getStyleClass().add("settings-feature-card");
+            VBox licenseCard = new VBox(13,
+                label("License Information", "details-heading"),
+                label("View license status and expiry date. Activation key is not displayed.", "detail-muted"),
+                action("View License Expiry", actions.get("activation")),
+                label("Shop Profile", "details-heading"),
+                action("Company / Tax Settings", actions.get("shopProfile")));
+            licenseCard.getStyleClass().add("settings-feature-card");
+            VBox securityCard = new VBox(13,
+                label("Security & Backup", "details-heading"),
+                label("Keep secure backups before application upgrades.", "detail-muted"),
+                action("Backup Database", actions.get("backup")),
+                action("Restore Backup", actions.get("restore")));
+            securityCard.getStyleClass().add("settings-feature-card");
+            sections.add(gmailCard,0,0); sections.add(usersCard,1,0);
+            sections.add(licenseCard,0,1); sections.add(securityCard,1,1);
+            surface.getChildren().add(sections);
         }
         VBox quick = new VBox(10);
         quick.getStyleClass().add("workspace-surface");

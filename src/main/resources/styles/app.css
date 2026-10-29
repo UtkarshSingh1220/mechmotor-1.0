@@ -287,3 +287,99 @@
 }
 .workspace-surface .primary-action { -fx-background-color: #076bff; -fx-text-fill: white; }
 .workspace-surface .detail-muted { -fx-text-fill: #617ba4; }
+
+
+/* Premium Modern – visual reference implementation */
+.app-shell { -fx-background-color: #0b70df; -fx-padding: 5px; }
+.app-content { -fx-background-color: #f1f7ff; -fx-background-radius: 13px; }
+.dashboard-sidebar {
+    -fx-background-color: linear-gradient(to bottom, #075bd0 0%, #073d97 55%, #04215d 100%);
+    -fx-background-radius: 12px 0 0 12px;
+}
+.sidebar-logo { -fx-font-size: 21px; -fx-text-fill: #ffffff; -fx-font-weight: 900; }
+.sidebar-subtitle { -fx-font-size: 11px; -fx-text-fill: #cae3ff; }
+.sidebar-navigation { -fx-background-radius: 9px; -fx-padding: 12px 14px; -fx-font-size: 14px; -fx-text-fill: #fff; }
+.sidebar-navigation.nav-selected, .sidebar-navigation:hover {
+    -fx-background-color: linear-gradient(to right, #ffffff, #d7eaff); -fx-text-fill: #075cdd;
+    -fx-font-weight: bold;
+}
+.sidebar-profile { -fx-background-color: #0955ba; -fx-background-radius: 12px; }
+.dashboard-topbar { -fx-background-color: #ffffff; -fx-min-height: 70px; -fx-border-color: transparent transparent #e8effa transparent; }
+.dashboard-topbar .global-search { -fx-border-color: #c8dcff; -fx-border-radius: 30px; -fx-background-radius: 30px; -fx-pref-height: 41px; }
+.welcome-banner {
+    -fx-background-color: linear-gradient(to right, #dcecff, #b9daff 70%, #78b5ff);
+    -fx-background-radius: 12px; -fx-border-color: #d5e7ff; -fx-min-height: 96px;
+}
+.metric-card { -fx-background-radius: 12px; -fx-border-radius: 12px;
+    -fx-effect: dropshadow(gaussian, rgba(32,93,175,0.13), 12, 0, 0, 3); }
+.table-panel, .details-panel, .bottom-card, .workspace-surface {
+    -fx-background-color: #ffffff; -fx-background-radius: 12px; -fx-border-radius: 12px;
+    -fx-border-color: #e1edfc; -fx-effect: dropshadow(gaussian, rgba(32,93,175,0.07), 9, 0, 0, 2);
+}
+.primary-action, .activation-submit { -fx-background-color: #0968f6; -fx-text-fill: white;
+    -fx-background-radius: 7px; -fx-font-weight: bold; -fx-padding: 11px 18px; }
+.primary-action:hover, .activation-submit:hover { -fx-background-color: #0055d9; }
+.premium-activation-dialog { -fx-background-color: linear-gradient(to bottom right, #eaf4ff, #b6dcff); }
+.premium-activation-dialog > .button-bar > .container { -fx-background-color: #ffffff; -fx-padding: 10px 24px 20px 24px; }
+.activation-content { -fx-background-color: white; -fx-background-radius: 14px; -fx-border-radius: 14px;
+    -fx-effect: dropshadow(gaussian, rgba(21,62,142,0.10), 22, 0, 0, 5); }
+.activation-heading { -fx-text-fill: #102b66; -fx-font-size: 25px; -fx-font-weight: 900; }
+.activation-subheading { -fx-text-fill: #4f6797; -fx-font-size: 13px; }
+.activation-input { -fx-background-radius: 7px; -fx-border-radius: 7px; -fx-border-color: #bcd4f7;
+    -fx-pref-height: 44px; -fx-font-size: 13px; }
+.premium-activation-dialog .button-bar .button { -fx-min-width: 120px; }
+.premium-activation-dialog .activation-submit { -fx-min-width: 225px; -fx-pref-height: 44px; }
+
+
+.settings-feature-card {
+    -fx-background-color: #fff; -fx-background-radius: 11px; -fx-border-radius: 11px;
+    -fx-border-color: #dbe8fb; -fx-padding: 21px; -fx-min-height: 200px;
+}
+.settings-feature-card .button {
+    -fx-background-color: #edf5ff; -fx-text-fill: #085dde; -fx-border-color: #d1e5ff;
+    -fx-border-radius: 7px; -fx-background-radius: 7px; -fx-padding: 10px 14px;
+}
+.report-download { -fx-background-color: #0870ff; -fx-text-fill: white; }
+.report-send { -fx-background-color: #04a965; -fx-text-fill: white; }
+.report-both { -fx-background-color: #7137e6; -fx-text-fill: white; }
+.workspace-surface .report-send { -fx-background-color: #08a45c; }
+.workspace-surface .report-both { -fx-background-color: #703de4; }
+
+
+.activation-layout {
+    -fx-background-color: linear-gradient(to right, #cfe8ff, #ecf7ff);
+    -fx-padding: 16px; -fx-alignment: center; -fx-background-radius: 13px;
+}
+.activation-brand-pane {
+    -fx-min-height: 360px; -fx-background-color: linear-gradient(to bottom right, #d5ebff, #96cbff);
+    -fx-background-radius: 12px; -fx-padding: 24px;
+}
+.activation-brand { -fx-text-fill: #0743ad; -fx-font-size: 32px; -fx-font-weight: 900; }
+.activation-brand-subtitle { -fx-text-fill: #294e83; -fx-font-size: 13px; }
+.activation-layout .activation-content { -fx-min-width: 420px; -fx-min-height: 360px; }
+
+
+/* Consistent Premium Modern dialog surfaces: Users, Gmail, Reporting. */
+.premium-admin-dialog { -fx-background-color: #f0f6ff; }
+.premium-admin-dialog > .button-bar > .container {
+    -fx-background-color: #f0f6ff; -fx-padding: 10px 20px 14px 20px;
+}
+.admin-content { -fx-background-color: white; -fx-background-radius: 12px; }
+.admin-heading { -fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #0f2d68; }
+.premium-admin-dialog .text-field,
+.premium-admin-dialog .combo-box-base,
+.premium-admin-dialog .date-picker {
+    -fx-background-radius: 7px; -fx-border-radius: 7px;
+    -fx-border-color: #c9dbf4; -fx-pref-height: 36px;
+}
+.premium-admin-dialog .table-view .column-header,
+.premium-admin-dialog .table-view .column-header-background { -fx-background-color: #edf5ff; }
+.premium-admin-dialog .table-row-cell:odd { -fx-background-color: #f8fbff; }
+.premium-admin-dialog .admin-primary { -fx-background-color: #086bfa; -fx-text-fill: white; -fx-font-weight: bold; }
+.premium-admin-dialog .admin-success { -fx-background-color: #04a868; -fx-text-fill: white; -fx-font-weight: bold; }
+.premium-admin-dialog .admin-purple { -fx-background-color: #7038e8; -fx-text-fill: white; -fx-font-weight: bold; }
+.premium-admin-dialog .admin-destructive { -fx-background-color: #fff1f1; -fx-text-fill: #c3212d; -fx-border-color: #fac5c5; }
+.report-control-card {
+    -fx-background-color: #fff; -fx-border-color: #e2ecfb; -fx-border-radius: 10px;
+    -fx-background-radius: 10px; -fx-padding: 15px; -fx-min-width: 190px;
+}
