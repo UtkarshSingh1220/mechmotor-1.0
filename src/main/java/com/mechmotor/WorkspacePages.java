@@ -153,55 +153,7 @@ public final class WorkspacePages {
             grid.setPrefHeight(230);
             surface.getChildren().addAll(recentTitle, grid);
         } else if ("Settings".equals(page)) {
-            tabRow(surface, List.of("General", "Email & Reports",
-                    "Users & Roles", "Notifications", "Security"), actions,
-                    "Manage Users", "users");
-
-            Label settingsTitle = label("Settings & Preferences", "details-heading");
-            Label settingsDescription = label(
-                    "Manage your account, email configuration and application settings.", "detail-muted");
-            surface.getChildren().addAll(settingsTitle, settingsDescription);
-
-            GridPane sections = new GridPane();
-            sections.setHgap(14);
-            sections.setVgap(14);
-            ColumnConstraints halfLeft = new ColumnConstraints();
-            halfLeft.setPercentWidth(50);
-            ColumnConstraints halfRight = new ColumnConstraints();
-            halfRight.setPercentWidth(50);
-            sections.getColumnConstraints().addAll(halfLeft, halfRight);
-
-            VBox gmailCard = new VBox(13,
-                label("Google Account (Gmail)", "details-heading"),
-                label("Connect Google to send your generated reports.", "detail-muted"),
-                action("Connect / Disconnect Gmail", actions.get("gmail")),
-                label("Default Report Recipient", "details-heading"),
-                label("Set or update the default email from Gmail settings.", "detail-muted"),
-                action("Set Default Email", actions.get("gmail")));
-            gmailCard.getStyleClass().add("settings-feature-card");
-            VBox usersCard = new VBox(13,
-                label("Users & Roles", "details-heading"),
-                label("Manage saved user directory entries.", "detail-muted"),
-                action("Add / Update / Delete User", actions.get("users")),
-                label("Access note", "details-heading"),
-                label("Directory roles are not yet enforced sign-in permissions.", "detail-muted"));
-            usersCard.getStyleClass().add("settings-feature-card");
-            VBox licenseCard = new VBox(13,
-                label("License Information", "details-heading"),
-                label("View license status and expiry date. Activation key is not displayed.", "detail-muted"),
-                action("View License Expiry", actions.get("activation")),
-                label("Shop Profile", "details-heading"),
-                action("Company / Tax Settings", actions.get("shopProfile")));
-            licenseCard.getStyleClass().add("settings-feature-card");
-            VBox securityCard = new VBox(13,
-                label("Security & Backup", "details-heading"),
-                label("Keep secure backups before application upgrades.", "detail-muted"),
-                action("Backup Database", actions.get("backup")),
-                action("Restore Backup", actions.get("restore")));
-            securityCard.getStyleClass().add("settings-feature-card");
-            sections.add(gmailCard,0,0); sections.add(usersCard,1,0);
-            sections.add(licenseCard,0,1); sections.add(securityCard,1,1);
-            surface.getChildren().add(sections);
+            buildSettingsTabs(surface, actions);
         }
         VBox quick = new VBox(10);
         quick.getStyleClass().add("workspace-surface");
@@ -220,6 +172,142 @@ public final class WorkspacePages {
                 "Back Up Now", "backup");
         root.getChildren().add(quick);
         return root;
+    }
+
+    /**
+     * Real clickable tabs for Settings. The selected tab replaces the content
+     * area instead of presenting an inert label or all settings at once.
+     * Unimplemented capabilities are explicitly described, never simulated.
+     */
+    static void buildSettingsTabs(VBox surface, Map<String, Runnable> actions) {
+        List<String> names = List.of("General", "Email & Reports",
+                "Users & Roles", "Notifications", "Security");
+        HBox tabs = new HBox(10);
+        tabs.setAlignment(Pos.CENTER_LEFT);
+        tabs.getStyleClass().add("settings-tab-bar");
+
+        VBox content = new VBox(14);
+        content.getStyleClass().add("settings-tab-content");
+        VBox.setVgrow(content, Priority.ALWAYS);
+        List<Button> buttons = new ArrayList<>();
+
+        for (String name : names) {
+            Button tab = new Button(name);
+            tab.setFocusTraversable(true);
+            tab.setAccessibleText("Settings: " + name);
+            tab.getStyleClass().add("settings-tab");
+            buttons.add(tab);
+            tabs.getChildren().add(tab);
+            tab.setOnAction(event -> {
+                for (Button other : buttons) {
+                    other.getStyleClass().remove("settings-tab-selected");
+                    other.setAccessibleHelp("Click to display " + other.getText() + " settings.");
+                }
+                tab.getStyleClass().add("settings-tab-selected");
+                tab.setAccessibleHelp("Currently selected settings section.");
+                showSettingsSection(content, name, actions);
+            });
+        }
+        surface.getChildren().addAll(tabs, content);
+        buttons.get(0).fire(); // Show General at first open.
+    }
+
+    private static void showSettingsSection(VBox target, String section,
+                                           Map<String, Runnable> actions) {
+        target.getChildren().clear();
+        Label heading = label(section, "details-heading");
+        target.getChildren().add(heading);
+        GridPane cards = new GridPane();
+        cards.setHgap(14);
+        cards.setVgap(14);
+        ColumnConstraints left = new ColumnConstraints();
+        left.setPercentWidth(50);
+        left.setHgrow(Priority.ALWAYS);
+        ColumnConstraints right = new ColumnConstraints();
+        right.setPercentWidth(50);
+        right.setHgrow(Priority.ALWAYS);
+        cards.getColumnConstraints().addAll(left, right);
+
+        switch (section) {
+            case "General" -> {
+                cards.add(settingsCard("Company & Shop Profile",
+                        "Configure your business information and tax details.",
+                        actions, "Edit Shop Profile", "shopProfile"), 0, 0);
+                cards.add(settingsCard("License",
+                        "View your activation status and expiry date. Your key stays hidden.",
+                        actions, "View License Expiry", "activation"), 1, 0);
+                cards.add(settingsCard("Local Data",
+                        "Inventory records are stored in the local SQLite database.",
+                        actions, "Backup Database", "backup"), 0, 1);
+                cards.add(settingsCard("Restore",
+                        "Restore a validated backup using the existing recovery workflow.",
+                        actions, "Restore Backup", "restore"), 1, 1);
+            }
+            case "Email & Reports" -> {
+                cards.add(settingsCard("Google Account (Gmail)",
+                        "Connect or disconnect your Google account for report delivery.",
+                        actions, "Manage Gmail Connection", "gmail"), 0, 0);
+                cards.add(settingsCard("Default Report Recipient",
+                        "Save a default email address for sending reports.",
+                        actions, "Set Default Email", "gmail"), 1, 0);
+                cards.add(settingsCard("Generate & Send Reports",
+                        "Choose today's report or a custom range, then download or send it.",
+                        actions, "Open Report Generator", "emailReports"), 0, 1);
+                cards.add(settingsCard("Report Export",
+                        "Export inventory data to a local CSV file.",
+                        actions, "Export Inventory CSV", "export"), 1, 1);
+            }
+            case "Users & Roles" -> {
+                cards.add(settingsCard("User Management",
+                        "Add, edit, deactivate or permanently delete local directory users.",
+                        actions, "Manage Users", "users"), 0, 0);
+                cards.add(settingsCard("Directory Roles",
+                        "Admin, Manager and Staff are directory labels. Login permissions are not yet enforced.",
+                        actions, "View Users & Roles", "users"), 1, 0);
+            }
+            case "Notifications" -> {
+                cards.add(settingsCard("Low Stock Alerts",
+                        "View parts that need replenishment. Background alerts are not yet available.",
+                        actions, "View Low Stock", "lowStock"), 0, 0);
+                cards.add(settingsCard("Email Notifications",
+                        "On-demand report emailing is supported. Automatic email notifications are not yet implemented.",
+                        actions, "Gmail & Report Preferences", "gmail"), 1, 0);
+                Label notice = label("Automatic alerts, notification preferences and delivery schedules "
+                        + "are planned features, not active notification services.", "detail-muted");
+                notice.setWrapText(true);
+                target.getChildren().add(notice);
+            }
+            case "Security" -> {
+                cards.add(settingsCard("Activation & License",
+                        "Review expiry information. The activation key is never displayed.",
+                        actions, "View License Status", "activation"), 0, 0);
+                cards.add(settingsCard("Backup & Recovery",
+                        "Protect your shop records with independent database snapshots.",
+                        actions, "Backup Database", "backup"), 1, 0);
+                cards.add(settingsCard("Restore Database",
+                        "Validate a backup before replacing the local database.",
+                        actions, "Restore Backup", "restore"), 0, 1);
+                cards.add(settingsCard("Account Security",
+                        "Multi-user sign-in, two-factor authentication and session timeout are not implemented.",
+                        actions), 1, 1);
+            }
+            default -> throw new IllegalArgumentException("Unsupported Settings tab: " + section);
+        }
+        target.getChildren().add(cards);
+    }
+
+    private static VBox settingsCard(String heading, String description,
+                                     Map<String, Runnable> actions, String... commands) {
+        Label title = label(heading, "details-heading");
+        Label help = label(description, "detail-muted");
+        help.setWrapText(true);
+        VBox card = new VBox(12, title, help);
+        card.getStyleClass().add("settings-feature-card");
+        for (int i = 0; i + 1 < commands.length; i += 2) {
+            card.getChildren().add(action(commands[i], actions.get(commands[i + 1])));
+        }
+        card.setMaxWidth(Double.MAX_VALUE);
+        return card;
     }
 
     private static <T> void search(VBox parent, TableView<T> grid,
