@@ -732,6 +732,10 @@ public class MechMotorApplication extends Application {
         controlsScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         controlsScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
         controlsScroll.getStyleClass().add("controls-scroll");
+        TitledPane advanced = new TitledPane("Advanced filters and actions", controlsScroll);
+        advanced.setExpanded(false);
+        advanced.setAnimated(false);
+        advanced.getStyleClass().add("advanced-controls");
 
         header.setPadding(new Insets(12, 18, 12, 18));
         header.getStyleClass().add("header");
@@ -914,13 +918,24 @@ public class MechMotorApplication extends Application {
         });
         HBox.setHgrow(inventorySearch, Priority.ALWAYS);
         Button filterOpen = new Button("☷");
-        filterOpen.setOnAction(e -> controlsScroll.setVvalue(0));
+        filterOpen.setOnAction(e -> advanced.setExpanded(!advanced.isExpanded()));
         Button resetInline = new Button("Clear");
         resetInline.setOnAction(e -> {
             inventorySearch.clear();
             clearButton.fire();
         });
-        HBox inventoryFilterRow = new HBox(10, inventorySearch, resetInline, filterOpen);
+        ComboBox<LookupOption> inlineCategory = new ComboBox<>();
+        inlineCategory.setPromptText("All Categories");
+        inlineCategory.setPrefWidth(155);
+        inlineCategory.itemsProperty().bind(categoryFilter.itemsProperty());
+        inlineCategory.valueProperty().bindBidirectional(categoryFilter.valueProperty());
+        inlineCategory.setOnAction(e -> searchButton.fire());
+        ComboBox<InventoryFilter.StockStatus> inlineStock = new ComboBox<>(
+                FXCollections.observableArrayList(InventoryFilter.StockStatus.values()));
+        inlineStock.valueProperty().bindBidirectional(stockFilter.valueProperty());
+        inlineStock.setPrefWidth(155);
+        inlineStock.setOnAction(e -> searchButton.fire());
+        HBox inventoryFilterRow = new HBox(10, inventorySearch, inlineCategory, inlineStock, resetInline, filterOpen);
         inventoryFilterRow.setAlignment(Pos.CENTER_LEFT);
         inventoryFilterRow.setPadding(new Insets(3, 12, 10, 12));
         inventoryFilterRow.getStyleClass().add("inventory-filter-row");
@@ -973,10 +988,6 @@ public class MechMotorApplication extends Application {
         for (Node card : lowerCards.getChildren()) HBox.setHgrow(card, Priority.ALWAYS);
 
         // Keep advanced inventory filters and all existing workflows accessible.
-        TitledPane advanced = new TitledPane("Advanced filters and actions", controlsScroll);
-        advanced.setExpanded(false);
-        advanced.setAnimated(false);
-        advanced.getStyleClass().add("advanced-controls");
         VBox mainPage = new VBox(12, welcome, dashboard, inventorySection, lowerCards, advanced);
         mainPage.setPadding(new Insets(10, 16, 16, 16));
         mainPage.getStyleClass().add("dashboard-body");
