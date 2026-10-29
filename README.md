@@ -29,6 +29,28 @@ Full **functional requirements** (FR-01 through FR-12), **non-functional require
 
 **Deployment scope:** Offline-first Windows desktop, in-process JavaFX + Spring Boot services, Spring JDBC + SQLite, local reports/backups, optional Google OAuth/Gmail. No internal HTTP/gRPC service, Kubernetes, message queue, CDN or load balancer is currently used.
 
+**Functional requirements at a glance** (full evidence and implementation status: [requirements matrix](Architechture%20Design/REQUIREMENTS.md)):
+
+| IDs | Core capabilities | Status |
+|---|---|---|
+| FR-01–03 | Signed activation, inventory CRUD/search, categories/fitment/suppliers | Implemented |
+| FR-04–06 | Purchase orders/receiving, sales/returns, stock movement audit | Implemented with stated financial restrictions |
+| FR-07–08 | Date-range reports, CSV/PDF, Gmail OAuth and recipient selection | Implemented; live Gmail authorization required |
+| FR-09–10 | Local user directory, shop profile, backup/restore | Implemented; directory roles do not enforce login |
+| FR-11 | Desktop navigation and consistent functional dialogs | Partial; some Settings tabs are still static |
+| FR-12 | Unattended scheduled Gmail reports / delivery history | Planned, not implemented |
+
+**Non-functional requirements at a glance** ([NFR-01–12 evidence and diagram mappings](Architechture%20Design/REQUIREMENTS.md)):
+
+| IDs | Quality attribute / design control | Acceptance status |
+|---|---|---|
+| NFR-01–03 | Offline-first, atomic stock/accounting, signed licensing | Implemented patterns; field validation required |
+| NFR-04–06 | Scoped OAuth, recoverable SQLite, JavaFX responsiveness | Implemented; OAuth/restore drills pending |
+| NFR-07–09 | Paged search, signed-install readiness, Java/Windows testing | Performance benchmarking and certificate-based release signing pending |
+| NFR-10–11 | Local logging/migrations; single-PC deployment, no server infrastructure | Implemented |
+| NFR-12 | True role-based authorization for directory users | Gap; directory roles only |
+
+
 ## Activation and licensing
 
 MechMotor validates signed Ed25519 activation tokens before loading inventory. The application contains only the public verification key; the signing private key must remain outside this repository and be protected offline.
