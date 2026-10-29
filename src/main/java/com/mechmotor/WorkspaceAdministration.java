@@ -18,9 +18,15 @@ import java.util.function.Consumer;
 /** Admin and Gmail report controls. All database/network work uses the supplied executor. */
 public final class WorkspaceAdministration {
     private WorkspaceAdministration() {}
+    private static void theme(Dialog<?> dialog) {
+        var css=WorkspaceAdministration.class.getResource("/styles/app.css");
+        if(css!=null) dialog.getDialogPane().getStylesheets().add(css.toExternalForm());
+        dialog.getDialogPane().getStyleClass().add("premium-admin-dialog");
+    }
     public static void users(Window owner,WorkspaceUserService service,Executor executor) {
         Dialog<ButtonType> dialog=new Dialog<>();
         dialog.initOwner(owner);
+        theme(dialog);
         dialog.setTitle("MechMotor - Manage Users");
         dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
         TableView<WorkspaceUserService.User> table=new TableView<>();
@@ -29,7 +35,10 @@ public final class WorkspaceAdministration {
                 column("Email",WorkspaceUserService.User::email),
                 column("Role",WorkspaceUserService.User::role),
                 column("Status",u->u.active()?"Active":"Inactive"));
-        Button add=new Button("+ Add User"),edit=new Button("Edit User"),remove=new Button("Deactivate User"),delete=new Button("Delete User Permanently");
+        Button add=new Button("+ Add User"),edit=new Button("Edit User"),
+                remove=new Button("Deactivate User"),delete=new Button("Delete User");
+        add.getStyleClass().add("admin-primary");
+        delete.getStyleClass().add("admin-destructive");
         Label info=new Label("Local user directory only. Roles do not grant login permissions.");
         info.setWrapText(true);
         VBox root=new VBox(12,info,table,new HBox(10,add,edit,remove,delete));
@@ -69,6 +78,7 @@ public final class WorkspaceAdministration {
                                  WorkspaceUserService service,Executor executor,Runnable refresh) {
         Dialog<ButtonType> dialog=new Dialog<>();
         dialog.initOwner(owner);
+        theme(dialog);
         dialog.setTitle(prior==null?"Add User":"Edit User");
         ButtonType save=new ButtonType("Save User",ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().addAll(save,ButtonType.CANCEL);
@@ -97,6 +107,7 @@ public final class WorkspaceAdministration {
                                      GmailReportService gmail,Executor executor) {
         Dialog<ButtonType> dialog=new Dialog<>();
         dialog.initOwner(owner);
+        theme(dialog);
         dialog.setTitle("MechMotor - Gmail Connection & Default Recipient");
         dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
         Label connection=new Label(gmail.connected()?"Google account connected":"Google account not connected");
@@ -107,9 +118,18 @@ public final class WorkspaceAdministration {
         defaultEmail.setPromptText("default@example.com");
         Button save=new Button("Save Default Email");
         Button connect=new Button("Connect Google Account");
+        Button disconnect=new Button("Disconnect");
+        connect.getStyleClass().add("admin-primary");
+        disconnect.getStyleClass().add("admin-destructive");
         Label status=new Label("");
-        VBox layout=new VBox(13,new Label("Gmail connection"),connection,connect,
-                directions,new Label("Default report recipient"),defaultEmail,save,status);
+        Label googleHeading=new Label("Google Account (Gmail)");
+        googleHeading.getStyleClass().add("admin-heading");
+        Label emailHeading=new Label("Default Report Recipient");
+        emailHeading.getStyleClass().add("admin-heading");
+        VBox layout=new VBox(13,googleHeading,connection,new HBox(10,connect,disconnect),
+                directions,emailHeading,defaultEmail,save,status);
+        layout.getStyleClass().add("admin-content");
+        save.getStyleClass().add("admin-success");
         layout.setPadding(new Insets(18));
         layout.setPrefWidth(560);
         dialog.getDialogPane().setContent(layout);
@@ -128,13 +148,19 @@ public final class WorkspaceAdministration {
                     ok->{connect.setDisable(false);connection.setText("Google account connected");status.setText("Connected for this session.");},
                     error->{connect.setDisable(false);status.setText("Connection failed.");failure(owner,error);});
         });
+        disconnect.setOnAction(e->{
+            gmail.disconnect();
+            connection.setText("Google account not connected");
+            status.setText("Disconnected.");
+        });
         dialog.showAndWait();
     }
 
     public static void reports(Window owner, OperationalReportsService reports,
                                WorkspaceUserService users,GmailReportService gmail,Executor executor) {
         Dialog<ButtonType> dialog=new Dialog<>();
-        dialog.initOwner(owner);dialog.setTitle("MechMotor - Generate and Email Report");
+        dialog.initOwner(owner);
+        theme(dialog);dialog.setTitle("MechMotor - Generate and Email Report");
         dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
         ComboBox<OperationalReportsService.ReportType> type=new ComboBox<>(
                 FXCollections.observableArrayList(OperationalReportsService.ReportType.values()));
@@ -152,13 +178,25 @@ public final class WorkspaceAdministration {
         Label connected=new Label(gmail.connected()?"Gmail connected":"Gmail not connected - connect in Settings");
         Label status=new Label("");
         Button generate=new Button("Generate & Download");
-        Button send=new Button("Generate & Send Mail");
-        VBox layout=new VBox(12,new Label("Report type"),type,
-                new HBox(12,today,new Label("From"),from,new Label("To"),to),
-                new Separator(),new Label("Send report by Gmail"),connected,
-                defaultLabel,new Label("Recipient email"),recipient,both,
-                new HBox(12,generate,send),status);
-        layout.setPadding(new Insets(18));layout.setPrefWidth(630);
+        Button send=new Button("Send Report");
+        Button generateAndSendBoth=new Button("Generate & Send Both");
+        generate.getStyleClass().add("admin-primary");
+        send.getStyleClass().add("admin-success");
+        generateAndSendBoth.getStyleClass().add("admin-purple");
+        Label heading=new Label("Generate, Download or Email Reports");
+        heading.getStyleClass().add("admin-heading");
+        VBox typeCard=new VBox(9,new Label("Report Type"),type);
+        VBox dateCard=new VBox(9,new Label("Date Range"),today,new HBox(8,new Label("From"),from),
+                new HBox(8,new Label("To"),to));
+        VBox emailCard=new VBox(9,new Label("Email Options"),connected,defaultLabel,recipient,both);
+        for(VBox card:List.of(typeCard,dateCard,emailCard))
+            card.getStyleClass().add("report-control-card");
+        HBox formRow=new HBox(13,typeCard,dateCard,emailCard);
+        HBox.setHgrow(emailCard,Priority.ALWAYS);
+        VBox layout=new VBox(15,heading,formRow,
+                new HBox(12,generate,send,generateAndSendBoth),status);
+        layout.getStyleClass().add("admin-content");
+        layout.setPadding(new Insets(18));layout.setPrefWidth(900);
         dialog.getDialogPane().setContent(layout);
         final String[] defaultEmail={""};
         background(executor,users::defaultRecipient,email->{
@@ -189,6 +227,14 @@ public final class WorkspaceAdministration {
             },count->{generate.setDisable(false);status.setText("Generated "+count+" rows: "+destination.getFileName()
                     +(copyTargets.isEmpty()?"":" and sent to "+String.join(", ",copyTargets)));},
                     error->{generate.setDisable(false);failure(owner,error);status.setText("Generation failed.");});
+        });
+        generateAndSendBoth.setOnAction(e->{
+            if(recipient.getText().isBlank()) {
+                failure(owner,new IllegalArgumentException("Enter a recipient to send to both emails."));
+                return;
+            }
+            both.setSelected(true);
+            send.fire();
         });
         send.setOnAction(e->{
             LocalDate reportStart=today.isSelected()?LocalDate.now():from.getValue();
