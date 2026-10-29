@@ -112,16 +112,19 @@ public class MechMotorApplication extends Application {
         Label lowStockValue = new Label("—"); lowStockValue.getStyleClass().add("metric-value");
         Label outOfStockValue = new Label("—"); outOfStockValue.getStyleClass().add("metric-value");
         Label retailValue = new Label("—"); retailValue.getStyleClass().add("metric-value");
-        FlowPane dashboard = new FlowPane(12, 12,
-                metricCard("Active parts", activePartsValue),
-                metricCard("Units on hand", totalUnitsValue),
-                metricCard("Low-stock parts", lowStockValue),
-                metricCard("Out of stock", outOfStockValue),
-                metricCard("Retail value (est.)", retailValue));
+        // Four evenly sized, live-data KPI tiles — no illustrative hard-coded counts.
+        HBox dashboard = new HBox(12,
+                metricCard("Total Items", activePartsValue),
+                metricCard("Units In Stock", totalUnitsValue),
+                metricCard("Low Stock", lowStockValue),
+                metricCard("Out of Stock", outOfStockValue));
         dashboard.setAlignment(Pos.CENTER_LEFT);
-        dashboard.setPrefWrapLength(1200);
-        dashboard.setPadding(new Insets(12, 16, 4, 16));
-        dashboard.getStyleClass().add("dashboard");
+        dashboard.setPadding(new Insets(2, 0, 2, 0));
+        dashboard.getStyleClass().add("dashboard-kpi-row");
+        for (Node card : dashboard.getChildren()) {
+            HBox.setHgrow(card, Priority.ALWAYS);
+            if (card instanceof Region region) region.setMaxWidth(Double.MAX_VALUE);
+        }
 
         TextField query = new TextField();
         query.setPromptText("Search SKU, barcode, brand, material, color, category, supplier or vehicle make/model/engine");
@@ -721,7 +724,7 @@ public class MechMotorApplication extends Application {
         // Screenshot-inspired dashboard composition; all figures and rows remain backed
         // by the existing services rather than the illustrative screenshot values.
         dashboard.getStyleClass().add("dashboard-metrics");
-        VBox topControls = new VBox(10, dashboard, filters, primaryActions, moreActions);
+        VBox topControls = new VBox(10, filters, primaryActions, moreActions);
         topControls.getStyleClass().add("top-controls");
 
         ScrollPane controlsScroll = new ScrollPane(topControls);
@@ -736,6 +739,12 @@ public class MechMotorApplication extends Application {
         table.getStyleClass().add("inventory-table");
         status.setPadding(new Insets(8, 16, 8, 16));
 
+        ImageView heroBrandIcon = new ImageView(new Image(
+                java.util.Objects.requireNonNull(getClass().getResource("/icons/mechmotor.png"))
+                        .toExternalForm()));
+        heroBrandIcon.setFitWidth(58);
+        heroBrandIcon.setFitHeight(58);
+        heroBrandIcon.setPreserveRatio(true);
         Label greeting = new Label("Hello! 👋");
         greeting.getStyleClass().add("welcome-title");
         Label greetingDescription = new Label("Manage your inventory, orders and suppliers in one place.");
@@ -745,7 +754,8 @@ public class MechMotorApplication extends Application {
                 .format(java.time.format.DateTimeFormatter.ofPattern("EEEE, dd MMM yyyy")));
         today.getStyleClass().add("today-pill");
         BorderPane welcome = new BorderPane();
-        welcome.setLeft(greetingWords);
+        welcome.setLeft(new HBox(16, heroBrandIcon, greetingWords));
+        ((HBox) welcome.getLeft()).setAlignment(Pos.CENTER_LEFT);
         welcome.setRight(today);
         welcome.setPadding(new Insets(16, 20, 16, 20));
         welcome.getStyleClass().add("welcome-banner");
@@ -851,6 +861,7 @@ public class MechMotorApplication extends Application {
             detailSupplier.setText("Supplier: " + selected.supplier());
         });
 
+        // Interactive inventory tabs and compact search row from the approved dashboard.
         Label inventoryTitle = new Label("▦  Inventory");
         inventoryTitle.getStyleClass().add("section-title");
         Button inventoryAdd = new Button("+  Add Item");
@@ -858,14 +869,64 @@ public class MechMotorApplication extends Application {
         inventoryAdd.setOnAction(e -> addButton.fire());
         Button inventoryExport = new Button("⇩  Export");
         inventoryExport.setOnAction(e -> exportCsvItem.fire());
-        HBox inventoryHeading = new HBox(12, inventoryTitle, new Region(), inventoryAdd, inventoryExport);
-        HBox.setHgrow(inventoryHeading.getChildren().get(1), Priority.ALWAYS);
+
+        Button inventoryTab = new Button("▦  Inventory");
+        Button recentTab = new Button("▤  Recent Orders");
+        Button lowStockTab = new Button("⚠  Low Stock Items");
+        Button suppliersTab = new Button("♟  Top Suppliers");
+        Button categoriesTab = new Button("▦  Categories");
+        List<Button> dashboardTabs = List.of(inventoryTab, recentTab, lowStockTab, suppliersTab, categoriesTab);
+        HBox inventoryTabs = new HBox(8);
+        for (Button tab : dashboardTabs) {
+            tab.getStyleClass().add("dashboard-section-tab");
+            inventoryTabs.getChildren().add(tab);
+        }
+        inventoryTab.getStyleClass().add("dashboard-tab-selected");
+        inventoryTab.setOnAction(e -> {
+            dashboardTabs.forEach(button -> button.getStyleClass().remove("dashboard-tab-selected"));
+            inventoryTab.getStyleClass().add("dashboard-tab-selected");
+            stockFilter.setValue(InventoryFilter.StockStatus.ANY);
+            searchButton.fire();
+        });
+        lowStockTab.setOnAction(e -> {
+            dashboardTabs.forEach(button -> button.getStyleClass().remove("dashboard-tab-selected"));
+            lowStockTab.getStyleClass().add("dashboard-tab-selected");
+            stockFilter.setValue(InventoryFilter.StockStatus.LOW_STOCK);
+            searchButton.fire();
+        });
+        recentTab.setOnAction(e -> salesHistoryButton.fire());
+        suppliersTab.setOnAction(e -> supplierMenu.show());
+        categoriesTab.setOnAction(e -> categoryMenu.show());
+
+        Region headingSpacer = new Region();
+        HBox.setHgrow(headingSpacer, Priority.ALWAYS);
+        HBox inventoryHeading = new HBox(10, inventoryTabs, headingSpacer, inventoryAdd, inventoryExport);
         inventoryHeading.setAlignment(Pos.CENTER_LEFT);
-        inventoryHeading.setPadding(new Insets(12, 14, 12, 14));
+        inventoryHeading.setPadding(new Insets(12, 14, 10, 14));
         inventoryHeading.getStyleClass().add("inventory-heading");
 
+        TextField inventorySearch = new TextField();
+        inventorySearch.setPromptText("⌕  Search by item code, name or category...");
+        inventorySearch.getStyleClass().add("inventory-inline-search");
+        inventorySearch.setOnAction(e -> {
+            query.setText(inventorySearch.getText());
+            searchButton.fire();
+        });
+        HBox.setHgrow(inventorySearch, Priority.ALWAYS);
+        Button filterOpen = new Button("☷");
+        filterOpen.setOnAction(e -> controlsScroll.setVvalue(0));
+        Button resetInline = new Button("Clear");
+        resetInline.setOnAction(e -> {
+            inventorySearch.clear();
+            clearButton.fire();
+        });
+        HBox inventoryFilterRow = new HBox(10, inventorySearch, resetInline, filterOpen);
+        inventoryFilterRow.setAlignment(Pos.CENTER_LEFT);
+        inventoryFilterRow.setPadding(new Insets(3, 12, 10, 12));
+        inventoryFilterRow.getStyleClass().add("inventory-filter-row");
+        VBox tableHeader = new VBox(inventoryHeading, inventoryFilterRow);
         BorderPane tablePanel = new BorderPane();
-        tablePanel.setTop(inventoryHeading);
+        tablePanel.setTop(tableHeader);
         tablePanel.setCenter(table);
         tablePanel.setBottom(status);
         tablePanel.getStyleClass().add("table-panel");
@@ -891,13 +952,21 @@ public class MechMotorApplication extends Application {
         quickActionsPanel.getStyleClass().add("bottom-card");
         quickActionsPanel.setPadding(new Insets(12));
 
-        VBox categoryPanel = new VBox(8, new Label("Stock by Category"),
-                new Label("Use Categories to explore and manage stock groups."), categoryMenu);
+        javafx.scene.chart.PieChart categoryChart = new javafx.scene.chart.PieChart();
+        categoryChart.setLegendVisible(false);
+        categoryChart.setLabelsVisible(true);
+        categoryChart.setPrefHeight(145);
+        categoryChart.setMinHeight(125);
+        table.itemsProperty().addListener((observable, previous, current) -> refreshCategoryChart(categoryChart, current));
+        refreshCategoryChart(categoryChart, table.getItems());
+        VBox categoryPanel = new VBox(5, new Label("Stock by Category"), categoryChart, categoryMenu);
         categoryPanel.getStyleClass().add("bottom-card");
         categoryPanel.setPadding(new Insets(12));
-        VBox stockPanel = new VBox(8, new Label("Stock Overview"),
-                new Label("Current stock and low-stock totals are shown above."),
-                new Label("Operational reports provide detailed stock movement history."));
+        VBox stockPanel = new VBox(8, new Label("Stock Trend (Last 6 Months)"),
+                new Label("Historical monthly stock snapshots are not available in the current database."),
+                new Label("Open Reports for actual transaction history."));
+        ((Label) stockPanel.getChildren().get(1)).setWrapText(true);
+        ((Label) stockPanel.getChildren().get(2)).setWrapText(true);
         stockPanel.getStyleClass().add("bottom-card");
         stockPanel.setPadding(new Insets(12));
         HBox lowerCards = new HBox(12, categoryPanel, stockPanel, quickActionsPanel);
@@ -1026,6 +1095,20 @@ public class MechMotorApplication extends Application {
         }, error -> { status.setText("Could not load categories and suppliers."); showError("Database initialization failed", error); });
     }
 
+
+    private static void refreshCategoryChart(javafx.scene.chart.PieChart chart,
+                                             javafx.collections.ObservableList<Part> parts) {
+        if (parts == null) return;
+        Map<String, Integer> counts = new java.util.LinkedHashMap<>();
+        for (Part part : parts) {
+            String group = part.category() == null || part.category().isBlank()
+                    ? "Other" : part.category();
+            counts.merge(group, 1, Integer::sum);
+        }
+        chart.getData().setAll(counts.entrySet().stream()
+                .map(entry -> new javafx.scene.chart.PieChart.Data(entry.getKey(), entry.getValue()))
+                .toList());
+    }
 
     private static Button dashboardNav(String symbol, String name, Runnable action) {
         Button button = new Button(symbol + "    " + name);
