@@ -96,9 +96,9 @@ class LicenseServiceTest {
         var field = LicenseService.class.getDeclaredField("OWNER_PUBLIC_KEY_DER_BASE64");
         field.setAccessible(true);
         byte[] der = Base64.getDecoder().decode((String)field.get(null));
-        assertEquals("Ed25519",
+        assertTrue(java.util.Set.of("Ed25519", "EdDSA").contains(
                 java.security.KeyFactory.getInstance("Ed25519")
-                        .generatePublic(new java.security.spec.X509EncodedKeySpec(der)).getAlgorithm());
+                        .generatePublic(new java.security.spec.X509EncodedKeySpec(der)).getAlgorithm()));
     }
 
     private String token(String id, String customer, LocalDate issued, LocalDate expiry, String features) throws Exception {
