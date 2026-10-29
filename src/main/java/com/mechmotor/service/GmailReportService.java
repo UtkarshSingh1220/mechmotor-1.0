@@ -27,6 +27,10 @@ public class GmailReportService {
     public boolean connected() {
         return accessToken!=null && Instant.now().isBefore(expiry.minusSeconds(60));
     }
+    public synchronized void disconnect() {
+        accessToken = null;
+        expiry = Instant.EPOCH;
+    }
     public synchronized void connect() throws Exception {
         String client=System.getenv("MECHMOTOR_GOOGLE_CLIENT_ID");
         if(client==null || client.isBlank())
