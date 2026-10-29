@@ -42,9 +42,11 @@ jobs:
       - name: Resolve application version
         shell: pwsh
         run: |
-          # Read the project's own POM directly: no network or Maven help plugin dependency.
-          $version = (Select-Xml -Path pom.xml -XPath "/*[local-name()='project']/*[local-name()='version']").Node.InnerText
-          if ([string]::IsNullOrWhiteSpace($version) -or $version -notmatch '^[0-9]+[.][0-9]+[.][0-9]+([-.][A-Za-z0-9.]+)?
+          # Read Maven project version from POM without requiring Maven help plugin.
+          $versionNode = Select-Xml -Path pom.xml -XPath "/*[local-name()='project']/*[local-name()='version']"
+          if (-not $versionNode) { throw "Version element missing in pom.xml." }
+          $version = $versionNode.Node.InnerText.Trim()
+          if ([string]::IsNullOrWhiteSpace($version)) { throw "Empty project version." }
           "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "Packaging MechMotor version $version"
 
