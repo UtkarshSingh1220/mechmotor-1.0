@@ -2463,9 +2463,25 @@ public class MechMotorApplication extends Application {
         }
         panel.getStyleClass().add("activation-content");
         panel.setAlignment(Pos.CENTER);
-        panel.setPadding(new Insets(50, 38, 55, 38));
-        dialog.getDialogPane().setContent(panel);
-        dialog.getDialogPane().setPrefWidth(520);
+        panel.setPadding(new Insets(45, 28, 48, 28));
+        ImageView activationMark = new ImageView(new Image(
+                java.util.Objects.requireNonNull(getClass().getResource("/icons/mechmotor.png"))
+                        .toExternalForm()));
+        activationMark.setPreserveRatio(true);
+        activationMark.setFitWidth(185);
+        activationMark.setFitHeight(185);
+        Label productName = new Label("MechMotor");
+        productName.getStyleClass().add("activation-brand");
+        Label productSubtitle = new Label("Inventory Management");
+        productSubtitle.getStyleClass().add("activation-brand-subtitle");
+        VBox brandSide = new VBox(11, activationMark, productName, productSubtitle);
+        brandSide.getStyleClass().add("activation-brand-pane");
+        brandSide.setAlignment(Pos.CENTER);
+        brandSide.setPrefWidth(350);
+        HBox layout = new HBox(16, brandSide, panel);
+        layout.getStyleClass().add("activation-layout");
+        dialog.getDialogPane().setContent(layout);
+        dialog.getDialogPane().setPrefWidth(840);
         dialog.showAndWait();
         LicenseStatus after = licenseService.status();
         updateLicenseLabel(after, licenseStatusLabel);
