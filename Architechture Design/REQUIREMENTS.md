@@ -16,7 +16,7 @@
 | FR-08 | Connect Google via installed-app OAuth 2.0 PKCE, set default recipient, generate/send report to entered/default/both recipients | Implemented with external dependency | `GmailReportService`, `WorkspaceUserService`, `WorkspaceAdministration`; needs Google OAuth configuration and internet | HLD-01, HLD-02, LLD-03 |
 | FR-09 | Maintain local users and directory roles; create/update/deactivate/delete | Implemented directory; **not** application login authorization | `WorkspaceUserService`, `app_users` | HLD-02, LLD-01, LLD-05 |
 | FR-10 | Edit shop profile/tax settings; SQLite backup and restore | Implemented | `ShopProfileService`, `DatabaseBackupService` | HLD-03, LLD-05 |
-| FR-11 | Consistent navigable JavaFX desktop pages and dialogs | Partially implemented | `MechMotorApplication`, `WorkspacePages`, `WorkspaceAdministration`; some UI tabs are currently static labels | HLD-01, LLD-01 |
+| FR-11 | Consistent navigable JavaFX desktop pages and dialogs | Settings tabs implemented; other page-level tabs still under review | `WorkspacePages.create` now uses five selected `ToggleButton` tabs with per-tab content and existing actions; remaining page tabs may be decorative | HLD-01, LLD-01 |
 | FR-12 | Schedule recurring Gmail reports and maintain delivery history | **Planned; not implemented as unattended scheduler** | Existing on-demand Gmail delivery is not a scheduler | HLD-04 (future boundary only) |
 
 ## Non-functional requirements
