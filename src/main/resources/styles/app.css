@@ -287,3 +287,45 @@
 }
 .workspace-surface .primary-action { -fx-background-color: #076bff; -fx-text-fill: white; }
 .workspace-surface .detail-muted { -fx-text-fill: #617ba4; }
+
+
+/* Premium Modern – visual reference implementation */
+.app-shell { -fx-background-color: #0b70df; -fx-padding: 5px; }
+.app-content { -fx-background-color: #f1f7ff; -fx-background-radius: 13px; }
+.dashboard-sidebar {
+    -fx-background-color: linear-gradient(to bottom, #075bd0 0%, #073d97 55%, #04215d 100%);
+    -fx-background-radius: 12px 0 0 12px;
+}
+.sidebar-logo { -fx-font-size: 21px; -fx-text-fill: #ffffff; -fx-font-weight: 900; }
+.sidebar-subtitle { -fx-font-size: 11px; -fx-text-fill: #cae3ff; }
+.sidebar-navigation { -fx-background-radius: 9px; -fx-padding: 12px 14px; -fx-font-size: 14px; -fx-text-fill: #fff; }
+.sidebar-navigation.nav-selected, .sidebar-navigation:hover {
+    -fx-background-color: linear-gradient(to right, #ffffff, #d7eaff); -fx-text-fill: #075cdd;
+    -fx-font-weight: bold;
+}
+.sidebar-profile { -fx-background-color: #0955ba; -fx-background-radius: 12px; }
+.dashboard-topbar { -fx-background-color: #ffffff; -fx-min-height: 70px; -fx-border-color: transparent transparent #e8effa transparent; }
+.dashboard-topbar .global-search { -fx-border-color: #c8dcff; -fx-border-radius: 30px; -fx-background-radius: 30px; -fx-pref-height: 41px; }
+.welcome-banner {
+    -fx-background-color: linear-gradient(to right, #dcecff, #b9daff 70%, #78b5ff);
+    -fx-background-radius: 12px; -fx-border-color: #d5e7ff; -fx-min-height: 96px;
+}
+.metric-card { -fx-background-radius: 12px; -fx-border-radius: 12px;
+    -fx-effect: dropshadow(gaussian, rgba(32,93,175,0.13), 12, 0, 0, 3); }
+.table-panel, .details-panel, .bottom-card, .workspace-surface {
+    -fx-background-color: #ffffff; -fx-background-radius: 12px; -fx-border-radius: 12px;
+    -fx-border-color: #e1edfc; -fx-effect: dropshadow(gaussian, rgba(32,93,175,0.07), 9, 0, 0, 2);
+}
+.primary-action, .activation-submit { -fx-background-color: #0968f6; -fx-text-fill: white;
+    -fx-background-radius: 7px; -fx-font-weight: bold; -fx-padding: 11px 18px; }
+.primary-action:hover, .activation-submit:hover { -fx-background-color: #0055d9; }
+.premium-activation-dialog { -fx-background-color: linear-gradient(to bottom right, #eaf4ff, #b6dcff); }
+.premium-activation-dialog > .button-bar > .container { -fx-background-color: #ffffff; -fx-padding: 10px 24px 20px 24px; }
+.activation-content { -fx-background-color: white; -fx-background-radius: 14px; -fx-border-radius: 14px;
+    -fx-effect: dropshadow(gaussian, rgba(21,62,142,0.10), 22, 0, 0, 5); }
+.activation-heading { -fx-text-fill: #102b66; -fx-font-size: 25px; -fx-font-weight: 900; }
+.activation-subheading { -fx-text-fill: #4f6797; -fx-font-size: 13px; }
+.activation-input { -fx-background-radius: 7px; -fx-border-radius: 7px; -fx-border-color: #bcd4f7;
+    -fx-pref-height: 44px; -fx-font-size: 13px; }
+.premium-activation-dialog .button-bar .button { -fx-min-width: 120px; }
+.premium-activation-dialog .activation-submit { -fx-min-width: 225px; -fx-pref-height: 44px; }
