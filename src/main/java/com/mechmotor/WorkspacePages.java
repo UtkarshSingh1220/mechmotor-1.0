@@ -153,55 +153,83 @@ public final class WorkspacePages {
             grid.setPrefHeight(230);
             surface.getChildren().addAll(recentTitle, grid);
         } else if ("Settings".equals(page)) {
-            tabRow(surface, List.of("General", "Email & Reports",
-                    "Users & Roles", "Notifications", "Security"), actions,
-                    "Manage Users", "users");
+            // Real keyboard-accessible toggles, not decorative labels. Selecting a
+            // tab swaps its own content without recreating the Settings page.
+            List<String> settingsTabs = List.of(
+                    "General", "Email & Reports", "Users & Roles", "Notifications", "Security");
+            ToggleGroup tabGroup = new ToggleGroup();
+            HBox navigation = new HBox(8);
+            navigation.getStyleClass().add("settings-tab-bar");
+            VBox tabContent = new VBox(14);
+            tabContent.getStyleClass().add("settings-tab-content");
+            tabContent.setFillWidth(true);
 
-            Label settingsTitle = label("Settings & Preferences", "details-heading");
-            Label settingsDescription = label(
-                    "Manage your account, email configuration and application settings.", "detail-muted");
-            surface.getChildren().addAll(settingsTitle, settingsDescription);
+            Map<String, VBox> panes = new LinkedHashMap<>();
 
-            GridPane sections = new GridPane();
-            sections.setHgap(14);
-            sections.setVgap(14);
-            ColumnConstraints halfLeft = new ColumnConstraints();
-            halfLeft.setPercentWidth(50);
-            ColumnConstraints halfRight = new ColumnConstraints();
-            halfRight.setPercentWidth(50);
-            sections.getColumnConstraints().addAll(halfLeft, halfRight);
+            VBox profile = settingsCard("Company & Shop Profile",
+                    "Configure your registered shop information, address and tax details.",
+                    actions, "Edit Shop Profile", "shopProfile");
+            VBox license = settingsCard("License & Activation",
+                    "View your activation status and expiry date. The stored key is never shown.",
+                    actions, "View License Expiry", "activation");
+            panes.put("General", settingsGrid(profile, license));
 
-            VBox gmailCard = new VBox(13,
-                label("Google Account (Gmail)", "details-heading"),
-                label("Connect Google to send your generated reports.", "detail-muted"),
-                action("Connect / Disconnect Gmail", actions.get("gmail")),
-                label("Default Report Recipient", "details-heading"),
-                label("Set or update the default email from Gmail settings.", "detail-muted"),
-                action("Set Default Email", actions.get("gmail")));
-            gmailCard.getStyleClass().add("settings-feature-card");
-            VBox usersCard = new VBox(13,
-                label("Users & Roles", "details-heading"),
-                label("Manage saved user directory entries.", "detail-muted"),
-                action("Add / Update / Delete User", actions.get("users")),
-                label("Access note", "details-heading"),
-                label("Directory roles are not yet enforced sign-in permissions.", "detail-muted"));
-            usersCard.getStyleClass().add("settings-feature-card");
-            VBox licenseCard = new VBox(13,
-                label("License Information", "details-heading"),
-                label("View license status and expiry date. Activation key is not displayed.", "detail-muted"),
-                action("View License Expiry", actions.get("activation")),
-                label("Shop Profile", "details-heading"),
-                action("Company / Tax Settings", actions.get("shopProfile")));
-            licenseCard.getStyleClass().add("settings-feature-card");
-            VBox securityCard = new VBox(13,
-                label("Security & Backup", "details-heading"),
-                label("Keep secure backups before application upgrades.", "detail-muted"),
-                action("Backup Database", actions.get("backup")),
-                action("Restore Backup", actions.get("restore")));
-            securityCard.getStyleClass().add("settings-feature-card");
-            sections.add(gmailCard,0,0); sections.add(usersCard,1,0);
-            sections.add(licenseCard,0,1); sections.add(securityCard,1,1);
-            surface.getChildren().add(sections);
+            VBox google = settingsCard("Google Account (Gmail)",
+                    "Authorize Gmail sending through Google OAuth. An internet connection is required.",
+                    actions, "Connect / Disconnect Google", "gmail");
+            VBox recipients = settingsCard("Default Report Recipient",
+                    "Set the default email in Gmail settings. A typed recipient overrides it; the Both option sends to both.",
+                    actions, "Configure Default Email", "gmail");
+            VBox delivery = settingsCard("Generate & Send Reports",
+                    "Select Today or a custom range, then generate/download, send, or send to both recipients.",
+                    actions, "Open Report Generator", "emailReports");
+            panes.put("Email & Reports", settingsGrid(google, recipients, delivery));
+
+            VBox directory = settingsCard("User Management",
+                    "Create, update, deactivate or permanently delete local directory users.",
+                    actions, "Manage Users", "users");
+            VBox permissions = infoCard("Role Permissions",
+                    "Directory roles describe users but are not enforced as application login permissions. "
+                    + "No additional authentication or access controls are represented here.");
+            panes.put("Users & Roles", settingsGrid(directory, permissions));
+
+            VBox alerts = infoCard("Low-stock Alerts",
+                    "Low-stock and out-of-stock totals are available on the Dashboard and in Inventory. "
+                    + "Automatic notifications are not implemented.");
+            VBox orderNotifications = infoCard("Order and Email Notifications",
+                    "Scheduled notifications and unattended email delivery are not implemented. "
+                    + "Use Reports to explicitly generate and send a report.");
+            panes.put("Notifications", settingsGrid(alerts, orderNotifications));
+
+            VBox backup = settingsCard("Database Backup",
+                    "Create an integrity-checked snapshot in a folder you select.",
+                    actions, "Back Up Database", "backup");
+            VBox restore = settingsCard("Restore Database",
+                    "Restore a validated backup after reviewing the current database and preserving a pre-restore copy.",
+                    actions, "Restore Backup", "restore");
+            VBox security = infoCard("Session & Access Security",
+                    "This desktop release does not currently implement enforced role-based access control, "
+                    + "two-factor authentication or configurable session timeout.");
+            panes.put("Security", settingsGrid(backup, restore, security));
+
+            List<ToggleButton> buttons = new ArrayList<>();
+            for (String name : settingsTabs) {
+                ToggleButton button = new ToggleButton(name);
+                button.setToggleGroup(tabGroup);
+                button.getStyleClass().add("settings-tab");
+                button.setFocusTraversable(true);
+                buttons.add(button);
+                navigation.getChildren().add(button);
+                button.setOnAction(event -> showSettingsTab(name, panes, tabContent, buttons));
+            }
+            // An already selected tab stays selected when clicked again.
+            tabGroup.selectedToggleProperty().addListener((obs, before, selected) -> {
+                if (selected == null && before != null) before.setSelected(true);
+            });
+            showSettingsTab("General", panes, tabContent, buttons);
+            VBox section = new VBox(17, navigation, tabContent);
+            section.getStyleClass().add("settings-container");
+            surface.getChildren().add(section);
         }
         VBox quick = new VBox(10);
         quick.getStyleClass().add("workspace-surface");
@@ -220,6 +248,47 @@ public final class WorkspacePages {
                 "Back Up Now", "backup");
         root.getChildren().add(quick);
         return root;
+    }
+
+    private static VBox settingsCard(String title, String description,
+                                     Map<String, Runnable> actions, String buttonText, String actionId) {
+        VBox card = infoCard(title, description);
+        card.getChildren().add(action(buttonText, actions.get(actionId)));
+        return card;
+    }
+
+    private static VBox infoCard(String title, String description) {
+        Label heading = label(title, "details-heading");
+        Label detail = label(description, "detail-muted");
+        detail.setWrapText(true);
+        VBox card = new VBox(13, heading, detail);
+        card.getStyleClass().add("settings-feature-card");
+        card.setFillWidth(true);
+        return card;
+    }
+
+    private static VBox settingsGrid(VBox... cards) {
+        FlowPane grid = new FlowPane(14, 14);
+        grid.setPrefWrapLength(830);
+        grid.getStyleClass().add("settings-card-grid");
+        for (VBox card : cards) {
+            card.setPrefWidth(370);
+            grid.getChildren().add(card);
+        }
+        return new VBox(grid);
+    }
+
+    private static void showSettingsTab(String name, Map<String, VBox> panes,
+                                        VBox content, List<ToggleButton> buttons) {
+        VBox selected = panes.get(name);
+        if (selected == null) throw new IllegalArgumentException("Unknown settings tab: " + name);
+        content.getChildren().setAll(selected);
+        for (ToggleButton button : buttons) {
+            boolean active = name.equals(button.getText());
+            button.setSelected(active);
+            button.getStyleClass().remove("settings-tab-selected");
+            if (active) button.getStyleClass().add("settings-tab-selected");
+        }
     }
 
     private static <T> void search(VBox parent, TableView<T> grid,
