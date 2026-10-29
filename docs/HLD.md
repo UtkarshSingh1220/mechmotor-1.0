@@ -46,3 +46,14 @@ Invoice PDFs are generated locally from immutable sale/item snapshots plus payme
 
 ## Service-level license enforcement
 Signed feature entitlements are checked both in the UI and through a Spring AOP guard on business services. The UI layer is for user-friendly feedback; service interception is the enforcement boundary for inventory, CSV, sales/invoices and purchasing operations.
+
+
+## Current architecture diagram set (2026-10-29)
+
+The maintained source-aligned diagrams and traceable functional/non-functional requirements are in **[Architechture Design](../Architechture%20Design/README.md)**:
+
+- [Requirements matrix](../Architechture%20Design/REQUIREMENTS.md) — FR-01 through FR-12; NFR-01 through NFR-12; implementation evidence and limitations.
+- [Detailed HLD](../Architechture%20Design/HLD.md) — System Architecture, High-Level DFD, Component and Deployment diagrams.
+- [Detailed LLD](../Architechture%20Design/LLD.md) — Class, Sequence, State Machine and ER diagrams.
+
+This historical document remains for existing design notes. Where historical planned scope differs from current code, the new requirement/status matrix and current source files distinguish implemented, partial and planned behaviors. No distributed infrastructure is deployed in the present single-PC design.

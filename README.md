@@ -7,6 +7,50 @@ MechMotor is designed as a lightweight desktop application for a single shop PC.
 
 > **Project status (2026-10-18):** Implemented workflows include inventory CRUD/search/filters, category hierarchy and vehicle fitment, saved views, CSV import/export, inventory metrics, signed Ed25519 activation and service-level feature gating, multi-item sales with discount/tax snapshots, voids/partial returns, purchase orders with partial receiving, supplier payments/returns, PDF invoices, operational CSV reports, and database backup/restore. PR #53 added a safeguard that rejects supplier returns which would create an untracked supplier credit; supplier-credit carry-forward/settlement is not implemented. The Windows workflow builds and smoke-tests EXE/MSI installers on hosted runners, but physical Windows acceptance, representative-shop reconciliation, restore drills and performance/release review remain outstanding. **Do not use this as the sole live-shop system until the release gate in [issue #51](https://github.com/UtkarshSingh1220/mechmotor-1.0/issues/51) is closed.**
 
+## Architecture design diagrams and requirements
+
+Full **functional requirements** (FR-01 through FR-12), **non-functional requirements** (NFR-01 through NFR-12), and the eight requested diagram types (nine diagrams total) are maintained under [Architechture Design](Architechture%20Design/README.md):
+
+| Level | Diagram type | Image | Editable design |
+|---|---|---|---|
+| HLD | System Architecture | [SVG](Architechture%20Design/diagrams/HLD-01-system-architecture.svg) | [HLD](Architechture%20Design/HLD.md) |
+| HLD | High-Level DFD | [SVG](Architechture%20Design/diagrams/HLD-02-high-level-dfd.svg) | [HLD](Architechture%20Design/HLD.md) |
+| HLD | Component Diagram | [SVG](Architechture%20Design/diagrams/HLD-03-component-diagram.svg) | [HLD](Architechture%20Design/HLD.md) |
+| HLD | Deployment Diagram | [SVG](Architechture%20Design/diagrams/HLD-04-deployment-diagram.svg) | [HLD](Architechture%20Design/HLD.md) |
+| LLD | Class Diagram | [SVG](Architechture%20Design/diagrams/LLD-01-class-diagram.svg) | [LLD](Architechture%20Design/LLD.md) |
+| LLD | Purchase Sequence | [SVG](Architechture%20Design/diagrams/LLD-02-purchasing-sequence.svg) | [LLD](Architechture%20Design/LLD.md) |
+| LLD | Gmail Report Sequence | [SVG](Architechture%20Design/diagrams/LLD-03-gmail-report-sequence.svg) | [LLD](Architechture%20Design/LLD.md) |
+| LLD | License State Machine | [SVG](Architechture%20Design/diagrams/LLD-04-license-state-machine.svg) | [LLD](Architechture%20Design/LLD.md) |
+| LLD | ER Diagram | [SVG](Architechture%20Design/diagrams/LLD-05-entity-relationship.svg) | [LLD](Architechture%20Design/LLD.md) |
+
+[View requirement/status matrices](Architechture%20Design/REQUIREMENTS.md) · [Architecture documentation index](Architechture%20Design/README.md)
+
+![Current high-level MechMotor system architecture](Architechture%20Design/diagrams/HLD-01-system-architecture.svg)
+
+**Deployment scope:** Offline-first Windows desktop, in-process JavaFX + Spring Boot services, Spring JDBC + SQLite, local reports/backups, optional Google OAuth/Gmail. No internal HTTP/gRPC service, Kubernetes, message queue, CDN or load balancer is currently used.
+
+**Functional requirements at a glance** (full evidence and implementation status: [requirements matrix](Architechture%20Design/REQUIREMENTS.md)):
+
+| IDs | Core capabilities | Status |
+|---|---|---|
+| FR-01–03 | Signed activation, inventory CRUD/search, categories/fitment/suppliers | Implemented |
+| FR-04–06 | Purchase orders/receiving, sales/returns, stock movement audit | Implemented with stated financial restrictions |
+| FR-07–08 | Date-range reports, CSV/PDF, Gmail OAuth and recipient selection | Implemented; live Gmail authorization required |
+| FR-09–10 | Local user directory, shop profile, backup/restore | Implemented; directory roles do not enforce login |
+| FR-11 | Desktop navigation and consistent functional dialogs | Partial; some Settings tabs are still static |
+| FR-12 | Unattended scheduled Gmail reports / delivery history | Planned, not implemented |
+
+**Non-functional requirements at a glance** ([NFR-01–12 evidence and diagram mappings](Architechture%20Design/REQUIREMENTS.md)):
+
+| IDs | Quality attribute / design control | Acceptance status |
+|---|---|---|
+| NFR-01–03 | Offline-first, atomic stock/accounting, signed licensing | Implemented patterns; field validation required |
+| NFR-04–06 | Scoped OAuth, recoverable SQLite, JavaFX responsiveness | Implemented; OAuth/restore drills pending |
+| NFR-07–09 | Paged search, signed-install readiness, Java/Windows testing | Performance benchmarking and certificate-based release signing pending |
+| NFR-10–11 | Local logging/migrations; single-PC deployment, no server infrastructure | Implemented |
+| NFR-12 | True role-based authorization for directory users | Gap; directory roles only |
+
+
 ## Activation and licensing
 
 MechMotor validates signed Ed25519 activation tokens before loading inventory. The application contains only the public verification key; the signing private key must remain outside this repository and be protected offline.
@@ -14,7 +58,7 @@ MechMotor validates signed Ed25519 activation tokens before loading inventory. T
 - Default activation file: `%LOCALAPPDATA%\\MechMotor\\license\\activation.key` on Windows.
 - Fallback when `LOCALAPPDATA` is unavailable: `%USERPROFILE%\\.mechmotor\\license\\activation.key`.
 - Override for testing or managed deployments: JVM property `-Dmechmotor.licenseFile=/path/to/activation.key`.
-- In the desktop header, select **Activation…** to view status, license ID, customer, expiry and features. Use **Reveal stored activation key** to view the installed token.
+- A missing or expired license opens the activation dialog before the main workspace. The dashboard does not expose the activation token; the Settings license information displays expiry only.
 - To issue a customer key, compile/run `tools/license-issuer/IssueLicense.java` with the offline private key. Never put that private key in Git, the installer, or the application JAR.
 
 See `docs/LLD.md` for token validation and issuer usage.
@@ -552,3 +596,25 @@ email scheduler, durable outbound queue, send retry or multi-user security model
 
 This branch requires Windows UI testing, Google OAuth consent testing and Maven test/packaging
 verification before being merged or advertised as production ready.
+
+
+## Architecture Design — HLD, LLD, functional and non-functional requirements
+
+The repository contains a dedicated, source-aligned **[Architechture Design](Architechture%20Design/README.md)** documentation folder. Its diagram source is Mermaid and renders directly in GitHub Markdown. The existing [high-level](docs/HLD.md) and [low-level](docs/LLD.md) design notes remain available.
+
+| Document / diagram type | Requirements covered | Open document |
+|---|---|---|
+| **Functional requirements** FR-01–FR-12 | Inventory, category/fitment, purchasing, sales/refunds, licensing, reporting/Gmail, user directory, settings, backup, UI; status of planned scheduling | [Functional requirements table](Architechture%20Design/REQUIREMENTS.md#functional-requirements) |
+| **Non-functional requirements** NFR-01–NFR-12 | Offline operation, security/privacy, transaction integrity, recovery, responsiveness, search, packaging, tests, operability, topology and RBAC limitations | [Non-functional requirements table](Architechture%20Design/REQUIREMENTS.md#non-functional-requirements) |
+| **HLD: System Architecture Diagram** | UI → Spring services → SQLite, licensing, reporting, optional Gmail integration | [HLD-01](Architechture%20Design/HLD.md#hld-01--system-architecture-diagram) |
+| **HLD: High-Level Data Flow Diagram (DFD)** | Inputs, validations, transactional data, local exports and email outputs | [HLD-02](Architechture%20Design/HLD.md#hld-02--high-level-data-flow-diagram-dfd) |
+| **HLD: Component Diagram** | Code-level module boundaries, in-process dependencies, storage | [HLD-03](Architechture%20Design/HLD.md#hld-03--component-diagram) |
+| **HLD: Deployment Diagram** | Windows installer, jlink/jpackage, local data paths and optional Google network boundary | [HLD-04](Architechture%20Design/HLD.md#hld-04--deployment--infrastructure-diagram) |
+| **LLD: Class Diagram** | JavaFX composition, services, repository, feature enforcement | [LLD-01](Architechture%20Design/LLD.md#lld-01--class-diagram) |
+| **LLD: Sequence Diagrams** | Atomic purchase receiving and Google OAuth/report sending workflows | [LLD-02 and LLD-03](Architechture%20Design/LLD.md) |
+| **LLD: State Machine Diagram** | First-run activation, expiry, invalid key, license feature denial | [LLD-04](Architechture%20Design/LLD.md#lld-04--license-state-machine-diagram) |
+| **LLD: ER Diagram** | SQLite parts/inventory/ledger, purchases, sales, users and preferences | [LLD-05](Architechture%20Design/LLD.md#lld-05--entity-relationship-diagram-current-schema-selected-relationships) |
+
+**Actual technology/deployment constraints:** MechMotor is an offline-first JavaFX **desktop app** with embedded Spring Boot (no local HTTP server), Spring JDBC and SQLite on one PC. Its modules call each other in-process; REST/gRPC microservices, queues, CDNs, load balancers and Kubernetes are **not currently implemented**. The Gmail API is an external HTTPS integration requiring OAuth. The local `app_users` directory does **not** currently enforce sign-in roles. Scheduled unattended email remains a planned feature; on-demand report email exists. Diagram IDs link back to FR/NFR IDs for maintenance.
+
+**Design maintenance:** Update [REQUIREMENTS.md](Architechture%20Design/REQUIREMENTS.md), [HLD.md](Architechture%20Design/HLD.md) and [LLD.md](Architechture%20Design/LLD.md) whenever source architecture, schemas, external interfaces, licensing or workflow behavior changes; validate against tests before claiming a feature implemented.

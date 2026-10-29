@@ -99,3 +99,14 @@ Package only after validating the JavaFX native libraries, launcher configuratio
 - The JavaFX report picker parses dates before scheduling the export on the existing background database executor. Export requires the existing `CSV` feature entitlement.
 - The supplier payable report shows each purchase's payable total, posted supplier payments, and arithmetic balance; voided payment entries are excluded and cancelled receipts contribute zero payable value. A negative balance is retained as a reconciliation signal rather than hidden.
 - Reports are operational exports, not accounting/tax certification. Recorded sale or supplier payment entries are not proof that an external payment settled.
+
+
+## Current architecture diagram set (2026-10-29)
+
+The maintained source-aligned diagrams and traceable functional/non-functional requirements are in **[Architechture Design](../Architechture%20Design/README.md)**:
+
+- [Requirements matrix](../Architechture%20Design/REQUIREMENTS.md) — FR-01 through FR-12; NFR-01 through NFR-12; implementation evidence and limitations.
+- [Detailed HLD](../Architechture%20Design/HLD.md) — System Architecture, High-Level DFD, Component and Deployment diagrams.
+- [Detailed LLD](../Architechture%20Design/LLD.md) — Class, Sequence, State Machine and ER diagrams.
+
+This historical document remains for existing design notes. Where historical planned scope differs from current code, the new requirement/status matrix and current source files distinguish implemented, partial and planned behaviors. No distributed infrastructure is deployed in the present single-PC design.
