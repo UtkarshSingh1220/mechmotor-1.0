@@ -383,3 +383,53 @@
     -fx-background-color: #fff; -fx-border-color: #e2ecfb; -fx-border-radius: 10px;
     -fx-background-radius: 10px; -fx-padding: 15px; -fx-min-width: 190px;
 }
+
+
+/* Settings: real accessible JavaFX tab controls, styled to the Premium Modern reference. */
+.settings-container { -fx-background-color: transparent; }
+.settings-tab-bar {
+    -fx-alignment: CENTER_LEFT;
+    -fx-padding: 0 0 11px 0;
+    -fx-border-color: transparent transparent #e2ebf8 transparent;
+}
+.settings-tab-bar .toggle-button {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-background-radius: 0;
+    -fx-padding: 11px 14px;
+    -fx-text-fill: #2b4470;
+    -fx-font-weight: bold;
+    -fx-cursor: hand;
+}
+.settings-tab-bar .toggle-button:selected,
+.settings-tab-bar .toggle-button.settings-tab-selected {
+    -fx-text-fill: #0565f5;
+    -fx-border-color: transparent transparent #0670ff transparent;
+    -fx-border-width: 0 0 3px 0;
+    -fx-background-color: #f0f7ff;
+}
+.settings-tab-bar .toggle-button:hover { -fx-background-color: #e8f2ff; }
+.settings-tab-bar .toggle-button:focused {
+    -fx-border-color: #73aaff;
+    -fx-border-width: 1px 1px 3px 1px;
+}
+.settings-tab-content { -fx-background-color: transparent; }
+.settings-card-grid { -fx-alignment: TOP_LEFT; }
+.settings-feature-card {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #dbe8fc;
+    -fx-border-radius: 12px;
+    -fx-background-radius: 12px;
+    -fx-padding: 22px;
+    -fx-min-height: 190px;
+    -fx-effect: dropshadow(gaussian, rgba(24,80,160,0.07), 10, 0, 0, 3);
+}
+.settings-feature-card .button {
+    -fx-background-color: #086bfa;
+    -fx-background-radius: 7px;
+    -fx-text-fill: #ffffff;
+    -fx-font-weight: bold;
+    -fx-padding: 10px 15px;
+    -fx-cursor: hand;
+}
+.settings-feature-card .button:disabled { -fx-opacity: 0.55; }
