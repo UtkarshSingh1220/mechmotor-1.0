@@ -986,6 +986,7 @@ public class MechMotorApplication extends Application {
         mainScroll.getStyleClass().add("main-scroll");
         Map<String, Runnable> pageActions = new java.util.HashMap<>();
         pageActions.put("inventory", () -> { mainScroll.setContent(mainPage); mainScroll.setVvalue(0); });
+        pageActions.put("lowStock", () -> lowStockTab.fire());
         pageActions.put("addSupplier", () -> addSupplierItem.fire());
         pageActions.put("editSupplier", () -> editSupplierItem.fire());
         pageActions.put("payments", () -> supplierPaymentsButton.fire());
